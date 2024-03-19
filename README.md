@@ -129,7 +129,6 @@ the data then VLADs used as keys in a distributed hash table (DHT) work
 similarly to how public keys work in the [IPNS DHT][IPNS]. Think of this as 
 IPNS version 3. Below is an illustration of this theoretical IPNSv3 structure:
 
-```
 ╭────────────────────────────[IPNSv3]────────────────────────────╮
 │                                                                │
 │ ╭─[VLAD key]─┬────────────╮                  ╭─[CID value]───╮ │
@@ -148,7 +147,6 @@ IPNS version 3. Below is an illustration of this theoretical IPNSv3 structure:
 │ ╰───────────────────╯                    ╰───────────────────╯ │
 │                                                                │
 ╰────────────────────────────────────────────────────────────────╯
-```
 
 When using a VLAD to identify a provenance log, the CID in the VLAD is the 
 content address of the WASM lock script for validating the first entry in the 
@@ -168,7 +166,6 @@ the first entry of the provenance log. The first entry of the provenance log
 contains the ephemeral public key to verify the digital signature in the VLAD 
 nonce and confirm that the CID to the WASM lock script hasn't changed.
 
-```
 ╭────────────────────────────[IPNSv3]────────────────────────────╮
 │                                                                │
 │ ╭─[VLAD key]─┬────────────╮                  ╭─[CID value]───╮ │
@@ -187,7 +184,6 @@ nonce and confirm that the CID to the WASM lock script hasn't changed.
 │ ╰───────────────╯               ╰────────────╯   ╰───────────╯ │
 │                                                                │
 ╰────────────────────────────────────────────────────────────────╯
-```
 
 #### Encoding
 
