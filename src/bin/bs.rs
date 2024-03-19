@@ -1,0 +1,307 @@
+#![allow(dead_code)]
+use best_practices::cli::io::{reader, writer};
+use bs::prelude::*;
+use log::debug;
+use multicodec::Codec;
+use multihash::EncodedMultihash;
+use multikey::{mk, EncodedMultikey, Views};
+use multisig::{EncodedMultisig, Multisig};
+use multiutil::{prelude::Base, CodecInfo};
+use std::{convert::TryFrom, fs::File, io::Read, path::PathBuf};
+use structopt::StructOpt;
+
+#[derive(Debug, StructOpt)]
+#[structopt(
+    name = "bs",
+    version = "0.1.1",
+    author = "Dave Huseby <dwh@linuxprogrammer.org>",
+    about = "BetterSign provenance log based signing tool"
+)]
+struct Opt {
+    /// Silence all output
+    #[structopt(short = "q", long = "quiet")]
+    quiet: bool,
+
+    /// Verbosity (-v, -vv, -vvv)
+    #[structopt(short = "v", parse(from_occurrences))]
+    verbosity: usize,
+
+    /// Config file to use
+    #[structopt(long = "config", short = "c", parse(from_os_str))]
+    config: Option<PathBuf>,
+
+    /// Keychain file
+    #[structopt(long = "keychain", short = "k", parse(from_os_str))]
+    keyfile: Option<PathBuf>,
+
+    /// Use an ssh-agent?
+    #[structopt(long = "ssh-agent", short = "s")]
+    sshagent: bool,
+
+    /// Ssh-agent env var
+    #[structopt(long = "ssh-agent-env", default_value = "SSH_AUTH_SOCK")]
+    sshagentenv: String,
+
+    /// Subcommand
+    #[structopt(subcommand)]
+    cmd: Command,
+}
+
+#[derive(Debug, StructOpt)]
+enum Command {
+    /// Set the default key
+    #[structopt(name = "default")]
+    Default {
+        /// clear the default key
+        #[structopt(long = "clear", short = "c", group = "default")]
+        clear: bool,
+
+        /// the name of the key to make default
+        #[structopt(long = "set", short = "s", group = "default")]
+        hash: Option<String>,
+    },
+
+    /// Generate a new key
+    #[structopt(name = "generate")]
+    Generate {
+        /// Key type, valid values: "eddsa", "es256k", "blsg1", "blsg2"
+        #[structopt(long = "type", short = "t")]
+        key_type: Option<String>,
+
+        /// Comment for the keypair
+        #[structopt(long = "comment", short = "C")]
+        comment: Option<String>,
+    },
+
+    /// List available keys
+    #[structopt(name = "list")]
+    List,
+
+    /// Sign using the default/specified key
+    #[structopt(name = "sign")]
+    Sign {
+        /// The hash of the key to sign with
+        #[structopt(long = "keyhash", short = "h")]
+        keyhash: Option<String>,
+
+        /// Message encoding codec
+        #[structopt(long = "encoding", short = "e")]
+        encoding: Option<String>,
+
+        /// Combined signature
+        #[structopt(long = "combined", short = "c")]
+        combined: Option<bool>,
+
+        /// File to write the signature to, or stdout if missing
+        #[structopt(long = "sig", short = "s", parse(from_os_str))]
+        signature: Option<PathBuf>,
+
+        /// Message to sign
+        #[structopt(parse(from_os_str))]
+        msg: Option<PathBuf>,
+    },
+
+    /// Verify using the default/specified key
+    Verify {
+        /// The hash of the key to verify with
+        #[structopt(long = "keyhash", short = "h")]
+        keyhash: Option<String>,
+
+        /// Signature file to read signture from
+        #[structopt(long = "sig", short = "s", parse(from_os_str))]
+        signature: PathBuf,
+
+        /// Message that was signed
+        #[structopt(parse(from_os_str))]
+        msg: Option<PathBuf>,
+    }, /*
+       /// Remove a key
+       #[structopt(name = "remove")]
+       Remove {
+           /// the name of the key to remove
+           name: String,
+       },
+       */
+}
+
+fn main() -> anyhow::Result<()> {
+    // parse the cli options
+    let opt = Opt::from_args();
+
+    // set up the logger
+    stderrlog::new()
+        .quiet(opt.quiet)
+        .verbosity(opt.verbosity)
+        .init()
+        .map_err(|e| bs::Error::Log(e))?;
+
+    match opt.cmd {
+        Command::Default { clear, hash } => {
+            let mut config =
+                Config::from_path(opt.config, opt.keyfile, opt.sshagent, opt.sshagentenv)?;
+
+            if clear {
+                config.set_default_key(None)?;
+            } else if let Some(hash) = hash {
+                config.set_default_key(Some(hash))?;
+            }
+
+            if let Ok(key) = config.default_key() {
+                let kh = {
+                    let fv = key.fingerprint_view()?;
+                    EncodedMultihash::new(Base::Base58Btc, fv.fingerprint(Codec::Blake2S256)?)
+                };
+                println!("{} {} {}", key.codec(), kh, key.comment,);
+            } else {
+                println!("No default key set");
+            }
+        }
+        Command::Generate { key_type, comment } => {
+            // unwrap the key type
+            let key_type = key_type.unwrap_or("eddsa".to_string()).to_lowercase();
+            let codec = match key_type.as_str() {
+                "eddsa" => Codec::Ed25519Priv,
+                "es256k" => Codec::Secp256K1Priv,
+                "blsg1" => Codec::Bls12381G1Priv,
+                "blsg2" => Codec::Bls12381G2Priv,
+                _ => anyhow::bail!(Error::InvalidKeyType(key_type)),
+            };
+
+            // generate a new key
+            let mut rng = rand::rngs::OsRng::default();
+
+            // create the specified key from the random source
+            let mut mk = mk::Builder::new_from_random_bytes(codec, &mut rng)?;
+
+            // add the comment if specified
+            if let Some(comment) = comment {
+                mk = mk.with_comment(&comment);
+            }
+
+            // build the key
+            let mk = mk.try_build()?;
+
+            let mut config =
+                Config::from_path(opt.config, opt.keyfile, opt.sshagent, opt.sshagentenv)?;
+
+            // add the key to the keychain
+            config.keychain()?.borrow_mut().add(&mk)?;
+        }
+        Command::List => {
+            // load the config
+            let mut config =
+                Config::from_path(opt.config, opt.keyfile, opt.sshagent, opt.sshagentenv)?;
+            let keys = config.keychain()?.borrow().list()?;
+            for key in &keys {
+                let kh = {
+                    let fv = key.fingerprint_view()?;
+                    EncodedMultihash::new(Base::Base58Btc, fv.fingerprint(Codec::Blake2S256)?)
+                };
+                println!("{} {} {}", key.codec(), kh, key.comment,);
+            }
+        }
+        Command::Sign {
+            keyhash,
+            encoding,
+            combined,
+            signature,
+            msg,
+        } => {
+            // load the config
+            let mut config =
+                Config::from_path(opt.config, opt.keyfile, opt.sshagent, opt.sshagentenv)?;
+
+            // look up the signing key by hash
+            let keyhash = match keyhash {
+                Some(h) => EncodedMultihash::try_from(h.as_str())?,
+                None => config.default_key_fingerprint()?,
+            };
+            debug!("keyhash: {:?}", keyhash);
+            let encoding = encoding.unwrap_or("identity".to_string());
+            let encoding = Codec::try_from(encoding.as_str())?;
+            let key = config.keychain()?.borrow().get(&keyhash)?;
+            let emk: EncodedMultikey = key.clone().into();
+            debug!("signing key: {:?}", emk);
+
+            // read the msg from either the file of stdin
+            let mut r = reader(&msg)?;
+            let mut m = Vec::default();
+            r.read_to_end(&mut m)?;
+
+            // determine if this is a combined signature
+            let combined = combined.unwrap_or_default();
+
+            // generate multisig
+            let ms = config
+                .keychain()?
+                .borrow_mut()
+                .sign(&key, combined, encoding, &m)?;
+            let ems: EncodedMultisig = ms.clone().into();
+            debug!("signature: {:?}", ems);
+            let out: Vec<u8> = ms.into();
+
+            let mut w = writer(&signature)?;
+            w.write_all(&out)?;
+            println!("signed!");
+        }
+        Command::Verify {
+            keyhash,
+            signature,
+            msg,
+        } => {
+            // load the config
+            let mut config =
+                Config::from_path(opt.config, opt.keyfile, opt.sshagent, opt.sshagentenv)?;
+
+            // look up the signing key by hash
+            let keyhash = match keyhash {
+                Some(h) => EncodedMultihash::try_from(h.as_str())?,
+                None => config.default_key_fingerprint()?,
+            };
+            debug!("keyhash: {:?}", keyhash);
+            let key = config.keychain()?.borrow().get(&keyhash)?;
+            let emk: EncodedMultikey = key.clone().into();
+            debug!("verifying key: {:?}", emk);
+
+            // read the signature data from file
+            let ms = {
+                let mut r = File::open(&signature)?;
+                let mut s = Vec::default();
+                r.read_to_end(&mut s)?;
+                Multisig::try_from(s.as_slice())?
+            };
+            let ems: EncodedMultisig = ms.clone().into();
+            debug!("signature: {:?}", ems);
+
+            // get the message
+            let m = if ms.message.is_empty() {
+                // read the msg from either the file of stdin
+                let mut r = reader(&msg)?;
+                let mut m = Vec::default();
+                r.read_to_end(&mut m)?;
+                m
+            } else {
+                ms.message.clone()
+            };
+
+            // verify multisig
+            let vv = key.verify_view()?;
+            vv.verify(&ms, Some(m.as_slice()))?;
+            println!("signature valid!");
+        } /*
+
+          Command::Remove { name } => {
+              let mut config =
+                  Config::from_path(opt.config, opt.keyfile, opt.sshagent, opt.sshagentenv)?;
+              let mut keychain = config.keychain()?;
+              let key = config.default_key()?;
+              if key.comment().to_string() == name {
+                  config.set_default_key(None)?;
+                  keychain.
+              }
+          }
+          */
+    }
+
+    Ok(())
+}
