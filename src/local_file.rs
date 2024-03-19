@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: FSL-1.1
 use crate::{initialize_local_file, Error, Keychain};
 use log::debug;
 use multibase::Base;

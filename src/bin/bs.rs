@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: FSL-1.1
 #![allow(dead_code)]
 use best_practices::cli::io::{reader, writer};
 use bs::prelude::*;

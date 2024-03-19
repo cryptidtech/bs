@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: FSL-1.1
 use crate::Error;
 use directories::ProjectDirs;
 use log::debug;

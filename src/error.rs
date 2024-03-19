@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: FSL-1.1
 /// Errors generated from this crate
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]

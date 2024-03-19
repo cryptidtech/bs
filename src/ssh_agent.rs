@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: FSL-1.1
 use crate::{error::SshError, Error, Keychain};
 use multicodec::Codec;
 use multihash::EncodedMultihash;
