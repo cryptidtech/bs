@@ -1,4 +1,5 @@
 [![Functional Source License 1.1](https://img.shields.io/badge/License-Functional_Source_1.1-red)][FSL]
+![Rust build](https://github.com/cryptidtech/bs/actions/workflows/rust.yml/badge.svg)
 
 # BetterSign
 
