@@ -1,5 +1,8 @@
-[![Functional Source License 1.1](https://img.shields.io/badge/License-Functional_Source_1.1-red)][FSL]
-![Rust build](https://github.com/cryptidtech/bs/actions/workflows/rust.yml/badge.svg)
+[![](https://img.shields.io/badge/made%20by-Cryptid%20Technologies-gold.svg?style=flat-square)][CRYPTID]
+[![](https://img.shields.io/badge/project-provenance-purple.svg?style=flat-square)][PROVENANCE]
+[![](https://img.shields.io/badge/project-multiformats-blue.svg?style=flat-square)][MULTIFORMATS]
+[![](https://img.shields.io/badge/License-Functional_Source_1.1-red)][FSL]
+![](https://github.com/cryptidtech/bs/actions/workflows/rust.yml/badge.svg)
 
 # BetterSign
 
@@ -390,6 +393,9 @@ feature of Git is that commits are stored in a content addresable storage so it
 is natural that provenance log entries are stored in the repo using the 
 normal commit process.
 
+[CRYPTID]: https://cryptid.tech/
+[PROVENANCE]: https://github.com/cryptidtech/provenance-specifications/
+[MULTIFORMATS]: https://github.com/multiformats/multiformats/
 [FSL]: https://github.com/cryptidtech/bs/blob/main/LICENSE.md
 [PROVSPECS]: https://github.com/cryptidtech/provenance-specifications/
 [PROVREADME]: https://github.com/cryptidtech/provenance-log/blob/main/README.md
