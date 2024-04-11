@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1
-use crate::{initialize_local_file, Backend, Error, Keychain, KeychainConfig, LocalFile, SshAgent};
+use crate::{initialize_local_file, Backend, Error, Keychain, KeychainConfig, KeyEntry, LocalFile, SshAgent};
 use log::debug;
 use multihash::EncodedMultihash;
-use multikey::Multikey;
 use serde::{Deserialize, Serialize};
 use std::{
     cell::RefCell,
@@ -28,8 +27,18 @@ pub struct Config {
     #[serde(skip)]
     handle: Option<Rc<RefCell<dyn Keychain>>>,
 
+    /// The ssh agent config passed in during Config init
+    #[serde(skip)]
+    ssh_config: SshConfig,
+
     /// Keychain config
     keychain: KeychainConfig,
+}
+
+#[derive(Clone, Default)]
+struct SshConfig {
+    use_agent: bool,
+    sshagent: Option<String>
 }
 
 impl Config {
@@ -41,13 +50,17 @@ impl Config {
         sshagent: bool,
         sshagentenv: String,
     ) -> Result<Self, Error> {
+        debug!("Config::from_path({:?}, {:?}, {}, {})", path, keyfile, sshagent, sshagentenv);
         //initialize the bettersign config file if needed
+        let use_agent = sshagent;
+        let env_var = sshagentenv.clone();
         let config_path = initialize_local_file(path, ORG_DIRS, CONFIG_FILE, |pb| {
             debug!("creating default config: {}", pb.display());
-            let keychain = KeychainConfig::new(keyfile, sshagent, sshagentenv);
+            let keychain = KeychainConfig::new(keyfile, use_agent, env_var.clone());
             let config = Config {
                 path: pb.clone(),
                 handle: None,
+                ssh_config: SshConfig { use_agent, sshagent: Some(env_var) },
                 keychain,
             };
             let toml = toml::to_string(&config)?;
@@ -56,25 +69,30 @@ impl Config {
             Ok(())
         })?;
 
+        debug!("Loading config from: {}", config_path.as_os_str().to_string_lossy());
         let toml = fs::read_to_string(&config_path)?;
         let mut config: Self = toml::from_str(&toml)?;
         config.path = config_path.clone();
+        config.ssh_config = SshConfig { use_agent: sshagent, sshagent: Some(sshagentenv) };
         Ok(config)
     }
 
     /// Loads the actual keychain
     pub fn keychain(&mut self) -> Result<Rc<RefCell<dyn Keychain>>, Error> {
         if self.handle.is_none() {
-            self.handle = Some(match self.keychain.storage {
-                Backend::LocalFile => {
+            self.handle = {
+                if self.ssh_config.use_agent || self.keychain.storage == Backend::SshAgent {
+                    if let Ok(sshagent) = SshAgent::try_from(self.ssh_config.sshagent.clone()) {
+                        Some(Rc::new(RefCell::new(sshagent)))
+                    } else {
+                        let sshagent = SshAgent::try_from(self.keychain.sshagent.clone())?;
+                        Some(Rc::new(RefCell::new(sshagent)))
+                    }
+                } else {
                     let keyfile = LocalFile::try_from(self.keychain.keyfile.clone())?;
-                    Rc::new(RefCell::new(keyfile))
+                    Some(Rc::new(RefCell::new(keyfile)))
                 }
-                Backend::SshAgent => {
-                    let sshagent = SshAgent::try_from(self.keychain.sshagent.clone())?;
-                    Rc::new(RefCell::new(sshagent))
-                }
-            });
+            };
         }
 
         match &self.handle {
@@ -109,7 +127,7 @@ impl Config {
     }
 
     /// get default key
-    pub fn default_key(&mut self) -> Result<Multikey, Error> {
+    pub fn default_key(&mut self) -> Result<KeyEntry, Error> {
         if let Some(fingerprint) = self.keychain.default_key.clone() {
             debug!("looking for key: {}", fingerprint.to_string());
             let key = self.keychain()?.borrow().get(&fingerprint)?;

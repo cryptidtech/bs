@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: FSL-1.1
-use crate::{initialize_local_file, Error, Keychain};
+use crate::{initialize_local_file, Error, Keychain, KeyEntry};
 use log::debug;
 use multibase::Base;
 use multicodec::Codec;
@@ -16,7 +16,7 @@ const ORG_DIRS: &'static [&'static str; 3] = &["tech", "cryptid", "bettersign"];
 #[derive(Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct LocalFile {
     /// Map of private keys in the keychain
-    keys: BTreeMap<EncodedMultihash, Multikey>,
+    keys: BTreeMap<EncodedMultihash, KeyEntry>,
     /// The path to the keyfile
     #[serde(skip)]
     path: PathBuf,
@@ -62,7 +62,7 @@ impl TryFrom<Option<PathBuf>> for LocalFile {
 
 /// Interface to the keychain
 impl Keychain for LocalFile {
-    fn list(&self) -> Result<Vec<Multikey>, Error> {
+    fn list(&self) -> Result<Vec<KeyEntry>, Error> {
         let mut keys = Vec::with_capacity(self.keys.len());
         for k in self.keys.values() {
             keys.push(k.clone())
@@ -70,7 +70,7 @@ impl Keychain for LocalFile {
         Ok(keys)
     }
 
-    fn get(&self, fingerprint: &EncodedMultihash) -> Result<Multikey, Error> {
+    fn get(&self, fingerprint: &EncodedMultihash) -> Result<KeyEntry, Error> {
         debug!("looking for: {}", fingerprint);
         for h in self.keys.keys() {
             debug!("checking: {}", h);
@@ -81,10 +81,13 @@ impl Keychain for LocalFile {
         }
     }
 
-    fn add(&mut self, key: &Multikey) -> Result<(), Error> {
-        let kh = {
-            let fv = key.fingerprint_view()?;
-            EncodedMultihash::new(Base::Base58Btc, fv.fingerprint(Codec::Blake2S256)?)
+    fn add(&mut self, key: &KeyEntry) -> Result<(), Error> {
+        let kh = match key.fingerprint.clone() {
+            Some(kh) => kh,
+            None => {
+                let fv = key.pubkey.fingerprint_view()?;
+                EncodedMultihash::new(Base::Base32Lower, fv.fingerprint(Codec::Sha3256)?)
+            }
         };
         self.keys.insert(kh, key.clone());
         self.save()?;

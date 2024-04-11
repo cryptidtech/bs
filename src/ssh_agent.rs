@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: FSL-1.1
-use crate::{error::SshError, Error, Keychain};
+use crate::{error::SshError, Error, Keychain, KeyEntry};
 use multicodec::Codec;
 use multihash::EncodedMultihash;
 use multikey::{mk, Multikey, Views};
@@ -46,7 +46,7 @@ impl TryFrom<Option<String>> for SshAgent {
 
 /// Interface to the keychain
 impl Keychain for SshAgent {
-    fn list(&self) -> Result<Vec<Multikey>, Error> {
+    fn list(&self) -> Result<Vec<KeyEntry>, Error> {
         let pubkeys = self
             .client
             .borrow_mut()
@@ -55,17 +55,23 @@ impl Keychain for SshAgent {
         let mut keys = Vec::with_capacity(pubkeys.len());
         for pk in &pubkeys {
             if let Ok(mk) = mk::Builder::new_from_ssh_public_key(pk)?.try_build() {
-                keys.push(mk);
+                let fv = mk.fingerprint_view()?;
+                keys.push(KeyEntry{
+                    fingerprint: Some(fv.fingerprint(Codec::Sha3256)?.into()),
+                    pubkey: mk.clone(),
+                    threshold: 1,
+                    secret_keys: Vec::default(),
+                });
             }
         }
         Ok(keys)
     }
 
-    fn get(&self, fingerprint: &EncodedMultihash) -> Result<Multikey, Error> {
+    fn get(&self, fingerprint: &EncodedMultihash) -> Result<KeyEntry, Error> {
         let haystack = self.list()?;
         // check for a match
         for key in &haystack {
-            let fv = key.fingerprint_view()?;
+            let fv = key.pubkey.fingerprint_view()?;
             if *fingerprint == fv.fingerprint(fingerprint.codec())?.into() {
                 return Ok(key.clone());
             }
@@ -73,7 +79,7 @@ impl Keychain for SshAgent {
         Err(Error::NoKey(fingerprint.to_string()))
     }
 
-    fn add(&mut self, _key: &Multikey) -> Result<(), Error> {
+    fn add(&mut self, _key: &KeyEntry) -> Result<(), Error> {
         Err(SshError::AddingKeysNotAllowed.into())
     }
 

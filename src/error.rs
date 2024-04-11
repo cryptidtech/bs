@@ -15,10 +15,20 @@ pub enum Error {
     /// A log crate error
     #[error(transparent)]
     Log(#[from] log::SetLoggerError),
+    /// Wasm command error
+    #[error(transparent)]
+    Wasm(#[from] crate::commands::wasm::Error),
+    /// Keygen command error
+    #[error(transparent)]
+    Keygen(#[from] crate::commands::keygen::Error),
+
 
     /// BestPractices error
     #[error(transparent)]
     BestPractices(#[from] best_practices::error::Error),
+    /// Multicodec error
+    #[error(transparent)]
+    Multicodec(#[from] multicodec::Error),
     /// Multihash error
     #[error(transparent)]
     Multihash(#[from] multihash::Error),

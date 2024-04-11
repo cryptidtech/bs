@@ -3,21 +3,78 @@ use crate::Error;
 use core::{convert::TryFrom, fmt};
 use multicodec::Codec;
 use multihash::EncodedMultihash;
-use multikey::Multikey;
+use multikey::{Multikey, Views};
 use multisig::Multisig;
+use multiutil::{prelude::Base, CodecInfo};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+
+/// A key entry in the keychain
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct KeyEntry {
+    /// the fingerprint of the public key; used as the identifier of the key
+    pub fingerprint: Option<EncodedMultihash>,
+    /// the public key
+    pub pubkey: Multikey,
+    /// for non-threshold keys, this is 1, for threshold keys this is the threshold value
+    pub threshold: usize,
+    /// the list of generated secret keys. if the key is a threshold key then this list contains
+    /// all of the secreet key shares. there should be `limit` number of them.
+    pub secret_keys: Vec<Multikey>,
+}
+
+impl fmt::Display for KeyEntry {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let kh = match self.fingerprint.clone() {
+            Some(kh) => kh,
+            None => {
+                let fv = self.pubkey.fingerprint_view().unwrap();
+                EncodedMultihash::new(Base::Base32Lower, fv.fingerprint(Codec::Sha3256).unwrap())
+            }
+        };
+
+        let mut msg = String::default();
+
+        if self.secret_keys.len() > 1 {
+            msg.push_str(&format!("╭──── pubkey  {}\n", kh));
+            msg.push_str(&format!("├───── codec  {}\n", self.pubkey.codec()));
+            msg.push_str(&format!("├─── comment  {}\n", self.pubkey.comment));
+            msg.push_str(&format!("├─ threshold  {} of {}\n", self.threshold, self.secret_keys.len()));
+            msg.push_str(&format!("╰─┬── shares\n"));
+            for i in (0..self.secret_keys.len()).rev() {
+                let skh = {
+                    let cv = self.secret_keys[i].conv_view().unwrap();
+                    let pk = cv.to_public_key().unwrap();
+                    let fv = pk.fingerprint_view().unwrap();
+                    EncodedMultihash::new(Base::Base32Lower, fv.fingerprint(Codec::Sha3256).unwrap())
+                };
+                let key = format!("{} / {}  {}", (self.secret_keys.len() - i), self.secret_keys.len(), skh);
+                if i == 0 {
+                    msg.push_str(&format!("  ╰─── {}\n", key));
+                } else {
+                    msg.push_str(&format!("  ├─── {}\n", key));
+                }
+            }
+        } else {
+            msg.push_str(&format!("╭──── pubkey  {}\n", kh));
+            msg.push_str(&format!("├───── codec  {}\n", self.pubkey.codec()));
+            msg.push_str(&format!("╰─── comment  {}\n", self.pubkey.comment));
+        }
+
+        write!(f, "{}", msg)
+    }
+}
 
 /// Interface to the keychain
 pub trait Keychain {
     /// list the available keys
-    fn list(&self) -> Result<Vec<Multikey>, Error>;
+    fn list(&self) -> Result<Vec<KeyEntry>, Error>;
 
     /// get a key by name
-    fn get(&self, fingerprint: &EncodedMultihash) -> Result<Multikey, Error>;
+    fn get(&self, fingerprint: &EncodedMultihash) -> Result<KeyEntry, Error>;
 
     /// add a key
-    fn add(&mut self, key: &Multikey) -> Result<(), Error>;
+    fn add(&mut self, key: &KeyEntry) -> Result<(), Error>;
 
     /// sign a message with a key
     fn sign(

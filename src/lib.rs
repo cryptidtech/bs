@@ -1,12 +1,18 @@
 // SPDX-License-Identifier: FSL-1.1
 //!
 #![warn(missing_docs)]
+//#![feature(trace_macros)]
 #![deny(
     trivial_casts,
     trivial_numeric_casts,
     unused_import_braces,
     unused_qualifications
 )]
+//trace_macros!(true);
+
+/// Commands
+pub mod commands;
+pub use commands::{Transition, TransitionFrom, State, run_to_completion};
 
 /// Config
 pub mod config;
@@ -22,7 +28,7 @@ pub use fs::initialize_local_file;
 
 /// Keychain interface
 pub mod keychain;
-pub use keychain::{Backend, Keychain, KeychainConfig};
+pub use keychain::{Backend, Keychain, KeychainConfig, KeyEntry};
 
 /// Local file keychain
 pub mod local_file;
