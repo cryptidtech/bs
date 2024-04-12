@@ -1,6 +1,6 @@
 [package]
 name = "bs"
-version = "0.1.5"
+version = "0.1.6"
 authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
 edition = "2018"
 description = "BetterSign signing tool"

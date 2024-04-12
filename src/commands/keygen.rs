@@ -4,7 +4,7 @@ use log::debug;
 use multibase::Base;
 use multicodec::Codec;
 use multihash::EncodedMultihash;
-use multikey::Views;
+use multikey::{KEY_CODECS, Views};
 use std::io::{self, BufRead};
 
 /// convenience function that hides all of the details
@@ -98,7 +98,7 @@ impl State<Context, KeyEntry> for Initial {
     async fn next(self: Box<Self>, context: &mut Context) -> Result<Transition<Context, KeyEntry>, crate::error::Error> {
         // output what we're doing
         println!("Generating {}", &context.purpose);
-        if context.codec.is_none() {
+        if context.codec.is_none() || !KEY_CODECS.contains(&context.codec.clone().unwrap()) {
             Ok(Transition::next(Self, CodecAsk))
         } else if context.threshold.1.is_none() {
             Ok(Transition::next(Self, ThresholdAsk))
@@ -469,7 +469,6 @@ impl State<Context, KeyEntry> for Failed {
 mod tests {
     use super::*;
     use crate::commands::run_to_completion;
-    use multicid::EncodedCid;
 
     macro_rules! bo {
         ($e:expr) => {
@@ -478,63 +477,22 @@ mod tests {
     }
 
     #[test]
-    fn test_wasm_ok() {
-        let mut pb = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        pb.push("wat");
-        pb.push("first.wat");
+    fn test_key_gen_ok() {
+        for codec in KEY_CODECS {
+            let mut ctx = Context::new("test key", Some(codec), Some("test".to_string()), (Some(1), Some(1)));
+            let ret = bo!(run_to_completion(Initial, &mut ctx));
+            assert!(ret.is_ok());
 
-        let mut ctx = Context::new(&pb, Codec::Sha3256);
-        let ret = bo!(run_to_completion(Initial, &mut ctx));
-        assert!(ret.is_ok());
-
-        let (script, cid) = ret.unwrap();
-        let ecid: EncodedCid = cid.clone().into();
-        println!("cid: {:?}", cid);
-        println!("encoded cid: {}", ecid);
-        println!("script: {:?}", script);
+            let ke = ret.unwrap();
+            println!("{}", ke);
+        }
     }
     
     #[test]
     fn test_convenience_fn() {
-        let mut pb = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        pb.push("wat");
-        pb.push("first.wat");
-
-        let ret = bo!(load_wasm(&pb, Codec::Sha3256));
-        assert!(ret.is_ok());
-    }
-
-    #[test]
-    fn test_wasm_load_err() {
-        // inavlid path
-        let mut pb = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        pb.push("none.wat");
-
-        let mut ctx = Context::new(&pb, Codec::Sha3256);
-        let ret = bo!(run_to_completion(Initial, &mut ctx));
-        assert!(ret.is_err());
-    }
-
-    #[test]
-    fn test_wasm_compile_err() {
-        // path to a file with invalide wasm text and it won't compile
-        let mut pb = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        pb.push("wontcompile.wat");
-
-        let mut ctx = Context::new(&pb, Codec::Sha3256);
-        let ret = bo!(run_to_completion(Initial, &mut ctx));
-        assert!(ret.is_err());
-    }
-
-    #[test]
-    fn test_wasm_hash_err() {
-        let mut pb = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        pb.push("wat");
-        pb.push("first.wat");
-
-        // invalid hash codec
-        let mut ctx = Context::new(&pb, Codec::Ed25519Pub);
-        let ret = bo!(run_to_completion(Initial, &mut ctx));
-        assert!(ret.is_err());
+        for codec in KEY_CODECS {
+            let ret = bo!(key_gen("test key", Some(codec), Some("test".to_string()), (Some(1), Some(1))));
+            assert!(ret.is_ok());
+        }
     }
 }

@@ -21,6 +21,9 @@ pub enum Error {
     /// Keygen command error
     #[error(transparent)]
     Keygen(#[from] crate::commands::keygen::Error),
+    /// Vladgen command error
+    #[error(transparent)]
+    Vladgen(#[from] crate::commands::vladgen::Error),
 
 
     /// BestPractices error

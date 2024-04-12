@@ -94,7 +94,7 @@ macro_rules! states {
 
 /// Used to define valid state transitions. Typically the happy path is specified first and then
 /// any additional paths afterwards. Here's an example:
-/// ```
+///
 /// // the happy path
 /// path!(Foo -> Bar -> Baz);
 ///
@@ -103,7 +103,7 @@ macro_rules! states {
 ///
 /// // also Bar can loop
 /// path!(Bar -> Bar);
-/// ```
+///
 macro_rules! path {
     ($f:ident -> $t:ident) => {
         impl TransitionFrom<$f> for $t {}
@@ -116,14 +116,13 @@ macro_rules! path {
 
 /// Used to define multiple paths from the first state to multiple other states. This is typically
 /// used after the happy path is defined with `path!()` to define alternate routes like so:
-/// ```
+/// 
 /// // the happy path 
 /// path!(Foo -> Bar -> Baz -> Qux);
 ///
 /// // alternate paths. it's also legal to go Foo -> Bar -> Qux and Foo -> Qux
 /// paths!(Foo -> Baz, Qux);
 ///
-/// ```
 macro_rules! paths {
     ($f:ident -> $($t:ident),+ $(,)?) => {
         $(path!($f -> $t);)+
@@ -132,9 +131,9 @@ macro_rules! paths {
 
 /// Used to define the failure state—which is usually a terminal state—and all of the states that
 /// can transition to it like so:
-/// ```
+///
 /// failures!(Foo, Bar, Baz -> Failure);
-/// ```
+///
 macro_rules! failures {
     ($($s:ident),+ $(,)? -> $f:ident) => {
         $(path!($s -> $f);)+
@@ -146,3 +145,6 @@ pub mod wasm;
 
 /// key generator state machine
 pub mod keygen;
+
+/// vlad generator state machine
+pub mod vladgen;
