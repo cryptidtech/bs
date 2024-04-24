@@ -8,7 +8,7 @@ use multikey::{KEY_CODECS, Views};
 use std::io::{self, BufRead};
 
 /// convenience function that hides all of the details
-pub async fn key_gen(
+pub async fn gen(
     purpose: &str,
     codec: Option<Codec>,
     comment: Option<String>,
@@ -22,9 +22,6 @@ pub async fn key_gen(
 #[derive(Clone, Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
-    /// multihash error
-    #[error(transparent)]
-    Multihash(#[from] multihash::Error),
     /// multikey error
     #[error(transparent)]
     Multikey(#[from] multikey::Error),
@@ -67,7 +64,7 @@ path!(CommentAsk -> Generate);
 failures!(CodecAsk, CommentAsk, ThresholdAsk, Generate -> Failed);
 
 /// tracks the current state of the wasm loader
-#[derive(Clone, Default)]
+#[derive(Default)]
 pub struct Context {
     // inputs
     purpose: String,
@@ -97,7 +94,7 @@ impl State<Context, KeyEntry> for Initial {
     /// ensure that we have the precoditions to succeed
     async fn next(self: Box<Self>, context: &mut Context) -> Result<Transition<Context, KeyEntry>, crate::error::Error> {
         // output what we're doing
-        println!("Generating {}", &context.purpose);
+        println!("Generating key {}", &context.purpose);
         if context.codec.is_none() || !KEY_CODECS.contains(&context.codec.clone().unwrap()) {
             Ok(Transition::next(Self, CodecAsk))
         } else if context.threshold.1.is_none() {
@@ -491,7 +488,7 @@ mod tests {
     #[test]
     fn test_convenience_fn() {
         for codec in KEY_CODECS {
-            let ret = bo!(key_gen("test key", Some(codec), Some("test".to_string()), (Some(1), Some(1))));
+            let ret = bo!(gen("test key", Some(codec), Some("test".to_string()), (Some(1), Some(1))));
             assert!(ret.is_ok());
         }
     }

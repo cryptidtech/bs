@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: FSL-1.1
-use crate::{keychain::KeyEntry, commands::{wasm::load_wasm, keygen::key_gen, State, Terminal, Transition, TransitionFrom}};
+use crate::{keychain::KeyEntry, commands::{wasm, key, State, Terminal, Transition, TransitionFrom}};
 use log::debug;
 use multicid::{vlad, Cid, EncodedCid, Vlad};
 use multicodec::Codec;
@@ -7,8 +7,8 @@ use provenance_log::Script;
 use std::path::PathBuf;
 
 /// convenience function that hides all of the details
-pub async fn vlad_gen(lock: Option<PathBuf>) -> Result<VladGen, crate::error::Error> {
-    let mut ctx = Context::new(lock);
+pub async fn gen(purpose: &str, lock: Option<PathBuf>) -> Result<Generated, crate::error::Error> {
+    let mut ctx = Context::new(purpose, lock);
     crate::commands::run_to_completion(Initial, &mut ctx).await
 }
 
@@ -16,24 +16,9 @@ pub async fn vlad_gen(lock: Option<PathBuf>) -> Result<VladGen, crate::error::Er
 #[derive(Clone, Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
-    /// multihash error
-    #[error(transparent)]
-    Multihash(#[from] multihash::Error),
-    /// multikey error
-    #[error(transparent)]
-    Multikey(#[from] multikey::Error),
     /// multicid error
     #[error(transparent)]
     Multicid(#[from] multicid::Error),
-    /// missing codec
-    #[error("no key codec collected from user")]
-    NoCodec,
-    /// missing comment
-    #[error("no comment collected from user")]
-    NoComment,
-    /// missing answer
-    #[error("no answer collected from user")]
-    NoAnswer,
     /// we're in an error state but no error was specified
     #[error("error state without error specified")]
     NoError,
@@ -42,12 +27,12 @@ pub enum Error {
     NoResult,
     /// something went wrong and you're going to have a hell of a time debugging it
     #[error("vlad generation failed")]
-    VladGenerationFailed,
+    GeneratederationFailed,
 }
 
 /// The vlad generation returns the following type
 #[derive(Clone, Debug, Default)]
-pub struct VladGen {
+pub struct Generated {
     /// the first lock script referenced by the cid
     pub script: Script,
     /// the cid for the first lock script
@@ -55,35 +40,37 @@ pub struct VladGen {
     /// the generated vlad for the plog
     pub vlad: Vlad,
     /// the ephemeral key generated to sign the cid
-    pub key: KeyEntry,
+    pub ephemeral: KeyEntry,
 }
 
 // the states
-states!(Initial, Lock, KeyGen, [Generate], [Failed]);
+states!(Initial, WasmLoad, KeyGen, [Generate], [Failed]);
 
 // the happy path
-path!(Initial -> Lock -> KeyGen -> Generate);
+path!(Initial -> WasmLoad -> KeyGen -> Generate);
 
 // from CommentAsk we can skip ThresholAsk
 path!(Initial -> KeyGen);
 
 // all of the Failed paths
-failures!(Lock, KeyGen, Generate -> Failed);
+failures!(WasmLoad, KeyGen, Generate -> Failed);
 
 /// tracks the current state of the wasm loader
 #[derive(Default)]
 pub struct Context {
     // inputs
+    purpose: String,
     lock: Option<PathBuf>,
     // outputs
-    generated: Option<VladGen>,
+    generated: Option<Generated>,
     error: Option<crate::Error>,
 }
 
 impl Context {
     /// contruct a new context for the key generator
-    pub fn new(lock: Option<PathBuf>) -> Self  {
+    pub fn new(purpose: &str, lock: Option<PathBuf>) -> Self  {
         Self {
+            purpose: purpose.to_string(),
             lock,
             .. Default::default()
         }
@@ -91,12 +78,12 @@ impl Context {
 }
 
 #[async_trait::async_trait]
-impl State<Context, VladGen> for Initial {
+impl State<Context, Generated> for Initial {
     /// ensure that we have the precoditions to succeed
-    async fn next(self: Box<Self>, _context: &mut Context) -> Result<Transition<Context, VladGen>, crate::error::Error> {
+    async fn next(self: Box<Self>, context: &mut Context) -> Result<Transition<Context, Generated>, crate::error::Error> {
         // output what we're doing
-        println!("Generating vlad");
-        Ok(Transition::next(Self, Lock))
+        println!("Generating vlad {}", &context.purpose);
+        Ok(Transition::next(Self, WasmLoad))
     }
 
     /// return the status
@@ -105,16 +92,16 @@ impl State<Context, VladGen> for Initial {
     }
 
     /// Get the result of this state if it is a terminal one
-    async fn result(&self, _context: &mut Context) -> Result<VladGen, crate::error::Error> {
+    async fn result(&self, _context: &mut Context) -> Result<Generated, crate::error::Error> {
         Err(Error::NoResult.into())
     }
 }
 
 #[async_trait::async_trait]
-impl State<Context, VladGen> for Lock {
+impl State<Context, Generated> for WasmLoad {
     /// ask for the codec
-    async fn next(self: Box<Self>, context: &mut Context) -> Result<Transition<Context, VladGen>, crate::error::Error> {
-        let (script, cid) = match load_wasm(context.lock.clone(), Some(Codec::Sha3256)).await {
+    async fn next(self: Box<Self>, context: &mut Context) -> Result<Transition<Context, Generated>, crate::error::Error> {
+        let ret = match wasm::load(&context.purpose, context.lock.clone(), Some(Codec::Sha3256)).await {
             Ok(v) => v,
             Err(e) => {
                 context.error = Some(e);
@@ -122,12 +109,12 @@ impl State<Context, VladGen> for Lock {
             }
         };
 
-        let m: EncodedCid = cid.clone().into();
+        let m: EncodedCid = ret.cid.clone().into();
         debug!("{}", m);
 
-        let vg = VladGen {
-            script,
-            cid,
+        let vg = Generated {
+            script: ret.script,
+            cid: ret.cid,
             .. Default::default()
         };
         context.generated = Some(vg);
@@ -140,16 +127,16 @@ impl State<Context, VladGen> for Lock {
     }
 
     /// Get the result of this state if it is a terminal one
-    async fn result(&self, _context: &mut Context) -> Result<VladGen, crate::error::Error> {
+    async fn result(&self, _context: &mut Context) -> Result<Generated, crate::error::Error> {
         Err(Error::NoResult.into())
     }
 }
 
 #[async_trait::async_trait]
-impl State<Context, VladGen> for KeyGen {
+impl State<Context, Generated> for KeyGen {
     /// compile the script to check for errors
-    async fn next(self: Box<Self>, context: &mut Context) -> Result<Transition<Context, VladGen>, crate::error::Error> {
-        let key = match key_gen("ephemeral", Some(Codec::Ed25519Priv), Some("".to_string()), (Some(1), Some(1))).await {
+    async fn next(self: Box<Self>, context: &mut Context) -> Result<Transition<Context, Generated>, crate::error::Error> {
+        let ephemeral = match key::gen(&context.purpose, Some(Codec::Ed25519Priv), Some("".to_string()), (Some(1), Some(1))).await {
             Ok(v) => v,
             Err(e) => {
                 context.error = Some(e);
@@ -158,7 +145,7 @@ impl State<Context, VladGen> for KeyGen {
         };
 
         let mut vg = context.generated.take().unwrap();
-        vg.key = key;
+        vg.ephemeral = ephemeral;
         context.generated = Some(vg);
         Ok(Transition::next(Self, Generate))
     }
@@ -169,19 +156,19 @@ impl State<Context, VladGen> for KeyGen {
     }
 
     /// Get the result of this state if it is a terminal one
-    async fn result(&self, _context: &mut Context) -> Result<VladGen, crate::error::Error> {
+    async fn result(&self, _context: &mut Context) -> Result<Generated, crate::error::Error> {
         Err(Error::NoResult.into())
     }
 }
 
 #[async_trait::async_trait]
-impl State<Context, VladGen> for Generate {
+impl State<Context, Generated> for Generate {
     /// generate the Hash of the script
-    async fn next(self: Box<Self>, context: &mut Context) -> Result<Transition<Context, VladGen>, crate::error::Error> {
+    async fn next(self: Box<Self>, context: &mut Context) -> Result<Transition<Context, Generated>, crate::error::Error> {
         let mut vg = context.generated.take().unwrap();
         vg.vlad = {
             match vlad::Builder::default()
-                .with_signing_key(&vg.key.secret_keys[0])
+                .with_signing_key(&vg.ephemeral.secret_keys[0])
                 .with_cid(&vg.cid)
                 .try_build() {
                 Ok(v) => v,
@@ -201,19 +188,19 @@ impl State<Context, VladGen> for Generate {
     }
 
     /// Get the result of this state if it is a terminal one
-    async fn result(&self, context: &mut Context) -> Result<VladGen, crate::error::Error> {
+    async fn result(&self, context: &mut Context) -> Result<Generated, crate::error::Error> {
         if context.generated.is_some() {
             Ok(context.generated.take().unwrap())
         } else {
-            Err(Error::VladGenerationFailed.into())
+            Err(Error::GeneratederationFailed.into())
         }
     }
 }
 
 #[async_trait::async_trait]
-impl State<Context, VladGen> for Failed {
+impl State<Context, Generated> for Failed {
     /// ensure that we have the precoditions to succeed
-    async fn next(self: Box<Self>, _context: &mut Context) -> Result<Transition<Context, VladGen>, crate::error::Error> {
+    async fn next(self: Box<Self>, _context: &mut Context) -> Result<Transition<Context, Generated>, crate::error::Error> {
         Ok(Transition::complete(Self))
     }
 
@@ -223,7 +210,7 @@ impl State<Context, VladGen> for Failed {
     }
 
     /// return the error
-    async fn result(&self, context: &mut Context) -> Result<VladGen, crate::error::Error> {
+    async fn result(&self, context: &mut Context) -> Result<Generated, crate::error::Error> {
         Err(context.error.take().ok_or::<crate::error::Error>(Error::NoError.into())?)
     }
 }
@@ -246,7 +233,7 @@ mod tests {
         pb.push("wat");
         pb.push("first.wat");
 
-        let mut ctx = Context::new(Some(pb));
+        let mut ctx = Context::new("test", Some(pb));
         let ret = bo!(run_to_completion(Initial, &mut ctx));
         assert!(ret.is_ok());
 
@@ -262,7 +249,7 @@ mod tests {
         pb.push("wat");
         pb.push("first.wat");
 
-        let ret = bo!(vlad_gen(Some(pb)));
+        let ret = bo!(gen("test", Some(pb)));
         assert!(ret.is_ok());
     }
 }

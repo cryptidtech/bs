@@ -3,6 +3,9 @@
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
+    /// Blocks Error
+    #[error(transparent)]
+    Blocks(#[from] BlocksError),
     /// SshAgent Error
     #[error(transparent)]
     Ssh(#[from] SshError),
@@ -12,23 +15,28 @@ pub enum Error {
     /// I/O error
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    /// Keygen command error
+    #[error(transparent)]
+    Keygen(#[from] crate::commands::key::Error),
     /// A log crate error
     #[error(transparent)]
     Log(#[from] log::SetLoggerError),
+    /// A plog crate error
+    //#[error(transparent)]
+    //Plog(#[from] crate::commands::plog::Error),
+    /// Vladgen command error
+    #[error(transparent)]
+    Vladgen(#[from] crate::commands::vlad::Error),
     /// Wasm command error
     #[error(transparent)]
     Wasm(#[from] crate::commands::wasm::Error),
-    /// Keygen command error
-    #[error(transparent)]
-    Keygen(#[from] crate::commands::keygen::Error),
-    /// Vladgen command error
-    #[error(transparent)]
-    Vladgen(#[from] crate::commands::vladgen::Error),
-
 
     /// BestPractices error
     #[error(transparent)]
     BestPractices(#[from] best_practices::error::Error),
+    /// Multicid error
+    #[error(transparent)]
+    Multicid(#[from] multicid::Error),
     /// Multicodec error
     #[error(transparent)]
     Multicodec(#[from] multicodec::Error),
@@ -68,6 +76,9 @@ pub enum Error {
     /// Cannot initialize config file
     #[error("Cannot initialize config file: {0}")]
     CannotInitializeConfig(String),
+    /// Cannot initialize data dir
+    #[error("Cannot initialize data dir: {0}")]
+    CannotInitializeData(String),
     /// Invalid environment variable key
     #[error("Invalid environment variable key: {0}")]
     InvalidEnv(String),
@@ -83,6 +94,15 @@ pub enum Error {
     /// Invalid backend type
     #[error("Invalid backend type {0}")]
     InvalidBackendType(String),
+}
+
+/// Blocks error
+#[derive(Clone, Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum BlocksError {
+    /// No block associed with the cid
+    #[error("No such block {0}")]
+    NoSuchBlock(String),
 }
 
 /// SshAgent error

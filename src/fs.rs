@@ -4,6 +4,38 @@ use directories::ProjectDirs;
 use log::debug;
 use std::{fs, path::PathBuf};
 
+/// initialize the data directory
+pub fn initialize_data_dir<'a>(
+    path: Option<PathBuf>,
+    org_dirs: &'a [&'a str; 3],
+) -> Result<PathBuf, Error>
+{
+    // get the path or look it up via ProjectDirs crate
+    let path = {
+        match path {
+            Some(path) => path,
+            None => {
+                let pdirs = ProjectDirs::from(org_dirs[0], org_dirs[1], org_dirs[2])
+                    .ok_or(Error::NoHome)?;
+                pdirs.data_dir().to_path_buf()
+            }
+        }
+    };
+
+    // create the parent directories if needed
+    match path.try_exists() {
+        Ok(result) => {
+            if !result {
+                debug!("creating: {}", path.display());
+                fs::create_dir_all(path.clone())?;
+            }
+        }
+        Err(e) => return Err(Error::CannotInitializeData(format!("{}", e))),
+    }
+
+    Ok(path)
+}
+
 /// initialie a local file in the correct configuration location by calculating
 /// its correct location and then calling the init callback with the path so
 /// the file can be created

@@ -140,11 +140,14 @@ macro_rules! failures {
     };
 }
 
-/// Wasm loader state machine
-pub mod wasm;
-
 /// key generator state machine
-pub mod keygen;
+pub mod key;
+
+/// provenance log generatorA state machine
+//pub mod plog;
 
 /// vlad generator state machine
-pub mod vladgen;
+pub mod vlad;
+
+/// Wasm loader state machine
+pub mod wasm;

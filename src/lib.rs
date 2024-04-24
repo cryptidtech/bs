@@ -10,6 +10,10 @@
 )]
 //trace_macros!(true);
 
+/// Blocks
+pub mod blocks;
+pub use blocks::Blocks;
+
 /// Commands
 pub mod commands;
 pub use commands::{Transition, TransitionFrom, State, run_to_completion};
@@ -24,7 +28,7 @@ pub use error::Error;
 
 /// Filesystem functions
 pub mod fs;
-pub use fs::initialize_local_file;
+pub use fs::{initialize_data_dir, initialize_local_file};
 
 /// Keychain interface
 pub mod keychain;

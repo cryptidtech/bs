@@ -9,8 +9,8 @@ use std::{io::{self, BufRead}, path::PathBuf};
 use wacc::vm::Compiler;
 
 /// convenience function that hides all of the details
-pub async fn load_wasm(path: Option<PathBuf>, cid_hash_codec: Option<Codec>) -> Result<(Script, Cid), crate::error::Error> {
-    let mut ctx = Context::new(path, cid_hash_codec);
+pub async fn load(purpose: &str, path: Option<PathBuf>, cid_hash_codec: Option<Codec>) -> Result<Generated, crate::error::Error> {
+    let mut ctx = Context::new(purpose, path, cid_hash_codec);
     crate::commands::run_to_completion(Initial, &mut ctx).await
 }
 
@@ -50,8 +50,15 @@ pub enum Error {
     WasmLoadFailed,
 }
 
-/// the type returned from this state machine
-pub type ReturnValue = (Script, Cid);
+/// The wasm load returns the following type
+#[derive(Clone, Debug, Default)]
+pub struct Generated {
+    /// the first lock script referenced by the cid
+    pub script: Script,
+    /// the cid for the first lock script
+    pub cid: Cid,
+}
+
 
 // the states, both `Hash` and `Failed` are terminal states
 states!(Initial, PathAsk, CodecAsk, Load, Compile, [Hash], [Failed]);
@@ -69,8 +76,10 @@ path!(PathAsk -> Load);
 failures!(PathAsk, CodecAsk, Load, Compile, Hash -> Failed);
 
 /// tracks the current state of the wasm loader
+#[derive(Default)]
 pub struct Context {
     // inputs
+    purpose: String,
     path: Option<PathBuf>,
     codec: Option<Codec>,
     // outputs
@@ -81,24 +90,22 @@ pub struct Context {
 
 impl Context {
     /// contruct a new context for the wasm loader state machine
-    pub fn new(path: Option<PathBuf>, codec: Option<Codec>) -> Self  {
+    pub fn new(purpose: &str, path: Option<PathBuf>, codec: Option<Codec>) -> Self  {
         Self {
-            // inputs
+            purpose: purpose.to_string(),
             path,
             codec,
-            // outputs
-            script: None,
-            cid: None,
-            error: None,
+            .. Default::default()
         }
     }
 }
 
 #[async_trait::async_trait]
-impl State<Context, ReturnValue> for Initial {
+impl State<Context, Generated> for Initial {
     /// ensure that we have the precoditions to succeed
-    async fn next(self: Box<Self>, context: &mut Context) -> Result<Transition<Context, ReturnValue>, crate::error::Error> {
+    async fn next(self: Box<Self>, context: &mut Context) -> Result<Transition<Context, Generated>, crate::error::Error> {
         // check that we have a path and that it points at a file
+        println!("Loading wasm {}", &context.purpose);
         if context.path.is_none() {
             Ok(Transition::next(Self, PathAsk))
         } else if context.codec.is_none() || !SAFE_HASH_CODECS.contains(&context.codec.clone().unwrap()) {
@@ -114,15 +121,15 @@ impl State<Context, ReturnValue> for Initial {
     }
 
     /// Get the result of this state if it is a terminal one
-    async fn result(&self, _context: &mut Context) -> Result<ReturnValue, crate::error::Error> {
+    async fn result(&self, _context: &mut Context) -> Result<Generated, crate::error::Error> {
         Err(Error::NoResult.into())
     }
 }
 
 #[async_trait::async_trait]
-impl State<Context, ReturnValue> for PathAsk {
+impl State<Context, Generated> for PathAsk {
     /// get the wasm file path from the user
-    async fn next(self: Box<Self>, context: &mut Context) -> Result<Transition<Context, ReturnValue>, crate::error::Error> {
+    async fn next(self: Box<Self>, context: &mut Context) -> Result<Transition<Context, Generated>, crate::error::Error> {
         // loop getting the lock file path from the user
         let stdin = io::stdin();
         loop {
@@ -162,15 +169,15 @@ impl State<Context, ReturnValue> for PathAsk {
     }
 
     /// Get the result of this state if it is a terminal one
-    async fn result(&self, _context: &mut Context) -> Result<ReturnValue, crate::error::Error> {
+    async fn result(&self, _context: &mut Context) -> Result<Generated, crate::error::Error> {
         Err(Error::NoResult.into())
     }
 }
 
 #[async_trait::async_trait]
-impl State<Context, ReturnValue> for CodecAsk {
+impl State<Context, Generated> for CodecAsk {
     /// ask for the codec
-    async fn next(self: Box<Self>, context: &mut Context) -> Result<Transition<Context, ReturnValue>, crate::error::Error> {
+    async fn next(self: Box<Self>, context: &mut Context) -> Result<Transition<Context, Generated>, crate::error::Error> {
 
         // loop getting the key type from the user
         let stdin = io::stdin();
@@ -218,15 +225,15 @@ impl State<Context, ReturnValue> for CodecAsk {
     }
 
     /// Get the result of this state if it is a terminal one
-    async fn result(&self, _context: &mut Context) -> Result<ReturnValue, crate::error::Error> {
+    async fn result(&self, _context: &mut Context) -> Result<Generated, crate::error::Error> {
         Err(Error::NoResult.into())
     }
 }
 
 #[async_trait::async_trait]
-impl State<Context, ReturnValue> for Load {
+impl State<Context, Generated> for Load {
     /// load the script from the file
-    async fn next(self: Box<Self>, context: &mut Context) -> Result<Transition<Context, ReturnValue>, crate::error::Error> {
+    async fn next(self: Box<Self>, context: &mut Context) -> Result<Transition<Context, Generated>, crate::error::Error> {
         // try to build a script from the file
         let pb = context.path.take().unwrap();
         match script::Builder::from_code_file(&pb).try_build() {
@@ -247,15 +254,15 @@ impl State<Context, ReturnValue> for Load {
     }
 
     /// Get the result of this state if it is a terminal one
-    async fn result(&self, _context: &mut Context) -> Result<ReturnValue, crate::error::Error> {
+    async fn result(&self, _context: &mut Context) -> Result<Generated, crate::error::Error> {
         Err(Error::NoResult.into())
     }
 }
 
 #[async_trait::async_trait]
-impl State<Context, ReturnValue> for Compile {
+impl State<Context, Generated> for Compile {
     /// compile the script to check for errors
-    async fn next(self: Box<Self>, context: &mut Context) -> Result<Transition<Context, ReturnValue>, crate::error::Error> {
+    async fn next(self: Box<Self>, context: &mut Context) -> Result<Transition<Context, Generated>, crate::error::Error> {
         match {
             if context.script.is_some() {
                 let script = context.script.clone().unwrap();
@@ -279,15 +286,15 @@ impl State<Context, ReturnValue> for Compile {
     }
 
     /// Get the result of this state if it is a terminal one
-    async fn result(&self, _context: &mut Context) -> Result<ReturnValue, crate::error::Error> {
+    async fn result(&self, _context: &mut Context) -> Result<Generated, crate::error::Error> {
         Err(Error::NoResult.into())
     }
 }
 
 #[async_trait::async_trait]
-impl State<Context, ReturnValue> for Hash {
+impl State<Context, Generated> for Hash {
     /// generate the Hash of the script
-    async fn next(self: Box<Self>, context: &mut Context) -> Result<Transition<Context, ReturnValue>, crate::error::Error> {
+    async fn next(self: Box<Self>, context: &mut Context) -> Result<Transition<Context, Generated>, crate::error::Error> {
         match {
             if context.script.is_some() && context.codec.is_some() {
                 let script = context.script.clone().unwrap();
@@ -325,11 +332,11 @@ impl State<Context, ReturnValue> for Hash {
     }
 
     /// Get the result of this state if it is a terminal one
-    async fn result(&self, context: &mut Context) -> Result<ReturnValue, crate::error::Error> {
+    async fn result(&self, context: &mut Context) -> Result<Generated, crate::error::Error> {
         if context.script.is_some() && context.cid.is_some() {
             let script = context.script.take().unwrap();
             let cid = context.cid.take().unwrap();
-            Ok((script, cid))
+            Ok(Generated { script, cid })
         } else {
             Err(Error::WasmLoadFailed.into())
         }
@@ -337,9 +344,9 @@ impl State<Context, ReturnValue> for Hash {
 }
 
 #[async_trait::async_trait]
-impl State<Context, ReturnValue> for Failed {
+impl State<Context, Generated> for Failed {
     /// ensure that we have the precoditions to succeed
-    async fn next(self: Box<Self>, _context: &mut Context) -> Result<Transition<Context, ReturnValue>, crate::error::Error> {
+    async fn next(self: Box<Self>, _context: &mut Context) -> Result<Transition<Context, Generated>, crate::error::Error> {
         Ok(Transition::complete(Self))
     }
 
@@ -349,7 +356,7 @@ impl State<Context, ReturnValue> for Failed {
     }
 
     /// return the error
-    async fn result(&self, context: &mut Context) -> Result<ReturnValue, crate::error::Error> {
+    async fn result(&self, context: &mut Context) -> Result<Generated, crate::error::Error> {
         Err(context.error.take().ok_or::<crate::error::Error>(Error::MissingError.into())?.clone().into())
     }
 }
@@ -372,15 +379,15 @@ mod tests {
         pb.push("wat");
         pb.push("first.wat");
 
-        let mut ctx = Context::new(Some(pb), Some(Codec::Sha3256));
+        let mut ctx = Context::new("to test", Some(pb), Some(Codec::Sha3256));
         let ret = bo!(run_to_completion(Initial, &mut ctx));
         assert!(ret.is_ok());
 
-        let (script, cid) = ret.unwrap();
-        let ecid: EncodedCid = cid.clone().into();
-        println!("cid: {:?}", cid);
+        let ret = ret.unwrap();
+        let ecid: EncodedCid = ret.cid.clone().into();
+        println!("cid: {:?}", ret.cid);
         println!("encoded cid: {}", ecid);
-        println!("script: {:?}", script);
+        println!("script: {:?}", ret.script);
     }
     
     #[test]
@@ -389,7 +396,7 @@ mod tests {
         pb.push("wat");
         pb.push("first.wat");
 
-        let ret = bo!(load_wasm(Some(pb), Some(Codec::Sha3256)));
+        let ret = bo!(load("to test", Some(pb), Some(Codec::Sha3256)));
         assert!(ret.is_ok());
     }
 
@@ -399,7 +406,7 @@ mod tests {
         let mut pb = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         pb.push("none.wat");
 
-        let mut ctx = Context::new(Some(pb), Some(Codec::Sha3256));
+        let mut ctx = Context::new("to test", Some(pb), Some(Codec::Sha3256));
         let ret = bo!(run_to_completion(Initial, &mut ctx));
         assert!(ret.is_err());
     }
@@ -410,7 +417,7 @@ mod tests {
         let mut pb = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         pb.push("wontcompile.wat");
 
-        let mut ctx = Context::new(Some(pb), Some(Codec::Sha3256));
+        let mut ctx = Context::new("to test", Some(pb), Some(Codec::Sha3256));
         let ret = bo!(run_to_completion(Initial, &mut ctx));
         assert!(ret.is_err());
     }

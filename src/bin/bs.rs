@@ -2,7 +2,7 @@
 #![allow(dead_code)]
 //use best_practices::cli::io::{reader, writer};
 use bs::prelude::*;
-use crate::commands::keygen::key_gen;
+use crate::commands::key;
 //use log::debug;
 use multicodec::Codec;
 //use multihash::EncodedMultihash;
@@ -37,6 +37,10 @@ struct Opt {
     #[structopt(long = "keychain", short = "k", parse(from_os_str))]
     keyfile: Option<PathBuf>,
 
+    /// Data dir to use
+    #[structopt(long = "data", short = "d", parse(from_os_str))]
+    data: Option<PathBuf>,
+
     /// Use an ssh-agent?
     #[structopt(long = "ssh-agent", short = "s")]
     sshagent: bool,
@@ -59,7 +63,7 @@ enum Command {
         #[structopt(subcommand)]
         cmd: KeyCommand,
     },
-
+    /*
     /// Provenance log operations
     #[structopt(name = "plog")]
     Plog {
@@ -67,6 +71,7 @@ enum Command {
         #[structopt(subcommand)]
         cmd: PlogCommand
     }
+    */
 }
 
 #[derive(Debug, StructOpt)]
@@ -158,12 +163,14 @@ enum KeyCommand {
     */
 }
 
+/*
 #[derive(Debug, StructOpt)]
 enum PlogCommand {
     /// Generate a new key
     #[structopt(name = "generate")]
     Generate, 
 }
+*/
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -218,7 +225,7 @@ async fn main() -> Result<(), Error> {
                     };
 
                     // generate the new key
-                    let gk = key_gen("a new key", codec, comment, (threshold, limit)).await?;
+                    let gk = key::gen("a new key", codec, comment, (threshold, limit)).await?;
 
                     // get the config
                     let mut config =
@@ -343,15 +350,17 @@ async fn main() -> Result<(), Error> {
                 */
             }
         }
+        /*
         Command::Plog { cmd } => {
             match cmd {
                 PlogCommand::Generate => {
                     // generate the new key
-                    //let _plog = plog_gen().await?;
-                    //println!("{}", plog);
+                    let plog = plog::gen("for fun").await?;
+                    println!("{:?}", plog);
                 }
             }
         }
+        */
     }
 
     Ok(())
