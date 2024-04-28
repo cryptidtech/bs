@@ -16,11 +16,12 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - uses: webfactory/ssh-agent@v0.9.0
+    - uses: tanmancan/action-setup-ssh-agent-key@1.0.0
       with:
-        ssh-private-key: |
-          ${{ secrets.WACC_DEPLOY_KEY }}
-          ${{ secrets.PLOG_DEPLOY_KEY }}
+        ssh-private-key: ${{ secrets.WACC_DEPLOY_KEY }}
+    - uses: tanmancan/action-setup-ssh-agent-key@1.0.0
+      with:
+        ssh-private-key: ${{ secrets.PLOG_DEPLOY_KEY }}
     - name: Build
       run: cargo build --verbose
     - name: Run tests
