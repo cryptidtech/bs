@@ -1,6 +1,6 @@
-[![](https://img.shields.io/badge/made%20by-Cryptid%20Technologies-gold.svg?style=flat-square)][CRYPTID]
-[![](https://img.shields.io/badge/project-provenance-purple.svg?style=flat-square)][PROVSPECS]
-[![](https://img.shields.io/badge/project-multiformats-blue.svg?style=flat-square)][MULTIFORMATS]
+[![](https://img.shields.io/badge/made%20by-Cryptid%20Technologies-gold.svg)][CRYPTID]
+[![](https://img.shields.io/badge/project-provenance-purple.svg)][PROVSPECS]
+[![](https://img.shields.io/badge/project-multiformats-blue.svg)][MULTIFORMATS]
 [![](https://img.shields.io/badge/License-Functional_Source_1.1-red)][FSL]
 ![](https://github.com/cryptidtech/bs/actions/workflows/rust.yml/badge.svg)
 
