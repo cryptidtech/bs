@@ -8,6 +8,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_NET_GIT_FETCH_WITH_CLI: true
 
 jobs:
   build:
@@ -16,12 +17,14 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - uses: tanmancan/action-setup-ssh-agent-key@1.0.0
+    - uses: webfactory/ssh-agent@v0.9.0
       with:
-        ssh-private-key: ${{ secrets.WACC_DEPLOY_KEY }}
-    - uses: tanmancan/action-setup-ssh-agent-key@1.0.0
-      with:
-        ssh-private-key: ${{ secrets.PLOG_DEPLOY_KEY }}
+        ssh-private-key: |
+          ${{ secrets.WACC_DEPLOY_KEY }}
+          ${{ secrets.PLOG_DEPLOY_KEY }}
+    - name: Share SSH_AUTH_SOCK
+      run: |
+          echo "SSH_AUTH_SOCK=${SSH_AUTH_SOCK}" >> $GITHUB_ENV
     - name: Build
       run: cargo build --verbose
     - name: Run tests
