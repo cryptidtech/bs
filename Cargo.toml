@@ -27,7 +27,7 @@ multikey = { version = "1.0", git = "https://github.com/cryptidtech/multikey.git
 multisig = { version = "1.0", git = "https://github.com/cryptidtech/multisig.git" }
 multitrait = { version = "1.0", git = "https://github.com/cryptidtech/multitrait.git" }
 multiutil = { version = "1.0", git = "https://github.com/cryptidtech/multiutil.git" }
-provenance-log = { version = "1.0", git = "ssh://github.com/cryptidtech/provenance-log.git" }
+provenance-log = { version = "1.0", git = "ssh://git@github.com/cryptidtech/provenance-log.git" }
 rand = "0.8"
 serde = { version = "1.0", default-features = false, features = ["alloc", "derive"], optional = true }
 serde_cbor = "0.11"
@@ -39,7 +39,7 @@ stderrlog = "0.6"
 thiserror = "1.0"
 tokio = { version = "1.37", features = ["full"] }
 toml = "0.8"
-wacc = { version = "1.0", git = "ssh://github.com/cryptidtech/wacc.git" }
+wacc = { version = "1.0", git = "ssh://git@github.com/cryptidtech/wacc.git" }
 
 [dev-dependencies]
 tokio-test = "0.4"
