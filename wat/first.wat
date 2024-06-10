@@ -20,9 +20,9 @@
     ;; │        ┆         │
     ;; ┆                  ┆
 
-    ;; check_signature("/ephemeral")
+    ;; check_signature("/entrykey")
     i32.const 0
-    i32.const 10
+    i32.const 9
     call $check_signature
     return
   )
@@ -33,5 +33,5 @@
   ;; String constants for referenceing key-value pairs
   ;;
   ;;                    [NAME]              [IDX] [LEN]
-  (data (i32.const  0)  "/ephemeral" )  ;;    0     10
+  (data (i32.const  0)  "/entrykey" )  ;;   0     9
 )

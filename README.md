@@ -494,7 +494,7 @@ The steps for creating the first entry in a provenance log are as follows:
 1.  Create/select the WASM lock script to use for validating the first entry in
     the provenance log and hash it to get its CID. Choose a lock script that
     verifies the signature over the first entry using the public key stored under
-    `/ephemeralkey`.
+    `/entrykey`.
 2.  Generate an ephemeral vlad cryptographic public key pair for signing the
     CID of the first entry lock script and possibly the first entry in the
     provenance log.
@@ -520,7 +520,7 @@ The steps for creating the first entry in a provenance log are as follows:
     format. Optionally add an update operation that sets the `/recoverykey` to
     the threshold public get generated in step 1. Also add an update operation that
     sets the values for anything else related to the use of this provenance log.
-    There must be an update operation setting the `/ephemeralkey` value to the
+    There must be an update operation setting the `/entrykey` value to the
     ephemeral public key used to sign the first entry as well as an update
     operation setting the `/vladkey` value to the ephemeral public key used to
     sign the CID in the VLAD.
@@ -534,8 +534,8 @@ The steps for creating the first entry in a provenance log are as follows:
     generated when creating the VLAD.
 9.  Encode the digital signature in the multisig multiformat and assign the
     value to the "proof" member in the entry.
-10. DESTROY BOTH THE `/ephemeralkey` and `/vladkey` PRIVATE KEYS USING
-    APPROPRIATE DELETION METHODS.
+10. DESTROY BOTH THE `/entrykey` and `/vladkey` PRIVATE KEYS USING APPROPRIATE
+    DELETION METHODS.
 11. Calculate the content address for the first entry and encode it as a CID.
 12. Store the first entry in a content addressable storage system appropriate
     for the context in which the provenance log identity will have meaning. If

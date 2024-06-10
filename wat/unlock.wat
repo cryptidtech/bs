@@ -16,7 +16,9 @@
     ;; concatenates this data with the proof data H(<"/entry/"> ||
     ;; <"/entry/proof">) and hash it to see if it matches the hash referenced
     ;; by the key passed to check_preimage.
-    i32.const 0 i32.const 7 call $push
+    i32.const 0
+    i32.const 7
+    call $push
 
     ;; "/entry/proof", this data is either a digital signature over <"/entry/">
     ;; or the data to be concatenated with <"/entry/"> and hashed.
@@ -41,7 +43,7 @@
 
   ;; String constants for referenceing key-value pairs
   ;;
-  ;;                   [NAME]                  [IDX] [LEN]
-  (data (i32.const  0) "/entry/"  )       ;;     0     7
-  (data (i32.const  7) "/entry/proof"  )  ;;     7     12
+  ;;                   [NAME]               [IDX] [LEN]
+  (data (i32.const  0) "/entry/"  )       ;;    0     7
+  (data (i32.const  7) "/entry/proof"  )  ;;    7    12
 )
