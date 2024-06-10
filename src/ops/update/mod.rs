@@ -13,7 +13,7 @@ use crate::Error;
 use provenance_log::{Entry, Log};
 
 /// update a provenance log given the update config
-pub fn update(_log: &mut Log, _config: Config) -> Result<Entry, Error> {
+pub fn update_plog(_log: &mut Log, _config: Config) -> Result<Entry, Error> {
     Ok(Entry::default())
 
     /*

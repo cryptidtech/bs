@@ -3,7 +3,8 @@
 //mod commands;
 
 //use best_practices::cli::io::{reader, writer};
-use bs::prelude::*;
+//use bs::prelude::*;
+use bs_cli::prelude::*;
 //use commands::prelude::*;
 //use log::debug;
 //use multicodec::Codec;
@@ -18,9 +19,9 @@ use structopt::StructOpt;
 #[derive(Debug, StructOpt)]
 #[structopt(
     name = "bs",
-    version = "0.1.1",
-    author = "Dave Huseby <dwh@linuxprogrammer.org>",
-    about = "BetterSign provenance log tool"
+    version = clap::crate_version!(),
+    author = clap::crate_authors!(),
+    about = clap::crate_description!(),
 )]
 struct Opt {
     /// Silence all output
@@ -58,6 +59,13 @@ struct Opt {
 
 #[derive(Debug, StructOpt)]
 enum Command {
+    /// Config commands
+    #[structopt(name = "config")]
+    Config {
+        /// Config sub-command
+        #[structopt(subcommand)]
+        cmd: Option<subcmds::config::Command>,
+    },
     /*
     /// Key operations
     #[structopt(name = "key")]
@@ -66,14 +74,14 @@ enum Command {
         #[structopt(subcommand)]
         cmd: KeyCommand,
     },
+    */
     /// Provenance log operations
     #[structopt(name = "plog")]
     Plog {
         /// Provenance log subcommand
         #[structopt(subcommand)]
-        cmd: PlogCommand
-    }
-    */
+        cmd: subcmds::plog::Command,
+    },
 }
 
 /*
@@ -88,19 +96,39 @@ enum PlogCommand {
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     // parse the cli options
-    let _opt = Opt::from_args();
+    let opt = Opt::from_args();
 
-    /*
     // set up the logger
     stderrlog::new()
         .quiet(opt.quiet)
         .verbosity(opt.verbosity)
         .init()
-        .map_err(|e| bs::Error::Log(e))?;
-    */
+        .map_err(|e| bs_cli::Error::Log(e))?;
 
-    /*
-    match opt.cmd {
+    // load the config
+    let mut config =
+        Config::from_path(opt.config, opt.keyfile, opt.sshagent, opt.sshagentenv)?;
+
+    let ret = match opt.cmd {
+        // process a config command
+        Command::Config { cmd } => subcmds::config::go(cmd, &mut config).await,
+        // process a plog command
+        Command::Plog { cmd } => subcmds::plog::go(cmd, &config).await,
+    };
+
+    if let Err(ref e) = ret {
+        eprintln!("{}", e);
+        Opt::clap().print_help().unwrap();
+        println!();
+        ret?
+    }
+
+    // save any config changes
+    config.save()?;
+
+    Ok(())
+}
+        /*
         Command::Key { cmd } => {
             match cmd {
                 /*
@@ -280,5 +308,3 @@ async fn main() -> Result<(), Error> {
     }
     */
 
-    Ok(())
-}

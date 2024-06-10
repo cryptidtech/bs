@@ -3,7 +3,7 @@ name = "bs-cli"
 version = "1.0.3"
 authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
 edition = "2018"
-description = "BetterSign cli signing tool"
+description = "BetterSign Provenance Tool"
 repository = "https://github.com/cryptidtech/bs"
 readme = "README.md"
 keywords = ["signing", "provenance logs", "decentralized identity"]
@@ -17,6 +17,7 @@ anyhow = "1.0"
 async-trait = "0.1"
 best-practices = { version = "0.1", git = "https://github.com/cryptidtech/best-practices.git" }
 bs = { path = ".." }
+clap = { version = "4.5.6", features = ["cargo"] }
 directories = "5.0"
 ed25519-dalek = "2.0"
 log = "0.4"

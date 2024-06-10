@@ -30,13 +30,13 @@ pub use keychain::{Backend, Keychain, KeychainConfig, KeyEntry};
 pub mod local_file;
 pub use local_file::LocalFile;
 
-/// bettersign operations
-pub mod ops;
-pub use ops::prelude::*;
-
 /// SSH Agent keychain
 pub mod ssh_agent;
 pub use ssh_agent::SshAgent;
+
+/// cli subcommands
+pub mod subcmds;
+pub use subcmds::prelude::*;
 
 /// ...and in the darkness bind them
 pub mod prelude {

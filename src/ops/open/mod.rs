@@ -25,7 +25,7 @@ pub enum OpenKey {
 }
 
 /// open a new provenanc log based on the config
-pub fn open<F1, F2>(config: Config, get_key: F1, sign_entry: F2) -> Result<Log, Error>
+pub fn open_plog<F1, F2>(config: Config, get_key: F1, sign_entry: F2) -> Result<Log, Error>
 where
     F1: Fn(OpenKey, Codec) -> Result<Multikey, Error>,
     F2: Fn(&Multikey, &[u8]) -> Result<Multisig, Error>,

@@ -3,15 +3,12 @@
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
-    /// Open operation errors
+    /// Plog errors
     #[error(transparent)]
-    Open(#[from] OpenError),
-    /// SshAgent Error
+    Plog(#[from] PlogError),
+    /// SshAgent errors
     #[error(transparent)]
     Ssh(#[from] SshError),
-    /// Update operation errors
-    #[error(transparent)]
-    Update(#[from] UpdateError),
 
     /// Formatting error
     #[error(transparent)]
@@ -26,6 +23,9 @@ pub enum Error {
     /// BestPractices error
     #[error(transparent)]
     BestPractices(#[from] best_practices::error::Error),
+    /// Bs errors
+    #[error(transparent)]
+    Bs(#[from] bs::Error),
     /// Multicid error
     #[error(transparent)]
     Multicid(#[from] multicid::Error),
@@ -82,6 +82,9 @@ pub enum Error {
     /// No keychain
     #[error("No keychain available")]
     NoKeychain,
+    /// Invalid hash type
+    #[error("Invalid hash type {0}-{1}")]
+    InvalidHashType(String, String),
     /// Invalid key type
     #[error("Invalid key type {0}")]
     InvalidKeyType(String),
@@ -111,29 +114,11 @@ pub enum SshError {
     NotPublicKey,
 }
 
-/// Open op errors
+/// Plog errors
 #[derive(Clone, Debug, thiserror::Error)]
 #[non_exhaustive]
-pub enum OpenError {
-    /// No first lock script given
-    #[error("No first lock script given")]
-    NoFirstLockScript,
-    /// No entry lock script given
-    #[error("No lock script for first entry given")]
-    NoEntryLockScript,
-    /// No entry unlock script given
-    #[error("No unlock script for first entry given")]
-    NoEntryUnlockScript,
-}
-
-/// Update op errors
-#[derive(Clone, Debug, thiserror::Error)]
-#[non_exhaustive]
-pub enum UpdateError {
-    /// No op key-path
-    #[error("Missing op key-path")]
-    NoOpKeyPath,
-    /// No update op value
-    #[error("Missing update op value")]
-    NoUpdateOpValue,
+pub enum PlogError {
+    /// No plog command
+    #[error("No plog command")]
+    NoCommand,
 }
