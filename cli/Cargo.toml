@@ -1,15 +1,24 @@
 [package]
-name = "bs"
-version = "1.0.2"
+name = "bs-cli"
+version = "1.0.3"
 authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
 edition = "2018"
-description = "BetterSign signing tool"
+description = "BetterSign cli signing tool"
 repository = "https://github.com/cryptidtech/bs"
 readme = "README.md"
-keywords = ["provenance logs", "decentralized identity"]
+keywords = ["signing", "provenance logs", "decentralized identity"]
 license = "Functional Source License 1.1"
 
+[features]
+default = ["serde"]
+
 [dependencies]
+anyhow = "1.0"
+async-trait = "0.1"
+best-practices = { version = "0.1", git = "https://github.com/cryptidtech/best-practices.git" }
+bs = { path = ".." }
+directories = "5.0"
+ed25519-dalek = "2.0"
 log = "0.4"
 multibase = { version = "1.0", git = "https://github.com/cryptidtech/rust-multibase.git" }
 multicid = { version = "1.0", git = "https://github.com/cryptidtech/multicid.git" }
@@ -17,10 +26,21 @@ multicodec = { version = "1.0", git = "https://github.com/cryptidtech/rust-multi
 multihash = { version = "1.0", git = "https://github.com/cryptidtech/multihash.git" }
 multikey = { version = "1.0", git = "https://github.com/cryptidtech/multikey.git" }
 multisig = { version = "1.0", git = "https://github.com/cryptidtech/multisig.git" }
+multitrait = { version = "1.0", git = "https://github.com/cryptidtech/multitrait.git" }
+multiutil = { version = "1.0", git = "https://github.com/cryptidtech/multiutil.git" }
 provenance-log = { version = "1.0", git = "ssh://git@github.com/cryptidtech/provenance-log.git" }
 rand = "0.8"
+serde = { version = "1.0", default-features = false, features = ["alloc", "derive"], optional = true }
+serde_cbor = "0.11"
+serde_json = "1.0"
+ssh-key = { version = "0.6.2", features = ["crypto", "ed25519"]}
+ssh-agent-client-rs = "0.9"
+structopt = "0.3"
+stderrlog = "0.6"
 thiserror = "1.0"
+tokio = { version = "1.37", features = ["full"] }
+toml = "0.8"
 wacc = { version = "1.0", git = "ssh://git@github.com/cryptidtech/wacc.git" }
 
-[workspace]
-members = ["cli"]
+[dev-dependencies]
+tokio-test = "0.4"

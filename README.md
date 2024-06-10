@@ -299,7 +299,7 @@ data structure.
 ║  │             v              │                                      v    │  ║
 ║  │ ╭─[WASM]─────────╮         │      ╭─[IPLD]────────╮  ╭─[IPLD]────────╮ │  ║
 ║  │ │ (module        │         │    X── Prev          │<── Prev          │ │  ║
-║  │ │   (func $main  │         ╰─────── Eph. Pubkey   │  │ 1111101001101 │ │  ║
+║  │ │   (func $main  │         ╰─────── Vlad Pubkey   │  │ 1111101001101 │ │  ║
 ║  │ │     return     │                │ 1111000111100 │  │ 0111100011110 │ │  ║
 ║  │ │   )            │ ─ verifies ──> │ 0110110100010 │  │ 0011011110001 │ │  ║
 ║  │ │ )              │                │ 1101010011000 │  │ 1101101000100 │ │  ║
@@ -323,13 +323,15 @@ one-time Lamport signature is used. This increases the size of the VLAD to just
 over 8KB in size but gains quantum resistance. Because Lamport signatures are
 one-time use signatures, the first entry must be signed with a separate key
 pair than the ephemeral key pair used to sign the VLAD. This changes slightly
-the procedure for creating the VLAD and first entry. The ephemeral Lamport key
-pair is generated first and used to sign the CID to the first lock script and
-create the VLAD. Another Lamport key pair is generated to use for signing the
-first entry. The first entry must contain the VLAD, the ephemeral public key,
-and the first entry signing public key before it is signed. In high security
-use cases, the WASM code used for validating the first entry does three things:
-it verifies the signature in the VLAD using the ephemeral public key, it checks
+the procedure for creating the VLAD and first entry. Two Lamport key pairs are
+generated, one for signing the the CID of the first lock script to create the
+VLAD and the other to sign the first entry of the provenance log. So in addion
+to storing the public key for the first entry signature under `/ephemeralkey`,
+the public key for the VLAD is also stored under `/vladkey` in the key-value
+store. The first entry must contain the VLAD, the ephemeral public key, and the
+first entry signing public key before it is signed. In high security use cases,
+the WASM code used for validating the first entry does three things: it
+verifies the signature in the VLAD using the ephemeral public key, it checks
 that the CID in the VLAD matches its own CID, and it checks the signature over
 the first entry.
 
@@ -365,7 +367,7 @@ provenance log stored in content addressable storage.
 ║  │ ╭─[WASM]─────────╮         │      ╭─[Foot]────────╮  ╭─[Head]────────╮ │  ║
 ║  │ │ (module        │         │      │ Seqno 0       │  │ Seqno 1       │ │  ║
 ║  │ │   (func $main  │         │    X── Prev NULL     │<── Prev          │ │  ║
-║  │ │     return     │         ╰─────── Eph. Pubkey   │  │               │ │  ║
+║  │ │     return     │         ╰─────── Vlad Pubkey   │  │               │ │  ║
 ║  │ │   )            │ ─ verifies ──> │               │  │               │ │  ║
 ║  │ │ )              │                │               │  │               │ │  ║
 ║  │ ╰────────────────╯                ╰───────────────╯  ╰───────────────╯ │  ║
@@ -489,60 +491,56 @@ The steps for creating the first entry in a provenance log are as follows:
 
 #### VLAD Creation
 
-1. Create/select the WASM lock script to use for validating the first entry in
-   the provenance log and hash it to get its CID. If using Lamport signatures
-   for the VLAD and first entry, choose a lock script that verifies the
-   signature over the VLAD using the public key stored under `/ephemeral` and
-   also verifies the signature over the first entry using the public key stored
-   under `/ephemeralself`. Lamport signatures are one-time signatures so we
-   need two key pairs.
-2. Generate an ephemeral cryptographic public key pair. Use one-time Lamport
-   keys for quantum resistance.
-3. Create a detached digital signature of the WASM lock script CID using the
-   ephemeral key pair.
-4. Encode the digital signature in the multisig multiformat and create a VLAD
-   with a multisig nonce and the WASM CID values.
+1.  Create/select the WASM lock script to use for validating the first entry in
+    the provenance log and hash it to get its CID. Choose a lock script that
+    verifies the signature over the first entry using the public key stored under
+    `/ephemeralkey`.
+2.  Generate an ephemeral vlad cryptographic public key pair for signing the
+    CID of the first entry lock script and possibly the first entry in the
+    provenance log.
+3.  Create a detached digital signature of the WASM lock script CID using the
+    ephemeral key pair.
+4.  Encode the digital signature in the multisig multiformat and create a VLAD
+    with a multisig nonce and the WASM CID values.
 
 #### First Entry Creation (Non-forked)
 
-1. Generate a new public key pair to advertise as the current signing key in
-   the provenance log. Optionally, you may want set up a Lamport threshold
-   signature group, giving key shares to each of the trusted group members.
-   Setting up the lock script with the threshold signature has the highes
-   precedence allows "social recovery" of provenance log control should your
-   signing key be compromised.
-2. Create the first entry setting the "vlad" field to the newly constructed
-   VLAD value.
-3. Set the "prev" and "lipmaa" fields to NULL CIDs.
-4. Sets the "seqno" field to 0.
-5. Add an update operation to the "ops" list that sets `/pubkey` to the public
-   key value to the public key generated in step 1 encoded in the multikey
-   format. Optionally add an update operation that sets the `/tpubkey` to the
-   threshold public get generated in step 1. Also add an update operation that
-   sets the values for anything else related to the use of this provenance log.
-   There must be an update operation setting the `/ephemeral` value to the
-   ephemeral public key generated when creating the VLAD. If using Lamport
-   signatures, it is also necessary to generate an ephemeral key pair to sign
-   the first entry in the log with. There must be an update operation to
-   setting the `/ephemeralself` value to this public key.
-6. Add the `/` WACC WASM lock script that checks the conditions that the next
-   entry in the log must meet to be valid. Add in any other WASM lock scripts
-   for any other branches/leaves in the key-value pair store.
-7. Set the "unlock" field to the WACC WASM script that uses the data in the
-   first entry of the provenance log to satisfy the WASM lock script referenced
-   by the VLAD CID.
-8. Calculate a digital signature over the entire entry. If using Lamport
-   signatures use the `/ephemeralself` key pair, otherwise use the `/ephemeral`
-   key pair.
-9. Encode the digital signature in the multisig multiformat and assign the
-   value to the "proof" field in the entry.
-10. DESTROY THE `/ephemeral` and `/ephemeralself` PRIVATE KEYS USING APPROPRIATE
-    DELETION METHODS.
+1.  Generate a new public key pair to advertise as the current signing key in
+    the provenance log. Optionally, you may want set up a Lamport threshold
+    signature group, giving key shares to each of the trusted group members.
+    Setting up the lock script with the threshold signature has the highest
+    precedence allows "social recovery" of provenance log control should your
+    signing key be compromised.
+2.  Create the first entry setting the "vlad" field to the newly constructed
+    VLAD value.
+3.  Set the "prev" and "lipmaa" fields to NULL CIDs.
+4.  Sets the "seqno" field to 0.
+5.  Add an update operation to the "ops" list that sets `/pubkey` to the public
+    key value to the public key generated in step 1 encoded in the multikey
+    format. Optionally add an update operation that sets the `/recoverykey` to
+    the threshold public get generated in step 1. Also add an update operation that
+    sets the values for anything else related to the use of this provenance log.
+    There must be an update operation setting the `/ephemeralkey` value to the
+    ephemeral public key used to sign the first entry as well as an update
+    operation setting the `/vladkey` value to the ephemeral public key used to
+    sign the CID in the VLAD.
+6.  Add the `/` WACC WASM lock script that checks the conditions that the next
+    entry in the log must meet to be valid. Add in any other WASM lock scripts
+    for any other branches/leaves in the key-value pair store.
+7.  Set the "unlock" field to the WACC WASM script that uses the data in the
+    first entry of the provenance log to satisfy the WASM lock script referenced
+    by the VLAD CID.
+8.  Calculate a digital signature over the entire entry using the key pair
+    generated when creating the VLAD.
+9.  Encode the digital signature in the multisig multiformat and assign the
+    value to the "proof" member in the entry.
+10. DESTROY BOTH THE `/ephemeralkey` and `/vladkey` PRIVATE KEYS USING
+    APPROPRIATE DELETION METHODS.
 11. Calculate the content address for the first entry and encode it as a CID.
 12. Store the first entry in a content addressable storage system appropriate
     for the context in which the provenance log identity will have meaning. If
-    this is intended to be an Internet identity, store it in a globally
-    readable content addressable storage network such as [IPFS][IPFS].
+    this is intended to be an Internet identity, store it in a globally readable
+    content addressable storage network such as [IPFS][IPFS].
 13. Add the CID for the first entry as the value associated with the VLAD in
     the VLAD to CID mapping system used for this application.
 
@@ -594,14 +592,14 @@ helpful to prove the correct order of events in the future when maximum
 security is required. Typically, the public blockchain timestamp is only done
 when a key is compromised.
 
-To be clear, the ops list for a key revocation with timestamp looks like the
-following:
+To be clear, the ops list for a key revocation and rotation with timestamp
+looks like the following:
 
 ```json
 "ops": [
   { "delete": [ "/pubkey" ] },
   { "update": [ "/timestamp", { "str": [ "https://link.to/tx" ] } ] },
-  { "update": [ "/pubkey", { "data": [ "<multikey pubkey>" ] } ] }
+  { "update": [ "/pubkey", { "data": [ "<new multikey pubkey>" ] } ] }
 ]
 ```
 

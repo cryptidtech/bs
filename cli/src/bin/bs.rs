@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: FSL-1.1
 #![allow(dead_code)]
+//mod commands;
+
 //use best_practices::cli::io::{reader, writer};
 use bs::prelude::*;
-use crate::commands::key;
+//use commands::prelude::*;
 //use log::debug;
-use multicodec::Codec;
+//use multicodec::Codec;
 //use multihash::EncodedMultihash;
 //use multikey::{mk, EncodedMultikey, Views};
 //use multisig::{EncodedMultisig, Multisig};
@@ -18,7 +20,7 @@ use structopt::StructOpt;
     name = "bs",
     version = "0.1.1",
     author = "Dave Huseby <dwh@linuxprogrammer.org>",
-    about = "BetterSign provenance log based signing tool"
+    about = "BetterSign provenance log tool"
 )]
 struct Opt {
     /// Silence all output
@@ -56,6 +58,7 @@ struct Opt {
 
 #[derive(Debug, StructOpt)]
 enum Command {
+    /*
     /// Key operations
     #[structopt(name = "key")]
     Key {
@@ -63,7 +66,6 @@ enum Command {
         #[structopt(subcommand)]
         cmd: KeyCommand,
     },
-    /*
     /// Provenance log operations
     #[structopt(name = "plog")]
     Plog {
@@ -71,95 +73,6 @@ enum Command {
         #[structopt(subcommand)]
         cmd: PlogCommand
     }
-    */
-}
-
-#[derive(Debug, StructOpt)]
-enum KeyCommand {
-    /*
-    /// Set the default key
-    #[structopt(name = "default")]
-    Default {
-        /// clear the default key
-        #[structopt(long = "clear", short = "c", group = "default")]
-        clear: bool,
-
-        /// the name of the key to make default
-        #[structopt(long = "set", short = "s", group = "default")]
-        hash: Option<String>,
-    },
-    */
-
-    /// Generate a new key
-    #[structopt(name = "generate")]
-    Generate {
-        /// Key type, valid values: "eddsa", "es256k", "blsg1", "blsg2"
-        #[structopt(long = "type", short = "t")]
-        key_type: Option<String>,
-
-        /// Comment for the keypair
-        #[structopt(long = "comment", short = "C")]
-        comment: Option<String>,
-
-        /// Threshold for split keys
-        #[structopt(long = "threshold", short = "T")]
-        threshold: Option<usize>,
-
-        /// Limit for split keys
-        #[structopt(long = "limit", short = "L")]
-        limit: Option<usize>,
-    },
-
-    /// List available keys
-    #[structopt(name = "list")]
-    List,
-
-    /*
-    /// Sign using the default/specified key
-    #[structopt(name = "sign")]
-    Sign {
-        /// The hash of the key to sign with
-        #[structopt(long = "keyhash", short = "h")]
-        keyhash: Option<String>,
-
-        /// Message encoding codec
-        #[structopt(long = "encoding", short = "e")]
-        encoding: Option<String>,
-
-        /// Combined signature
-        #[structopt(long = "combined", short = "c")]
-        combined: Option<bool>,
-
-        /// File to write the signature to, or stdout if missing
-        #[structopt(long = "sig", short = "s", parse(from_os_str))]
-        signature: Option<PathBuf>,
-
-        /// Message to sign
-        #[structopt(parse(from_os_str))]
-        msg: Option<PathBuf>,
-    },
-
-    /// Verify using the default/specified key
-    Verify {
-        /// The hash of the key to verify with
-        #[structopt(long = "keyhash", short = "h")]
-        keyhash: Option<String>,
-
-        /// Signature file to read signture from
-        #[structopt(long = "sig", short = "s", parse(from_os_str))]
-        signature: PathBuf,
-
-        /// Message that was signed
-        #[structopt(parse(from_os_str))]
-        msg: Option<PathBuf>,
-    }, /*
-       /// Remove a key
-       #[structopt(name = "remove")]
-       Remove {
-           /// the name of the key to remove
-           name: String,
-       },
-       */
     */
 }
 
@@ -175,15 +88,18 @@ enum PlogCommand {
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     // parse the cli options
-    let opt = Opt::from_args();
+    let _opt = Opt::from_args();
 
+    /*
     // set up the logger
     stderrlog::new()
         .quiet(opt.quiet)
         .verbosity(opt.verbosity)
         .init()
         .map_err(|e| bs::Error::Log(e))?;
+    */
 
+    /*
     match opt.cmd {
         Command::Key { cmd } => {
             match cmd {
@@ -362,6 +278,7 @@ async fn main() -> Result<(), Error> {
         }
         */
     }
+    */
 
     Ok(())
 }

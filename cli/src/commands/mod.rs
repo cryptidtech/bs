@@ -140,10 +140,11 @@ macro_rules! failures {
     };
 }
 
-/// key generator state machine
+/// async key generator state machine
 pub mod key;
+pub use key::{gen as key_gen, KeyCommand};
 
-/// provenance log generatorA state machine
+// provenance log generatorA state machine
 //pub mod plog;
 
 /// vlad generator state machine
@@ -151,3 +152,10 @@ pub mod vlad;
 
 /// Wasm loader state machine
 pub mod wasm;
+
+/// convenient way to import all public symbols in this module
+pub mod prelude {
+    pub use super::*;
+}
+
+

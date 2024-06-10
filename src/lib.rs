@@ -10,39 +10,15 @@
 )]
 //trace_macros!(true);
 
-/// Blocks
-pub mod blocks;
-pub use blocks::Blocks;
-
-/// Commands
-pub mod commands;
-pub use commands::{Transition, TransitionFrom, State, run_to_completion};
-
-/// Config
-pub mod config;
-pub use config::Config;
-
 /// Error
 pub mod error;
 pub use error::Error;
 
-/// Filesystem functions
-pub mod fs;
-pub use fs::{initialize_data_dir, initialize_local_file};
+/// bettersign operations
+pub mod ops;
+pub use ops::prelude::*;
 
-/// Keychain interface
-pub mod keychain;
-pub use keychain::{Backend, Keychain, KeychainConfig, KeyEntry};
-
-/// Local file keychain
-pub mod local_file;
-pub use local_file::LocalFile;
-
-/// SSH Agent keychain
-pub mod ssh_agent;
-pub use ssh_agent::SshAgent;
-
-/// ...and in the darkness bind them
+/// convenient export
 pub mod prelude {
     pub use super::*;
 }
