@@ -5,7 +5,7 @@ pub mod command;
 pub use command::Command;
 
 use best_practices::cli::io::{reader, writer, writer_name};
-use bs::{self, ops::open, update::OpParams};
+use bs::{self, ops::{open, update}, update::OpParams};
 use crate::{Config, Error, error::PlogError};
 use log::debug;
 use multicid::EncodedVlad;
@@ -50,7 +50,9 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
                     let mk = mk::Builder::new_from_random_bytes(codec, &mut rng)?.try_build()?;
                     let fingerprint = mk.fingerprint_view()?.fingerprint(Codec::Blake3)?;
                     let ef = EncodedMultihash::from(fingerprint);
-                    debug!("{} key fingerprint: {}", key, ef);
+                    debug!("Writing {} key fingerprint: {}", key, ef);
+                    let w = writer(&Some(format!("{}.multikey", ef).into()))?;
+                    serde_cbor::to_writer(w, &mk)?;
                     Ok(mk)
                 },
                 |mk: &Multikey, data: &[u8]| -> Result<Multisig, bs::Error> {
@@ -72,6 +74,61 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
             //let plog: Log = serde_cbor::from_reader(reader(&input)?)?;
             println!("p.log");
             print_plog(&plog)?;
+        }
+
+        Command::Update {
+            delete_ops,
+            key_ops,
+            string_ops,
+            file_ops,
+            unlock_script_path,
+            entry_signing_key,
+            output,
+            input,
+        } => {
+            let mut plog = {
+                let mut v = Vec::default();
+                reader(&input)?.read_to_end(&mut v)?;
+                serde_cbor::from_slice::<Log>(&v)?
+            };
+
+            let entry_signing_key = {
+                let mut v = Vec::default();
+                reader(&entry_signing_key)?.read_to_end(&mut v)?;
+                serde_cbor::from_slice::<Multikey>(&v)?
+            };
+
+            let cfg = update::Config::default()
+                .with_ops(&mut build_delete_params(&delete_ops)?)
+                .with_ops(&mut build_key_params(&key_ops)?)
+                .with_ops(&mut build_string_params(&string_ops)?)
+                .with_ops(&mut build_file_params(&file_ops)?)
+                .with_entry_signing_key(&entry_signing_key)
+                .with_entry_unlock_script(&unlock_script_path);
+
+            // update the p.log
+            update::update_plog(&mut plog, cfg,
+                |key: &Key, codec: Codec, threshold: usize, limit: usize| -> Result<Multikey, bs::Error> {
+                    debug!("Generating {} key ({} of {})...", codec, threshold, limit);
+                    let mut rng = rand::rngs::OsRng::default();
+                    let mk = mk::Builder::new_from_random_bytes(codec, &mut rng)?.try_build()?;
+                    let fingerprint = mk.fingerprint_view()?.fingerprint(Codec::Blake3)?;
+                    let ef = EncodedMultihash::from(fingerprint);
+                    debug!("Writing {} key fingerprint: {}", key, ef);
+                    let w = writer(&Some(format!("{}.multikey", ef).into()))?;
+                    serde_cbor::to_writer(w, &mk)?;
+                    Ok(mk)
+                },
+                |mk: &Multikey, data: &[u8]| -> Result<Multisig, bs::Error> {
+                    debug!("Signing the first entry");
+                    Ok(mk.sign_view()?.sign(data, false, None)?)
+                },
+            )?;
+
+            println!("Writing p.log {}", writer_name(&output)?.to_string_lossy());
+            print_plog(&plog)?;
+            let w = writer(&output)?;
+            serde_cbor::to_writer(w, &plog)?;
         }
         _ => {}
     }
@@ -140,6 +197,11 @@ fn get_key_from_value(value: &wacc::Value) -> Result<Multikey, Error> {
     }
 }
 
+// <key-path>
+fn build_delete_params(ops: &Vec<String>) -> Result<Vec<OpParams>, Error> {
+    Ok(ops.iter().filter_map(|s| parse_delete_params(&s).ok()).collect::<Vec<_>>())
+}
+
 // <key-path>:<codec>[:<threshold>:<limit>]
 fn build_key_params(ops: &Vec<String>) -> Result<Vec<OpParams>, Error> {
     Ok(ops.iter().filter_map(|s| parse_key_params(&s, None).ok()).collect::<Vec<_>>())
@@ -155,7 +217,15 @@ fn build_file_params(ops: &Vec<String>) -> Result<Vec<OpParams>, Error> {
     Ok(ops.iter().filter_map(|s| parse_file_params(&s).ok()).collect::<Vec<_>>())
 }
 
-// <key-path>:<codec>[:<threshold>:<limit>]
+// <key-path>
+fn parse_delete_params(s: &str) -> Result<OpParams, Error> {
+    let key = Key::try_from(s)?;
+    Ok(OpParams::Delete {
+        key
+    })
+}
+
+// <key-path>:<codec>[:<threshold>:<limit>:<revoke>]
 fn parse_key_params(s: &str, key_path: Option<&str>) -> Result<OpParams, Error> {
     let mut parts = s.split(":").collect::<VecDeque<_>>();
     let key = match key_path {
@@ -163,7 +233,7 @@ fn parse_key_params(s: &str, key_path: Option<&str>) -> Result<OpParams, Error> 
         None => Key::try_from(parts.pop_front().ok_or(PlogError::NoKeyPath)?)?,
     };
     let codec = parse_key_codec(&parts.pop_front().ok_or(PlogError::NoCodec)?)?;
-    if !parts.is_empty() && parts.len() != 2 {
+    if !parts.is_empty() && !(parts.len() == 2 || parts.len() == 3) {
         return Err(PlogError::InvalidKeyParams.into());
     }
     let threshold = match parts.pop_front().unwrap_or("0").parse::<usize>() {
@@ -174,11 +244,16 @@ fn parse_key_params(s: &str, key_path: Option<&str>) -> Result<OpParams, Error> 
         Ok(n) => n,
         _ => 0,
     };
+    let revoke = match parts.pop_front().unwrap_or("false").parse::<bool>() {
+        Ok(b) => b,
+        _ => false,
+    };
     Ok(OpParams::KeyGen {
         key,
         codec,
         threshold,
         limit,
+        revoke,
     })
 }
 
@@ -205,7 +280,7 @@ fn parse_file_params(s: &str) -> Result<OpParams, Error> {
     if !parts.is_empty() && parts.len() != 4 {
         return Err(PlogError::InvalidFileParams.into());
     }
-    let inline = match parts.pop_front().unwrap().parse::<bool>() {
+    let inline = match parts.pop_front().unwrap_or("false").parse::<bool>() {
         Ok(b) => b,
         _ => false,
     };
@@ -248,6 +323,7 @@ fn parse_vlad_params(s: &str) -> Result<(OpParams, OpParams), Error> {
             codec,
             threshold: 0,
             limit: 0,
+            revoke: false,
         },
         OpParams::CidGen {
             key: Key::try_from("/vlad/")?,

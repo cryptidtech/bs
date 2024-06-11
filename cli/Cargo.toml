@@ -1,6 +1,6 @@
 [package]
 name = "bs-cli"
-version = "1.0.3"
+version = "1.0.4"
 authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
 edition = "2018"
 description = "BetterSign Provenance Tool"

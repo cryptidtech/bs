@@ -47,6 +47,8 @@ pub enum OpParams {
         threshold: usize,
         /// the limit for threshold key splitting
         limit: usize,
+        /// the previous key should be explicitly deleted
+        revoke: bool,
     },
 
     /// For using an existing CID

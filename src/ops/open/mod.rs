@@ -144,12 +144,19 @@ where
 {
     debug!("load_key: {:?}", params);
     match params {
-        OpParams::KeyGen { key, codec, threshold, limit } => {
+        OpParams::KeyGen { key, codec, threshold, limit, revoke } => {
             // call back to generate the key
             let mk = get_key(key, *codec, *threshold, *limit)?;
 
             // get the public key
             let pk = mk.conv_view()?.to_public_key()?;
+
+            // if revoking, explicitly delete the old key first
+            if *revoke {
+                ops.push(OpParams::Delete {
+                    key: key.clone(),
+                });
+            }
 
             // add the op params to add the key
             ops.push(OpParams::UseKey {

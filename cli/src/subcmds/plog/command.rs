@@ -46,14 +46,16 @@ pub enum Command {
         #[structopt(long = "pub-key", default_value = "eddsa")]
         pub_key_params: String,
 
-        /// The parameters for additional key generation and advertisement. This may be used
-        /// multiple times, as needed.
+        /// The parameters for key generation and advertisement. This may be used multiple times,
+        /// as needed.
         ///
-        /// Values are made up of two to four fields separated by colons, the last two fields are
-        /// optional and used when you want to create a threshold signature group and advertise the
-        /// public key.
+        /// Values are made up of two to five fields separated by colons, the last three fields are
+        /// optional. The threshold and limit values are for when you want to create a threshold
+        /// signature group and publish the public key. The revote field is a boolean that
+        /// determines if revocation should be signalged by first deletinging the key path before
+        /// setting a new key.
         ///
-        /// <key-path>:<key codec>[:<threshold>:<limit>]
+        /// <key-path>:<key codec>[:<threshold>:<limit>:<revoke>]
         ///
         /// Examples:
         ///     '/emailkey:eddsa'
@@ -148,5 +150,88 @@ pub enum Command {
 
     /// Update a provenance log with a new event
     #[structopt(name = "update")]
-    Update,
+    Update {
+        /// The parameters for delete ops. This may be used multiple times, as needed.
+        ///
+        /// Values are only a single field, the key-path that is to be deleted. If the key-path is
+        /// a branch then all descendants of the branch will be deleted as well.
+        ///
+        /// <key-path>
+        ///
+        /// Examples:
+        ///     '/emailkey'
+        ///     '/github_endpoint'
+        #[structopt(long = "delete-op")]
+        delete_ops: Vec<String>,
+
+        /// The parameters for key generation and advertisement. This may be used multiple times,
+        /// as needed.
+        ///
+        /// Values are made up of two to five fields separated by colons, the last three fields are
+        /// optional. The threshold and limit values are for when you want to create a threshold
+        /// signature group and publish the public key. The revote field is a boolean that
+        /// determines if revocation should be signalged by first deletinging the key path before
+        /// setting a new key.
+        ///
+        /// <key-path>:<key codec>[:<threshold>:<limit>:<revoke>]
+        ///
+        /// Examples:
+        ///     '/emailkey:eddsa'
+        ///     '/recoverykey:lamport:3:5'
+        #[structopt(long = "key-op")]
+        key_ops: Vec<String>,
+
+        /// The parameters for storing strings in the p.log. This is useful for storing textual
+        /// data such as meta data, endoint URLs, peer IDs, multiaddrs, whatever. This may be used
+        /// multiple times, as needed.
+        ///
+        /// Values are made up of two fields separated by colons.
+        ///
+        /// <key-path>:<string>
+        ///
+        /// Examples:
+        ///     '/contact/email:dwg@linuxprogrammer.org'
+        ///     '/contact/name:Dave Grantham'
+        ///     '/contact/telegram: @dwgrantham'
+        #[structopt(long = "string-op")]
+        string_ops: Vec<String>,
+
+        /// The parameters for storing/reference files in the p.log. This is most useful for
+        /// tracking the provenance of data in external files. This may be used multiple times, as
+        /// needed.
+        ///
+        /// Values are made up of two to six fields, the last four are optional. The 'inline'
+        /// field is either 'true' or 'false' with the default being 'false'. When true, the
+        /// contents of the file will be stored inside the p.log at '<branch-key-path>/data'. When
+        /// not specified, or false, only the CID of the file is stored at '<branch-key-path>/cid'.
+        ///
+        /// The last three parameters specify the target codec, the hash codec and hash length used
+        /// when generating the CID for the file. When not specified, the default target codec is
+        /// 'identity' (i.g. raw bytes), the default hash codec is 'blake3' and the default hash
+        /// length is '256'.
+        ///
+        /// <branch-key-path>:<file>[:<inline>:<target codec>:<hash codec>:<hash length in bits>]. 
+        ///
+        /// Examples:
+        ///     '/myfile/:myphoto.jpg'
+        ///     '/epoch/:./data/model.pth:::sha2:256'
+        #[structopt(long = "file-op")]
+        file_ops: Vec<String>,
+
+        /// The unlock script for providing proof for the first lock script.
+        #[structopt(long = "unlock", parse(from_os_str))]
+        unlock_script_path: PathBuf,
+
+        /// The key to use for signing the new entry
+        #[structopt(long = "entry-signing-key", parse(from_os_str))]
+        entry_signing_key: Option<PathBuf>,
+
+        /// The output file to write the log to
+        #[structopt(short = "o", parse(from_os_str))]
+        output: Option<PathBuf>,
+
+        /// The plog to verify and print
+        #[structopt(parse(from_os_str))]
+        input: Option<PathBuf>,
+    }
 }

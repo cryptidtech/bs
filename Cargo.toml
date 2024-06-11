@@ -1,6 +1,6 @@
 [package]
 name = "bs"
-version = "1.0.3"
+version = "1.0.4"
 authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
 edition = "2018"
 description = "BetterSign signing tool"
@@ -10,6 +10,7 @@ keywords = ["provenance logs", "decentralized identity"]
 license = "Functional Source License 1.1"
 
 [dependencies]
+best-practices = { version = "0.1", git = "https://github.com/cryptidtech/best-practices.git" }
 log = "0.4"
 multibase = { version = "1.0", git = "https://github.com/cryptidtech/rust-multibase.git" }
 multicid = { version = "1.0", git = "https://github.com/cryptidtech/multicid.git" }
@@ -19,6 +20,7 @@ multikey = { version = "1.0", git = "https://github.com/cryptidtech/multikey.git
 multisig = { version = "1.0", git = "https://github.com/cryptidtech/multisig.git" }
 provenance-log = { version = "1.0", git = "ssh://git@github.com/cryptidtech/provenance-log.git" }
 rand = "0.8"
+serde_cbor = "0.11.2"
 thiserror = "1.0"
 wacc = { version = "1.0", git = "ssh://git@github.com/cryptidtech/wacc.git" }
 

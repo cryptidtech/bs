@@ -10,6 +10,9 @@ pub enum Error {
     #[error(transparent)]
     Update(#[from] UpdateError),
 
+    /// BestPractices error
+    #[error(transparent)]
+    BestPractices(#[from] best_practices::error::Error),
     /// Multicid error
     #[error(transparent)]
     Multicid(#[from] multicid::Error),
@@ -32,6 +35,9 @@ pub enum Error {
     /// I/O error
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    /// Serde CBOR error
+    #[error(transparent)]
+    SerdeCbor(#[from] serde_cbor::Error),
 }
 
 /// Open op errors
@@ -65,10 +71,31 @@ pub enum OpenError {
 #[derive(Clone, Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum UpdateError {
+    /// Invalid CID params
+    #[error("Invalid cid params")]
+    InvalidCidParams,
+    /// Invalid entry
+    #[error("Invalid entry")]
+    InvalidEntry,
+    /// Invalid VLAD key params
+    #[error("Invalid key params")]
+    InvalidKeyParams,
+    /// Invalid OpParams
+    #[error("Invalid op params")]
+    InvalidOpParams,
     /// No op key-path
     #[error("Missing op key-path")]
     NoOpKeyPath,
     /// No update op value
     #[error("Missing update op value")]
     NoUpdateOpValue,
+    /// No last entry
+    #[error("No last entry")]
+    NoLastEntry,
+    /// No entry unlock script given
+    #[error("No unlock script for first entry given")]
+    NoEntryUnlockScript,
+    /// No signing key
+    #[error("No entry signing key")]
+    NoSigningKey,
 }
