@@ -15,7 +15,7 @@ pub struct Loader {
 
 impl Loader {
     /// initialize the loader with the path
-    pub fn new<P: AsRef<Path>>(path: &P) -> Self {
+    pub fn new<P: AsRef<Path>>(path: P) -> Self {
         Self {
             path: path.as_ref().to_path_buf(),
             .. Default::default()

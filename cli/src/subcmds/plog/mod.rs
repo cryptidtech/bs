@@ -4,52 +4,53 @@
 pub mod command;
 pub use command::Command;
 
-use best_practices::cli::io::writer;
-use bs::{self, ops::open::{self, OpenKey}};
-use crate::{Config, Error/*, error::PlogError*/};
+use best_practices::cli::io::{reader, writer, writer_name};
+use bs::{self, ops::open, update::OpParams};
+use crate::{Config, Error, error::PlogError};
 use log::debug;
 use multicid::EncodedVlad;
 use multicodec::Codec;
 use multihash::EncodedMultihash;
-use multikey::{mk, Multikey, Views};
+use multikey::{EncodedMultikey, mk, Multikey, Views};
 use multisig::Multisig;
+use provenance_log::{Key, Log};
+use std::{collections::VecDeque, convert::TryFrom, path::PathBuf};
+use wacc::Pairs;
 
 /// processes plog subcommands
 pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
     match cmd {
         Command::Open {
-            vlad_key_codec,
-            vlad_cid_codec,
-            vlad_cid_len,
+            pub_key_params,
+            key_ops,
+            string_ops,
+            file_ops,
+            vlad_params,
             entry_key_codec,
-            pub_key_codec,
-            first_lock_script_path,
             lock_script_path,
             unlock_script_path,
             output,
         } => {
+            let (vlad_key, vlad_cid) = parse_vlad_params(&vlad_params)?;
             let cfg = open::Config::default()
-                .with_vladkey_codec(parse_key_codec(&vlad_key_codec)?)
-                .with_entrykey_codec(parse_key_codec(&entry_key_codec)?)
-                .with_pubkey_codec(parse_reusable_only_key_codec(&pub_key_codec)?)
-                .with_vlad_cid_hash_codec(parse_safe_hash_codec(&vlad_cid_codec, &vlad_cid_len)?)
-                .with_first_lock_script(&first_lock_script_path)
+                .with_pubkey_params(parse_key_params(&pub_key_params, Some("/pubkey"))?)
+                .with_additional_ops(&mut build_key_params(&key_ops)?)
+                .with_additional_ops(&mut build_string_params(&string_ops)?)
+                .with_additional_ops(&mut build_file_params(&file_ops)?)
+                .with_vlad_params(vlad_key, vlad_cid)
+                .with_entrykey_params(parse_key_params(&entry_key_codec, Some("/entrykey"))?)
                 .with_entry_lock_script(&lock_script_path)
                 .with_entry_unlock_script(&unlock_script_path);
 
-            // open the log
-            let log = open::open_plog(cfg,
-                |key: OpenKey, codec: Codec| -> Result<Multikey, bs::Error> {
-                    debug!("Generating {} key...", codec);
+            // open the p.log
+            let plog = open::open_plog(cfg,
+                |key: &Key, codec: Codec, threshold: usize, limit: usize| -> Result<Multikey, bs::Error> {
+                    debug!("Generating {} key ({} of {})...", codec, threshold, limit);
                     let mut rng = rand::rngs::OsRng::default();
                     let mk = mk::Builder::new_from_random_bytes(codec, &mut rng)?.try_build()?;
                     let fingerprint = mk.fingerprint_view()?.fingerprint(Codec::Blake3)?;
                     let ef = EncodedMultihash::from(fingerprint);
-                    match key {
-                        OpenKey::VladKey => debug!("Vlad signing key fingerprint: {}", ef),
-                        OpenKey::EntryKey => debug!("Entry signing key fingerprint: {}", ef),
-                        OpenKey::PubKey => debug!("Entry advertising pubkey: {}", ef),
-                    }
+                    debug!("{} key fingerprint: {}", key, ef);
                     Ok(mk)
                 },
                 |mk: &Multikey, data: &[u8]| -> Result<Multisig, bs::Error> {
@@ -58,25 +59,205 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
                 },
             )?;
 
-            let mut vi = log.verify();
-            while let Some(ret) = vi.next() {
-                if let Some(e) = ret.err() {
-                    debug!("verify failed: {}", e.to_string());
-                }
-            }
-
-            let ev = EncodedVlad::from(log.vlad.clone());
-            debug!("\nSUCCESS!!");
-            debug!("Created p.log...");
-            debug!("\tVLAD: {}", ev);
-
+            println!("Created p.log {}", writer_name(&output)?.to_string_lossy());
+            print_plog(&plog)?;
             let w = writer(&output)?;
-            serde_cbor::to_writer(w, &log)?;
+            serde_cbor::to_writer(w, &plog)?;
+        }
+
+        Command::Print { input } => {
+            let mut v = Vec::default();
+            reader(&input)?.read_to_end(&mut v)?;
+            let plog: Log = serde_cbor::from_slice(&v)?;
+            //let plog: Log = serde_cbor::from_reader(reader(&input)?)?;
+            println!("p.log");
+            print_plog(&plog)?;
         }
         _ => {}
     }
 
     Ok(())
+}
+
+fn print_plog(plog: &Log) -> Result<(), Error> {
+    // get the verifying iterator
+    let mut vi = plog.verify();
+
+    // process the first entry and get the results
+    let (_, _, mut kvp) = vi.next().ok_or::<Error>(PlogError::NoFirstEntry.into())??;
+    let vlad_key_value = kvp.get("/vlad/key").ok_or::<Error>(PlogError::NoVladKey.into())?;
+    let vlad_key = get_key_from_value(&vlad_key_value)?;
+
+    while let Some(ret) = vi.next() {
+        match ret {
+            Ok((_, _, ref pairs)) => kvp = pairs.clone(),
+            Err(e) => debug!("verify failed: {}", e.to_string()),
+        }
+    }
+
+    println!("├─ vlad");
+    if plog.vlad.verify(&vlad_key).is_ok() {
+        println!("│   ├─ ☑ verified with");
+        println!("│   │   ╰─ {}", EncodedMultikey::from(vlad_key));
+    } else {
+        println!("│   ├─  ☒ failed to verify");
+    }
+    let vl: Vec<String> = EncodedVlad::from(plog.vlad.clone())
+        .to_string()
+        .chars()
+        .collect::<Vec<_>>()
+        .chunks(83)
+        .map(|chunk| chunk.iter().collect())
+        .collect();
+
+    let mut first = true;
+    for l in &vl {
+        if first {
+            println!("│   ╰─ {}", l);
+            first = false;
+        } else {
+            println!("│      {}", l);
+        }
+    }
+    println!("├─ entries {}", plog.entries.len());
+    println!("╰─ kvp");
+    let kvp_lines = kvp.to_string().lines().map(|s| s.to_string()).collect::<Vec<_>>();
+    for i in 0..kvp_lines.len() {
+        if i < kvp_lines.len() - 1 {
+            println!("    ├─ {}", kvp_lines[i]);
+        } else {
+            println!("    ╰─ {}", kvp_lines[i]);
+        }
+    }
+    Ok(())
+}
+
+fn get_key_from_value(value: &wacc::Value) -> Result<Multikey, Error> {
+    match value {
+        wacc::Value::Bin(v) => Ok(Multikey::try_from(v.as_slice())?),
+        wacc::Value::Str(s) => Ok(EncodedMultikey::try_from(s.as_str())?.to_inner()),
+        _ => Err(PlogError::InvalidWaccValue.into()),
+    }
+}
+
+// <key-path>:<codec>[:<threshold>:<limit>]
+fn build_key_params(ops: &Vec<String>) -> Result<Vec<OpParams>, Error> {
+    Ok(ops.iter().filter_map(|s| parse_key_params(&s, None).ok()).collect::<Vec<_>>())
+}
+
+// <key-path>:<string>
+fn build_string_params(ops: &Vec<String>) -> Result<Vec<OpParams>, Error> {
+    Ok(ops.iter().filter_map(|s| parse_string_params(&s).ok()).collect::<Vec<_>>())
+}
+
+/// <branch-key-path>:<file>[:<inline>:<target codec>:<hash codec>:<hash length in bits>]. 
+fn build_file_params(ops: &Vec<String>) -> Result<Vec<OpParams>, Error> {
+    Ok(ops.iter().filter_map(|s| parse_file_params(&s).ok()).collect::<Vec<_>>())
+}
+
+// <key-path>:<codec>[:<threshold>:<limit>]
+fn parse_key_params(s: &str, key_path: Option<&str>) -> Result<OpParams, Error> {
+    let mut parts = s.split(":").collect::<VecDeque<_>>();
+    let key = match key_path {
+        Some(s) => Key::try_from(s)?,
+        None => Key::try_from(parts.pop_front().ok_or(PlogError::NoKeyPath)?)?,
+    };
+    let codec = parse_key_codec(&parts.pop_front().ok_or(PlogError::NoCodec)?)?;
+    if !parts.is_empty() && parts.len() != 2 {
+        return Err(PlogError::InvalidKeyParams.into());
+    }
+    let threshold = match parts.pop_front().unwrap_or("0").parse::<usize>() {
+        Ok(n) => n,
+        _ => 0,
+    };
+    let limit = match parts.pop_front().unwrap_or("0").parse::<usize>() {
+        Ok(n) => n,
+        _ => 0,
+    };
+    Ok(OpParams::KeyGen {
+        key,
+        codec,
+        threshold,
+        limit,
+    })
+}
+
+/// <key-path>:<string>
+fn parse_string_params(s: &str) -> Result<OpParams, Error> {
+    let mut parts = s.split(":").collect::<VecDeque<_>>();
+    let key = Key::try_from(parts.pop_front().ok_or(PlogError::NoKeyPath)?)?;
+    let s = parts.pop_front().ok_or(PlogError::NoStringValue)?;
+    Ok(OpParams::UseStr {
+        key,
+        s: s.to_string()
+    })
+}
+
+/// <branch-key-path>:<file>[:<inline>:<target codec>:<hash codec>:<hash length in bits>]. 
+fn parse_file_params(s: &str) -> Result<OpParams, Error> {
+    let mut parts = s.split(":").collect::<VecDeque<_>>();
+    let key = Key::try_from(parts.pop_front().ok_or(PlogError::NoKeyPath)?)?;
+    // must be a branch
+    if !key.is_branch() {
+        return Err(PlogError::InvalidKeyPath.into());
+    }
+    let path = PathBuf::from(parts.pop_front().ok_or(PlogError::NoInputFile)?);
+    if !parts.is_empty() && parts.len() != 4 {
+        return Err(PlogError::InvalidFileParams.into());
+    }
+    let inline = match parts.pop_front().unwrap().parse::<bool>() {
+        Ok(b) => b,
+        _ => false,
+    };
+    let target = match Codec::try_from(parts.pop_front().unwrap()) {
+        Ok(c) => c,
+        _ => Codec::Identity,
+    };
+    let hash = match parse_safe_hash_codec(parts.pop_front().unwrap(), parts.pop_front().unwrap()) {
+        Ok(c) => c,
+        _ => Codec::Blake3,
+    };
+    Ok(OpParams::CidGen {
+        key,
+        version: Codec::Cidv1,
+        target,
+        hash,
+        inline,
+        path
+    })
+}
+
+/// <first lock script path>[:<signing key codec>:<cid hashing codec>[:<hash length in bits>]]
+fn parse_vlad_params(s: &str) -> Result<(OpParams, OpParams), Error> {
+    let mut parts = s.split(":").collect::<VecDeque<_>>();
+    let path = PathBuf::from(parts.pop_front().ok_or(PlogError::NoInputFile)?);
+    if !parts.is_empty() && !(parts.len() == 2 || parts.len() == 3) {
+        return Err(PlogError::InvalidFileParams.into());
+    }
+    let codec = match Codec::try_from(parts.pop_front().unwrap_or_default()) {
+        Ok(c) => c,
+        _ => Codec::Ed25519Priv,
+    };
+    let hash = match parse_safe_hash_codec(parts.pop_front().unwrap_or_default(), parts.pop_front().unwrap_or_default()) {
+        Ok(c) => c,
+        _ => Codec::Blake3,
+    };
+    Ok((
+        OpParams::KeyGen {
+            key: Key::try_from("/vlad/key")?,
+            codec,
+            threshold: 0,
+            limit: 0,
+        },
+        OpParams::CidGen {
+            key: Key::try_from("/vlad/")?,
+            version: Codec::Cidv1,
+            target: Codec::Identity,
+            hash,
+            inline: true,
+            path,
+        }
+    ))
 }
 
 fn parse_key_codec(s: &str) -> Result<Codec, Error> {
@@ -86,16 +267,6 @@ fn parse_key_codec(s: &str) -> Result<Codec, Error> {
         "blsg1" => Codec::Bls12381G1Priv,
         "blsg2" => Codec::Bls12381G2Priv,
         "lamport" => Codec::LamportPriv,
-        _ => return Err(Error::InvalidKeyType(s.to_string())),
-    })
-}
-
-fn parse_reusable_only_key_codec(s: &str) -> Result<Codec, Error> {
-    Ok(match s.to_lowercase().as_str() {
-        "eddsa" => Codec::Ed25519Priv,
-        "es256k" => Codec::Secp256K1Priv,
-        "blsg1" => Codec::Bls12381G1Priv,
-        "blsg2" => Codec::Bls12381G2Priv,
         _ => return Err(Error::InvalidKeyType(s.to_string())),
     })
 }

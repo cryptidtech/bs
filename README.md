@@ -522,7 +522,7 @@ The steps for creating the first entry in a provenance log are as follows:
     sets the values for anything else related to the use of this provenance log.
     There must be an update operation setting the `/entrykey` value to the
     ephemeral public key used to sign the first entry as well as an update
-    operation setting the `/vladkey` value to the ephemeral public key used to
+    operation setting the `/vlad/key` value to the ephemeral public key used to
     sign the CID in the VLAD.
 6.  Add the `/` WACC WASM lock script that checks the conditions that the next
     entry in the log must meet to be valid. Add in any other WASM lock scripts

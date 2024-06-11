@@ -118,7 +118,37 @@ pub enum SshError {
 #[derive(Clone, Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum PlogError {
-    /// No plog command
-    #[error("No plog command")]
+    /// An incorrect key-path
+    #[error("Invalid key-path")]
+    InvalidKeyPath,
+    /// Invalid file params
+    #[error("Invalid file params")]
+    InvalidFileParams,
+    /// Invalid key params
+    #[error("Invalid key params")]
+    InvalidKeyParams,
+    /// An incorrect value type was encountered
+    #[error("Invalid WACC value type")]
+    InvalidWaccValue,
+    /// No p.log command
+    #[error("No p.log command")]
     NoCommand,
+    /// No first entry
+    #[error("P.log missing first entry")]
+    NoFirstEntry,
+    /// No vlad key in the first entry
+    #[error("P.log missing VLAD verification key in first entry")]
+    NoVladKey,
+    /// No input file given
+    #[error("No input file given")]
+    NoInputFile,
+    /// No key-path specified
+    #[error("No key-path specified")]
+    NoKeyPath,
+    /// No codec specified
+    #[error("No codec specified")]
+    NoCodec,
+    /// No string value given
+    #[error("No string value given")]
+    NoStringValue,
 }

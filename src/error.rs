@@ -28,12 +28,28 @@ pub enum Error {
     /// Provenance Log error
     #[error(transparent)]
     ProvenanceLog(#[from] provenance_log::Error),
+
+    /// I/O error
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
 }
 
 /// Open op errors
 #[derive(Clone, Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum OpenError {
+    /// Invalid CID params
+    #[error("Invalid cid params")]
+    InvalidCidParams,
+    /// Invalid VLAD key params
+    #[error("Invalid key params")]
+    InvalidKeyParams,
+    /// Invalid OpParams
+    #[error("Invalid op params")]
+    InvalidOpParams,
+    /// Invalid VLAD params
+    #[error("Invalid vlad params")]
+    InvalidVladParams,
     /// No first lock script given
     #[error("No first lock script given")]
     NoFirstLockScript,

@@ -9,6 +9,10 @@ pub mod script;
 pub mod config;
 pub use config::Config;
 
+/// params for generating Op
+pub mod op_params;
+pub use op_params::OpParams;
+
 use crate::Error;
 use provenance_log::{Entry, Log};
 

@@ -4,52 +4,53 @@
 pub mod config;
 pub use config::Config;
 
-use crate::{Error, error::OpenError};
-use multicid::{cid, vlad};
+use crate::{Error, update::{op, OpParams, script}, error::OpenError};
+use log::debug;
+use multicid::{cid, Cid, vlad};
 use multicodec::Codec;
 use multihash::mh;
 use multikey::{Multikey, Views};
 use multisig::Multisig;
-use provenance_log::{entry, error::EntryError, Error as PlogError, log, Log, OpId};
-use super::update::{op, script};
-
-/// The key being asked for
-#[derive(Clone, Debug)]
-pub enum OpenKey {
-    /// Asking for a VLAD signing key
-    VladKey,
-    /// Asking for an Entry signing key
-    EntryKey,
-    /// Asking for a key to publish in the Entry
-    PubKey,
-}
+use provenance_log::{entry, error::EntryError, Error as PlogError, Key, Log, OpId, Script};
+use std::{fs::read, path::Path};
 
 /// open a new provenanc log based on the config
 pub fn open_plog<F1, F2>(config: Config, get_key: F1, sign_entry: F2) -> Result<Log, Error>
 where
-    F1: Fn(OpenKey, Codec) -> Result<Multikey, Error>,
+    F1: Fn(&Key, Codec, usize, usize) -> Result<Multikey, Error>,
     F2: Fn(&Multikey, &[u8]) -> Result<Multisig, Error>,
 {
-    // 1. Call back to get the VLAD key, load the first lock script and construct the VLAD
+    // 0. Set up the list of ops we're going to add
+    let mut op_params = Vec::default();
 
-    // get the codec for the vlad signing key and generate it
-    let vladkey_codec = config.vladkey_codec.unwrap_or(Codec::Ed25519Priv);
-    let vlad_mk = get_key(OpenKey::VladKey, vladkey_codec)?;
+    // go through the additional ops and generate CIDs and keys and adding the resulting op params
+    // to the vec of op params
+    config.additional_ops.iter().try_for_each(|params| -> Result<(), Error> {
+        match params {
+            p @ OpParams::KeyGen { .. } => { let _ = load_key(&mut op_params, &p, &get_key)?; }
+            p @ OpParams::CidGen { .. } => { let _ = load_cid(&mut op_params, &p, |path| -> Result<Vec<u8>, Error> {
+                    Ok(read(path)?)
+                })?;
+            },
+            p @ _ => op_params.push(p.clone()),
+        }
+        Ok(())
+    })?;
 
-    // load the first lock script
-    let first_lock_script = {
-        let first_lock_path = config.first_lock_script.ok_or::<Error>(OpenError::NoFirstLockScript.into())?;
-        script::Loader::new(&first_lock_path).try_build()?
-    };
+    // 1. Construct the VLAD from provided parameters
 
-    // generate the CID of the first lock script
-    let cid_hash_codec = config.vlad_cid_hash_codec.unwrap_or(Codec::Sha3512);
-    let cid = cid::Builder::new(Codec::Cidv1)
-        .with_target_codec(Codec::Identity)
-        .with_hash(
-            &mh::Builder::new_from_bytes(cid_hash_codec, &first_lock_script)?.try_build()?
-        )
-        .try_build()?;
+    // get the codec for the vlad signing key and cid
+    let (vlad_key_params, vlad_cid_params) = config.vlad_params.ok_or::<Error>(OpenError::InvalidVladParams.into())?;
+    // get the vlad signing key
+    let vlad_mk = load_key(&mut op_params, &vlad_key_params, &get_key)?;
+    // get the cid for the first lock script
+    let mut first_lock_script: Option<Script> = None;
+    let cid = load_cid(&mut op_params, &vlad_cid_params, |path| -> Result<Vec<u8>, Error> {
+        // this is a script so load the file that way
+        let script = script::Loader::new(path).try_build()?;
+        first_lock_script = Some(script.clone());
+        Ok(script.into())
+    })?;
 
     // construct the signed vlad using the vlad pubkey and the first lock script cid
     let vlad = vlad::Builder::default()
@@ -59,13 +60,17 @@ where
 
     // 2. Call back to get the entry and pub keys and load the lock and unlock scripts
 
-    // get the codec for the entry signing key and get it
-    let entrykey_codec = config.entrykey_codec.unwrap_or(Codec::Ed25519Priv);
-    let entry_mk = get_key(OpenKey::EntryKey, entrykey_codec)?;
+    // get the params for the entry signing key
+    let entrykey_params = config.entrykey_params.ok_or::<Error>(OpenError::InvalidKeyParams.into())?;
 
-    // construct the initial pubkey for the plog
-    let pubkey_codec = config.pubkey_codec.unwrap_or(Codec::Ed25519Priv);
-    let pubkey_mk = get_key(OpenKey::PubKey, pubkey_codec)?;
+    // get the entry signing key
+    let entry_mk = load_key(&mut op_params, &entrykey_params, &get_key)?;
+
+    // get the params for the pubkey
+    let pubkey_params = config.pubkey_params.ok_or::<Error>(OpenError::InvalidKeyParams.into())?;
+
+    // get the pubkey
+    let _ = load_key(&mut op_params, &pubkey_params, &get_key)?;
 
     // load the entry lock script
     let lock_script = {
@@ -79,53 +84,39 @@ where
         script::Loader::new(&unlock_path).try_build()?
     };
 
-    // 3. Construct the three operations to advertise the keys
-
-    // construct the Update("/entrykey") op to store the pubkey used for verifying the digital
-    // signature over the first entry
-    let entrykey_op = {
-        let cv = entry_mk.conv_view()?;
-        let entry_pk = cv.to_public_key()?;
-        let entry_pk_data: Vec<u8> = entry_pk.into();
-        op::Builder::new(OpId::Update)
-            .with_key_path("/entrykey")
-            .with_data_value(&entry_pk_data)
-            .try_build()?
-    };
-
-    // construct the Update("/vladkey") op to store the pubkey used for verifying the digital
-    // signature over the CID inside the VLAD.
-    let vladkey_op = {
-        let cv = vlad_mk.conv_view()?;
-        let vlad_pk = cv.to_public_key()?;
-        let vlad_pk_data: Vec<u8> = vlad_pk.into();
-        op::Builder::new(OpId::Update)
-            .with_key_path("/vladkey")
-            .with_data_value(&vlad_pk_data)
-            .try_build()?
-    };
-
-    // construct the Update("/pubkey") op to store the first advertised pubkey 
-    let pubkey_op = {
-        let cv = pubkey_mk.conv_view()?;
-        let pubkey_pk = cv.to_public_key()?;
-        let pubkey_pk_data: Vec<u8> = pubkey_pk.into();
-        op::Builder::new(OpId::Update)
-            .with_key_path("/pubkey")
-            .with_data_value(&pubkey_pk_data)
-            .try_build()?
-    };
-
-    // 4. Construct the first entry, calling back to get the entry signed
+    // 3. Construct the first entry, calling back to get the entry signed
 
     // construct the first entry from all of the parts
-    let entry = entry::Builder::default()
+    let mut builder = entry::Builder::default()
         .with_vlad(&vlad)
         .add_lock(&lock_script)
-        .with_unlock(&unlock_script)
-        .add_op(&entrykey_op)
-        .add_op(&vladkey_op)
-        .add_op(&pubkey_op)
+        .with_unlock(&unlock_script);
+
+    // add in all of the entry Ops
+    op_params.iter().try_for_each(|params| -> Result<(), Error> {
+        // construct the op
+        let op = match params {
+            OpParams::Noop { key } => op::Builder::new(OpId::Noop).with_key_path(key).try_build()?,
+            OpParams::Delete { key } => op::Builder::new(OpId::Delete).with_key_path(key).try_build()?,
+            OpParams::UseCid { key, cid } => {
+                let v: Vec<u8> = cid.clone().into();
+                op::Builder::new(OpId::Update).with_key_path(key).with_data_value(v).try_build()?
+            },
+            OpParams::UseKey { key, mk } => {
+                let v: Vec<u8> = mk.clone().into();
+                op::Builder::new(OpId::Update).with_key_path(key).with_data_value(v).try_build()?
+            },
+            OpParams::UseStr { key, s } => op::Builder::new(OpId::Update).with_key_path(key).with_string_value(s).try_build()?,
+            OpParams::UseBin { key, data } => op::Builder::new(OpId::Update).with_key_path(key).with_data_value(data).try_build()?,
+            _ => return Err(OpenError::InvalidOpParams.into()),
+        };
+        // add the op to the builder
+        builder = builder.clone().add_op(&op);
+        Ok(())
+    })?;
+
+    // finalize the entry building by signing it
+    let entry = builder
         .try_build(|e| {
             // get the serialzied version of the entry with an empty "proof" field
             let ev: Vec<u8> = e.clone().into();
@@ -136,14 +127,84 @@ where
             Ok(ms.into())
         })?;
 
-    // 5. Construct the log
+    // 4. Construct the log
 
-    let log = log::Builder::new()
+    let log = provenance_log::log::Builder::new()
         .with_vlad(&vlad)
-        .with_first_lock(&first_lock_script)
+        .with_first_lock(&first_lock_script.ok_or::<Error>(OpenError::NoFirstLockScript.into())?)
         .append_entry(&entry)
         .try_build()?;
 
     Ok(log)
 }
 
+fn load_key<F>(ops: &mut Vec<OpParams>, params: &OpParams, mut get_key: F) -> Result<Multikey, Error>
+where
+    F: FnMut(&Key, Codec, usize, usize) -> Result<Multikey, Error>,
+{
+    debug!("load_key: {:?}", params);
+    match params {
+        OpParams::KeyGen { key, codec, threshold, limit } => {
+            // call back to generate the key
+            let mk = get_key(key, *codec, *threshold, *limit)?;
+
+            // get the public key
+            let pk = mk.conv_view()?.to_public_key()?;
+
+            // add the op params to add the key
+            ops.push(OpParams::UseKey {
+                key: key.clone(),
+                mk: pk,
+            });
+
+            Ok(mk)
+        }
+        _ => Err(OpenError::InvalidKeyParams.into())
+    }
+}
+
+fn load_cid<F>(ops: &mut Vec<OpParams>, params: &OpParams, mut load_file: F) -> Result<Cid, Error>
+where
+    F: FnMut(&Path) -> Result<Vec<u8>, Error>
+{
+    debug!("load_cid: {:?}", params);
+    match params {
+        OpParams::CidGen { key, version, target, hash, inline, path } => {
+            // load the file data for the cid
+            let file_data = load_file(path)?;
+
+            let cid = cid::Builder::new(*version)
+                .with_target_codec(*target)
+                .with_hash(
+                    &mh::Builder::new_from_bytes(*hash, &file_data)?.try_build()?
+                )
+                .try_build()?;
+
+            // create the cid key-path
+            let mut cid_key = key.clone();
+            cid_key.push("/cid")?;
+
+            // add the op params to add the cid for the file
+            ops.push(OpParams::UseCid {
+                key: cid_key,
+                cid: cid.clone(),
+            });
+
+            // add the file directly to p.log if inline
+            if *inline {
+                // create the cid key-path
+                let mut data_key = key.clone();
+                data_key.push("/data")?;
+
+                // add the op param to add the file data
+                ops.push(OpParams::UseBin {
+                    key: data_key,
+                    data: file_data,
+                });
+            }
+
+            Ok(cid)
+        }
+        _ => Err(OpenError::InvalidCidParams.into())
+    }
+}

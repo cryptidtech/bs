@@ -1,60 +1,46 @@
 // SPDX-License-Identifier: FSL-1.1
-use multicodec::Codec;
+
+use crate::update::op_params::OpParams;
 use std::path::{Path, PathBuf};
 
 /// the configuration for opening a new provenance log
 #[derive(Clone, Debug, Default)]
 pub struct Config {
-    /// the vlad key codec
-    pub vladkey_codec: Option<Codec>,
+    /// the vlad key and cid params
+    pub vlad_params: Option<(OpParams, OpParams)>,
 
-    /// the entry key codec
-    pub entrykey_codec: Option<Codec>,
+    /// the entry key params
+    pub entrykey_params: Option<OpParams>,
 
-    /// pubkey codec
-    pub pubkey_codec: Option<Codec>,
-
-    /// the vlad cid hash codec
-    pub vlad_cid_hash_codec: Option<Codec>,
-
-    /// first lock script
-    pub first_lock_script: Option<PathBuf>,
+    /// the pubkey params
+    pub pubkey_params: Option<OpParams>,
 
     /// entry lock script
     pub entry_lock_script: Option<PathBuf>,
     
     /// entry unlock script
     pub entry_unlock_script: Option<PathBuf>,
+
+    /// additional ops for the first entry
+    pub additional_ops: Vec<OpParams>,
 }
 
 impl Config {
-    /// add the vladkey codec
-    pub fn with_vladkey_codec(mut self, codec: Codec) -> Self {
-        self.vladkey_codec = Some(codec);
+    /// add the vlad key and cid params
+    pub fn with_vlad_params(mut self, key: OpParams, cid: OpParams) -> Self {
+        self.vlad_params = Some((key, cid));
         self
     }
 
-    /// add the entrykey codec
-    pub fn with_entrykey_codec(mut self, codec: Codec) -> Self {
-        self.entrykey_codec = Some(codec);
+    /// add the entrykey params
+    pub fn with_entrykey_params(mut self, key: OpParams) -> Self {
+        self.entrykey_params = Some(key);
         self
     }
 
-    /// add the pubkey codec
-    pub fn with_pubkey_codec(mut self, codec: Codec) -> Self {
-        self.pubkey_codec = Some(codec);
-        self
-    }
-
-    /// add vlad cid hash codec
-    pub fn with_vlad_cid_hash_codec(mut self, codec: Codec) -> Self {
-        self.vlad_cid_hash_codec = Some(codec);
-        self
-    }
-
-    /// add in the first lock script
-    pub fn with_first_lock_script<P: AsRef<Path>>(mut self, path: &P) -> Self {
-        self.first_lock_script = Some(path.as_ref().to_path_buf());
+    /// add the pubkey params
+    pub fn with_pubkey_params(mut self, key: OpParams) -> Self {
+        self.pubkey_params = Some(key);
         self
     }
 
@@ -67,6 +53,12 @@ impl Config {
     /// add in the entry unlock script
     pub fn with_entry_unlock_script<P: AsRef<Path>>(mut self, path: &P) -> Self {
         self.entry_unlock_script = Some(path.as_ref().to_path_buf());
+        self
+    }
+
+    /// add additional ops
+    pub fn with_additional_ops(mut self, ops: &Vec<OpParams>) -> Self {
+        self.additional_ops.append(&mut ops.clone());
         self
     }
 }
