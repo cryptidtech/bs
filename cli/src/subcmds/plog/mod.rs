@@ -14,8 +14,8 @@ use multicodec::Codec;
 use multihash::EncodedMultihash;
 use multikey::{EncodedMultikey, mk, Multikey, Views};
 use multisig::Multisig;
-use multiutil::CodecInfo;
-use provenance_log::{Key, Log};
+use multiutil::{BaseEncoded, CodecInfo, DetectedEncoder, EncodingInfo};
+use provenance_log::{Key, Log, Script};
 use std::{collections::VecDeque, convert::TryFrom, path::PathBuf};
 use wacc::Pairs;
 
@@ -145,7 +145,7 @@ fn print_plog(plog: &Log) -> Result<(), Error> {
     // process the first entry and get the results
     let (_, _, mut kvp) = vi.next().ok_or::<Error>(PlogError::NoFirstEntry.into())??;
     let vlad_key_value = kvp.get("/vlad/key").ok_or::<Error>(PlogError::NoVladKey.into())?;
-    let vlad_key = get_key_from_value(&vlad_key_value)?;
+    let vlad_key: Multikey = get_from_wacc_value(&vlad_key_value).ok_or::<Error>(PlogError::InvalidWaccValue.into())?;
 
     while let Some(ret) = vi.next() {
         match ret {
@@ -178,21 +178,30 @@ fn print_plog(plog: &Log) -> Result<(), Error> {
         } else {
             print!("    ╰─ '{}' -> ", k);
         }
-        if let Some(codec) = get_codec_from_value(&v) {
+        if let Some(codec) = get_codec_from_plog_value(&v) {
             match codec {
                 Codec::Multikey => {
                     let v = kvp.get(k.as_str()).ok_or::<Error>(PlogError::NoKeyPath.into())?;
-                    let key = get_key_from_value(&v)?;
+                    let key: Multikey = get_from_wacc_value(&v)
+                        .ok_or::<Error>(PlogError::InvalidWaccValue.into())?;
                     println!("({} key) {}", key.codec(), EncodedMultikey::new(Base::Base32Z, key.clone()));
                 }
                 Codec::Vlad => {
                     let v = kvp.get(k.as_str()).ok_or::<Error>(PlogError::NoKeyPath.into())?;
-                    let vlad = get_vlad_from_value(&v)?;
+                    let vlad: Vlad = get_from_wacc_value(&v)
+                        .ok_or::<Error>(PlogError::InvalidWaccValue.into())?;
                     println!("(vlad) {}", EncodedVlad::from(vlad.clone()));
+                }
+                Codec::ProvenanceLogScript => {
+                    let v = kvp.get(k.as_str()).ok_or::<Error>(PlogError::NoKeyPath.into())?;
+                    let script: Script = get_from_wacc_value(&v)
+                        .ok_or::<Error>(PlogError::InvalidWaccValue.into())?;
+                    println!("(script) {} bytes", script.as_ref().len());
                 }
                 Codec::Cidv1 | Codec::Cidv2 | Codec::Cidv3 => {
                     let v = kvp.get(k.as_str()).ok_or::<Error>(PlogError::NoKeyPath.into())?;
-                    let cid = get_cid_from_value(&v)?;
+                    let cid: Cid = get_from_wacc_value(&v)
+                        .ok_or::<Error>(PlogError::InvalidWaccValue.into())?;
                     println!("({}) {}", cid.codec(), EncodedCid::from(cid.clone()));
                 }
                 _ => println!("{}", codec),
@@ -204,7 +213,7 @@ fn print_plog(plog: &Log) -> Result<(), Error> {
                 _ => println!("Nil"),
             }
         }
-        i += 0;
+        i += 1;
     }
     /*
     let kvp_lines = kvp.to_string().lines().map(|s| s.to_string()).collect::<Vec<_>>();
@@ -219,35 +228,46 @@ fn print_plog(plog: &Log) -> Result<(), Error> {
     Ok(())
 }
 
-fn get_codec_from_value(value: &provenance_log::Value) -> Option<Codec> {
+fn get_codec_from_plog_value(value: &provenance_log::Value) -> Option<Codec> {
     match value {
         provenance_log::Value::Data(v) => Codec::try_from(v.as_slice()).ok(),
         provenance_log::Value::Str(s) => Codec::try_from(s.as_str()).ok(),
         _ => None,
     }
 }
-
-fn get_key_from_value(value: &wacc::Value) -> Result<Multikey, Error> {
+/*
+fn get_from_plog_value<'a, T>(value: &'a provenance_log::Value) -> Option<T>
+where
+    T: TryFrom<&'a [u8]> + EncodingInfo,
+    BaseEncoded<T, DetectedEncoder>: TryFrom<&'a str>,
+{
     match value {
-        wacc::Value::Bin(v) => Ok(Multikey::try_from(v.as_slice())?),
-        wacc::Value::Str(s) => Ok(EncodedMultikey::try_from(s.as_str())?.to_inner()),
-        _ => Err(PlogError::InvalidWaccValue.into()),
+        provenance_log::Value::Data(v) => T::try_from(v.as_slice()).ok(),
+        provenance_log::Value::Str(s) => {
+            match BaseEncoded::<T, DetectedEncoder>::try_from(s.as_str()) {
+                Ok(be) => Some(be.to_inner()),
+                Err(_) => None
+            }
+        }
+        _ => None,
     }
 }
+*/
 
-fn get_cid_from_value(value: &wacc::Value) -> Result<Cid, Error> {
+fn get_from_wacc_value<'a, T>(value: &'a wacc::Value) -> Option<T>
+where
+    T: TryFrom<&'a [u8]> + EncodingInfo,
+    BaseEncoded<T, DetectedEncoder>: TryFrom<&'a str>,
+{
     match value {
-        wacc::Value::Bin(v) => Ok(Cid::try_from(v.as_slice())?),
-        wacc::Value::Str(s) => Ok(EncodedCid::try_from(s.as_str())?.to_inner()),
-        _ => Err(PlogError::InvalidWaccValue.into()),
-    }
-}
-
-fn get_vlad_from_value(value: &wacc::Value) -> Result<Vlad, Error> {
-    match value {
-        wacc::Value::Bin(v) => Ok(Vlad::try_from(v.as_slice())?),
-        wacc::Value::Str(s) => Ok(EncodedVlad::try_from(s.as_str())?.to_inner()),
-        _ => Err(PlogError::InvalidWaccValue.into()),
+        wacc::Value::Bin(v) => T::try_from(v.as_slice()).ok(),
+        wacc::Value::Str(s) => {
+            match BaseEncoded::<T, DetectedEncoder>::try_from(s.as_str()) {
+                Ok(be) => Some(be.to_inner()),
+                Err(_) => None
+            }
+        }
+        _ => None,
     }
 }
 
