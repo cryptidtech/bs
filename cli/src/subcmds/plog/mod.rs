@@ -12,7 +12,7 @@ use multibase::Base;
 use multicid::{Cid, EncodedCid, EncodedVlad, Vlad};
 use multicodec::Codec;
 use multihash::EncodedMultihash;
-use multikey::{EncodedMultikey, mk, Multikey, Views};
+use multikey::{mk, Multikey, Views};
 use multisig::Multisig;
 use multiutil::{BaseEncoded, CodecInfo, DetectedEncoder, EncodingInfo};
 use provenance_log::{Key, Log, Script};
@@ -51,7 +51,7 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
                     let mut rng = rand::rngs::OsRng::default();
                     let mk = mk::Builder::new_from_random_bytes(codec, &mut rng)?.try_build()?;
                     let fingerprint = mk.fingerprint_view()?.fingerprint(Codec::Blake3)?;
-                    let ef = EncodedMultihash::from(fingerprint);
+                    let ef = EncodedMultihash::new(Base::Base32Z, fingerprint);
                     debug!("Writing {} key fingerprint: {}", key, ef);
                     let w = writer(&Some(format!("{}.multikey", ef).into()))?;
                     serde_cbor::to_writer(w, &mk)?;
@@ -88,17 +88,20 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
             output,
             input,
         } => {
+            debug!("p.log update");
             let mut plog = {
                 let mut v = Vec::default();
                 reader(&input)?.read_to_end(&mut v)?;
                 serde_cbor::from_slice::<Log>(&v)?
             };
+            debug!("read p.log");
 
             let entry_signing_key = {
                 let mut v = Vec::default();
-                reader(&entry_signing_key)?.read_to_end(&mut v)?;
+                reader(&Some(entry_signing_key))?.read_to_end(&mut v)?;
                 serde_cbor::from_slice::<Multikey>(&v)?
             };
+            debug!("read p.log signing key");
 
             let cfg = update::Config::default()
                 .with_ops(&mut build_delete_params(&delete_ops)?)
@@ -115,7 +118,7 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
                     let mut rng = rand::rngs::OsRng::default();
                     let mk = mk::Builder::new_from_random_bytes(codec, &mut rng)?.try_build()?;
                     let fingerprint = mk.fingerprint_view()?.fingerprint(Codec::Blake3)?;
-                    let ef = EncodedMultihash::from(fingerprint);
+                    let ef = EncodedMultihash::new(Base::Base32Z, fingerprint);
                     debug!("Writing {} key fingerprint: {}", key, ef);
                     let w = writer(&Some(format!("{}.multikey", ef).into()))?;
                     serde_cbor::to_writer(w, &mk)?;
@@ -165,7 +168,9 @@ fn print_plog(plog: &Log) -> Result<(), Error> {
     }
 
     if plog.vlad.verify(&vlad_key).is_ok() {
-        println!("│   ╰─ ☑ verified '/vlad/key' -> ({}) {}", vlad_key.codec(), EncodedMultikey::new(Base::Base32Z, vlad_key));
+        let fingerprint = vlad_key.fingerprint_view()?.fingerprint(Codec::Blake3)?;
+        let ef = EncodedMultihash::new(Base::Base32Z, fingerprint);
+        println!("│   ╰─ ☑ verified '/vlad/key' -> ({}) {}", vlad_key.codec(), ef);
     } else {
         println!("│   ╰─ ☒ failed to verify");
     }
@@ -184,13 +189,15 @@ fn print_plog(plog: &Log) -> Result<(), Error> {
                     let v = kvp.get(k.as_str()).ok_or::<Error>(PlogError::NoKeyPath.into())?;
                     let key: Multikey = get_from_wacc_value(&v)
                         .ok_or::<Error>(PlogError::InvalidWaccValue.into())?;
-                    println!("({} key) {}", key.codec(), EncodedMultikey::new(Base::Base32Z, key.clone()));
+                    let fingerprint = key.fingerprint_view()?.fingerprint(Codec::Blake3)?;
+                    let ef = EncodedMultihash::new(Base::Base32Z, fingerprint);
+                    println!("({} key) {}", key.codec(), ef);
                 }
                 Codec::Vlad => {
                     let v = kvp.get(k.as_str()).ok_or::<Error>(PlogError::NoKeyPath.into())?;
                     let vlad: Vlad = get_from_wacc_value(&v)
                         .ok_or::<Error>(PlogError::InvalidWaccValue.into())?;
-                    println!("(vlad) {}", EncodedVlad::from(vlad.clone()));
+                    println!("(vlad) {}", EncodedVlad::new(Base::Base32Z, vlad.clone()));
                 }
                 Codec::ProvenanceLogScript => {
                     let v = kvp.get(k.as_str()).ok_or::<Error>(PlogError::NoKeyPath.into())?;
@@ -202,7 +209,7 @@ fn print_plog(plog: &Log) -> Result<(), Error> {
                     let v = kvp.get(k.as_str()).ok_or::<Error>(PlogError::NoKeyPath.into())?;
                     let cid: Cid = get_from_wacc_value(&v)
                         .ok_or::<Error>(PlogError::InvalidWaccValue.into())?;
-                    println!("({}) {}", cid.codec(), EncodedCid::from(cid.clone()));
+                    println!("({}) {}", cid.codec(), EncodedCid::new(Base::Base32Z, cid.clone()));
                 }
                 _ => println!("{}", codec),
             }

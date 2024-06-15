@@ -224,7 +224,7 @@ pub enum Command {
 
         /// The key to use for signing the new entry
         #[structopt(long = "entry-signing-key", parse(from_os_str))]
-        entry_signing_key: Option<PathBuf>,
+        entry_signing_key: PathBuf,
 
         /// The output file to write the log to
         #[structopt(short = "o", parse(from_os_str))]
