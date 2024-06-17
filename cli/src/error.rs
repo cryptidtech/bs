@@ -19,6 +19,9 @@ pub enum Error {
     /// A log crate error
     #[error(transparent)]
     Log(#[from] log::SetLoggerError),
+    /// An infallible error
+    #[error(transparent)]
+    Inf(#[from] std::convert::Infallible),
 
     /// BestPractices error
     #[error(transparent)]
