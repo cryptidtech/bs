@@ -25,36 +25,36 @@ primary goals:
 ## Provenance Based Identity
 
 The current web-of-trust and global PKI systems are constructed from buliding
-blocks that are too fragile to create a global regime for transmitting trust
-through time and space. Among the many design problems, the current systems
-operate without consideration for the element of time and therefore lack the
-ability to prove the history of control and modification of any digital data,
-let alone cryptographic keys. With the creation of blockchains and distributed
-consensus popularizing the idea of immutable records of transactions over time,
-we've learned the value of maintaining logs to document the provenance of data
-over large spans of time despite the unbounded memory requirement that results.
-In a world where there is old data signed with old keys, there must be some
-cryptographically verifiable record preserving and linking old keys to the new
-keys; provenance logs are design to be the simplest and most decentralized
-solution for that.
+blocks that are too fragile to create a global regime for transmitting
+verifiability through time and space. Among the many design problems, the
+current systems operate without consideration for the element of time and
+therefore lack the ability to prove the history of control and modification of
+any digital data, let alone cryptographic keys. With the creation of
+blockchains and distributed consensus popularizing the idea of immutable
+records of transactions over time, we've learned the value of maintaining logs
+to document the provenance of data over large spans of time despite the
+unbounded memory requirement that results. In a world where there is old data
+signed with old keys, there must be some cryptographically verifiable record
+preserving and linking old keys to the new keys; provenance logs are design to
+be the simplest and most decentralized solution for that.
 
 To finally improve the global PKI system, it seems logical to start from
-scratch and construct an identity solution based entirely off of a provenace
-logging structure. It also is apparent that identity based transactions are
-either 1-party or 3-party transactions and therefore do not require the
-distributed consensus necessary for trustful 2-party transactions. This opens
-the door for provenance logs that grow in trust in several ways. They can
-accumulate 1st party self-attestations along with proofs of work (i.e. content
-creation of all kinds or verifiable acts of service). They may also record
-references to 3rd party corroborating attestation sources for realtime,
-late-bidning verification from multiple trustworthy societal institutions or
-organizations. In the end, this solution is very good at overcoming the
-analog-to-digital problem of encoding trust. The security rests in the
-statistical improbability of corrupting and/or falsifying proof from an
-increasing number of trustworth insitutions while also making verification
-time-sensitive and responsive to shifting facts on the ground. This
-corroboration based security model gives statistical assurances of trust and is
-the natural trust model for provenance logs.
+scratch and construct an identity solution based entirely off of a provenance
+logging structure. It also is apparent that identity transactions are either
+1-party or 3-party transactions and therefore do not require the distributed
+consensus necessary for trustful 2-party transactions. This opens the door for
+provenance logs that grow in trust in several ways. They can accumulate 1st
+party self-attestations along with proofs of work (i.e. content creation of all
+kinds or verifiable acts of service). They may also record references to 3rd
+party corroborating attestation sources for realtime, late-binding verification
+from multiple trustworthy societal institutions or organizations. In the end,
+this solution is very good at overcoming the analog-to-digital problem of
+encoding verifiability. The security rests in the statistical improbability of
+corrupting and/or falsifying proof from an increasing number of trustworthy
+insitutions while also making verification time-sensitive and responsive to
+shifting facts on the ground. This corroboration based security model gives
+statistical assurances of what is true and is the native model for provenance
+logs.
 
 Provenance logs are a form of time-based log with the added feature of
 cryptographically enforced write priviledges which may be delegated and
@@ -67,8 +67,8 @@ README][PROVREADME].
 
 ## Metastable Systems
 
-> *metastable* (adj) — being in a long-lived stable state that arrises
-> spontaneously from and persists despite chaotic conditions
+> *metastable* (adj) — being in a long-lived stable state that arrose
+> spontaneously from, and persists despite, chaotic conditions.
 
 When discussing distributed systems we speak of networks of peers connected
 together with links. A network consists of peers with links that reference
