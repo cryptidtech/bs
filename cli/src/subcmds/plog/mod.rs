@@ -284,11 +284,11 @@ fn parse_file_params(s: &str) -> Result<OpParams, Error> {
         Ok(b) => b,
         _ => false,
     };
-    let target = match Codec::try_from(parts.pop_front().unwrap()) {
+    let target = match Codec::try_from(parts.pop_front().unwrap_or("identity")) {
         Ok(c) => c,
         _ => Codec::Identity,
     };
-    let hash = match parse_safe_hash_codec(parts.pop_front().unwrap(), parts.pop_front().unwrap()) {
+    let hash = match parse_safe_hash_codec(parts.pop_front().unwrap_or("blake3"), parts.pop_front().unwrap_or("256")) {
         Ok(c) => c,
         _ => Codec::Blake3,
     };
