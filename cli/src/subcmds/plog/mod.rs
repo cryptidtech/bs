@@ -83,6 +83,7 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
             key_ops,
             string_ops,
             file_ops,
+            lock_script_path: _,
             unlock_script_path,
             entry_signing_key,
             output,
@@ -267,8 +268,8 @@ where
     BaseEncoded<T, DetectedEncoder>: TryFrom<&'a str>,
 {
     match value {
-        wacc::Value::Bin(v) => T::try_from(v.as_slice()).ok(),
-        wacc::Value::Str(s) => {
+        wacc::Value::Bin { hint:_, data: ref v } => T::try_from(v.as_slice()).ok(),
+        wacc::Value::Str { hint:_, data: ref s } => {
             match BaseEncoded::<T, DetectedEncoder>::try_from(s.as_str()) {
                 Ok(be) => Some(be.to_inner()),
                 Err(_) => None

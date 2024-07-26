@@ -169,8 +169,8 @@ pub enum Command {
         ///
         /// Values are made up of two to five fields separated by colons, the last three fields are
         /// optional. The threshold and limit values are for when you want to create a threshold
-        /// signature group and publish the public key. The revote field is a boolean that
-        /// determines if revocation should be signalged by first deletinging the key path before
+        /// signature group and publish the public key. The revoke field is a boolean that
+        /// determines if revocation should be signaled by first deleting the key path before
         /// setting a new key.
         ///
         /// <key-path>:<key codec>[:<threshold>:<limit>:<revoke>]
@@ -217,6 +217,10 @@ pub enum Command {
         ///     '/epoch/:./data/model.pth:::sha2:256'
         #[structopt(long = "file-op")]
         file_ops: Vec<String>,
+
+        /// The lock script for verifying the next entry.
+        #[structopt(long = "lock", parse(from_os_str))]
+        lock_script_path: PathBuf,
 
         /// The unlock script for providing proof for the first lock script.
         #[structopt(long = "unlock", parse(from_os_str))]
