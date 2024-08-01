@@ -103,7 +103,7 @@ async fn main() -> Result<(), Error> {
         .quiet(opt.quiet)
         .verbosity(opt.verbosity)
         .init()
-        .map_err(|e| bs_cli::Error::Log(e))?;
+        .map_err(bs_cli::Error::Log)?;
 
     // load the config
     let mut config =

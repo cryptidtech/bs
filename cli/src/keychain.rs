@@ -40,7 +40,7 @@ impl fmt::Display for KeyEntry {
             msg.push_str(&format!("├───── codec  {}\n", self.pubkey.codec()));
             msg.push_str(&format!("├─── comment  {}\n", self.pubkey.comment));
             msg.push_str(&format!("├─ threshold  {} of {}\n", self.threshold, self.secret_keys.len()));
-            msg.push_str(&format!("╰─┬── shares\n"));
+            msg.push_str("╰─┬── shares\n");
             for i in (0..self.secret_keys.len()).rev() {
                 let skh = {
                     let cv = self.secret_keys[i].conv_view().unwrap();
@@ -140,7 +140,7 @@ impl TryFrom<String> for Backend {
         match s.to_lowercase().as_str() {
             "file" => Ok(Backend::LocalFile),
             "ssh-agent" => Ok(Backend::SshAgent),
-            _ => return Err(Error::InvalidBackendType(s)),
+            _ => Err(Error::InvalidBackendType(s)),
         }
     }
 }
@@ -158,8 +158,8 @@ impl fmt::Display for Backend {
     }
 }
 
-impl Into<String> for Backend {
-    fn into(self) -> String {
-        self.to_string()
+impl From<Backend> for String {
+    fn from(val: Backend) -> Self {
+        val.to_string()
     }
 }
