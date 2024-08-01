@@ -18,7 +18,7 @@ use multisig::Multisig;
 use provenance_log::{entry, error::EntryError, Error as PlogError, Key, Log, OpId, Script};
 use std::{fs::read, path::Path};
 
-/// open a new provenanc log based on the config
+/// open a new provenance log based on the config
 pub fn open_plog<F1, F2>(config: Config, get_key: F1, sign_entry: F2) -> Result<Log, Error>
 where
     F1: Fn(&Key, Codec, usize, usize) -> Result<Multikey, Error>,
