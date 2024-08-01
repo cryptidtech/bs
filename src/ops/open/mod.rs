@@ -219,9 +219,9 @@ where
     }
 }
 
-fn load_cid<F>(ops: &mut Vec<OpParams>, params: &OpParams, mut load_file: F) -> Result<Cid, Error>
+fn load_cid<F>(ops: &mut Vec<OpParams>, params: &OpParams, load_file: F) -> Result<Cid, Error>
 where
-    F: FnMut(&Path) -> Result<Vec<u8>, Error>,
+    F: FnOnce(&Path) -> Result<Vec<u8>, Error>,
 {
     debug!("load_cid: {:?}", params);
     match params {

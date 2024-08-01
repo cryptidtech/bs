@@ -114,10 +114,10 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
             debug!("read p.log signing key");
 
             let cfg = update::Config::default()
-                .with_ops(&mut build_delete_params(&delete_ops)?)
-                .with_ops(&mut build_key_params(&key_ops)?)
-                .with_ops(&mut build_string_params(&string_ops)?)
-                .with_ops(&mut build_file_params(&file_ops)?)
+                .with_ops(&build_delete_params(&delete_ops)?)
+                .with_ops(&build_key_params(&key_ops)?)
+                .with_ops(&build_string_params(&string_ops)?)
+                .with_ops(&build_file_params(&file_ops)?)
                 .with_entry_signing_key(&entry_signing_key)
                 .with_entry_unlock_script(&unlock_script_path);
 
@@ -202,8 +202,7 @@ fn print_plog(plog: &Log) -> Result<(), Error> {
     }
     println!("├─ entries {}", plog.entries.len());
     println!("╰─ kvp");
-    let mut i = 0;
-    for (k, v) in kvp.iter() {
+    for (i, (k, v)) in kvp.iter().enumerate() {
         if i < kvp.len() - 1 {
             print!("    ├─ '{}' -> ", k);
         } else {
@@ -258,7 +257,6 @@ fn print_plog(plog: &Log) -> Result<(), Error> {
                 _ => println!("Nil"),
             }
         }
-        i += 1;
     }
     /*
     let kvp_lines = kvp.to_string().lines().map(|s| s.to_string()).collect::<Vec<_>>();
@@ -321,7 +319,7 @@ where
 }
 
 // <key-path>
-fn build_delete_params(ops: &Vec<String>) -> Result<Vec<OpParams>, Error> {
+fn build_delete_params(ops: &[String]) -> Result<Vec<OpParams>, Error> {
     Ok(ops
         .iter()
         .filter_map(|s| parse_delete_params(s).ok())
@@ -329,7 +327,7 @@ fn build_delete_params(ops: &Vec<String>) -> Result<Vec<OpParams>, Error> {
 }
 
 // <key-path>:<codec>[:<threshold>:<limit>]
-fn build_key_params(ops: &Vec<String>) -> Result<Vec<OpParams>, Error> {
+fn build_key_params(ops: &[String]) -> Result<Vec<OpParams>, Error> {
     Ok(ops
         .iter()
         .filter_map(|s| parse_key_params(s, None).ok())
@@ -337,7 +335,7 @@ fn build_key_params(ops: &Vec<String>) -> Result<Vec<OpParams>, Error> {
 }
 
 // <key-path>:<string>
-fn build_string_params(ops: &Vec<String>) -> Result<Vec<OpParams>, Error> {
+fn build_string_params(ops: &[String]) -> Result<Vec<OpParams>, Error> {
     Ok(ops
         .iter()
         .filter_map(|s| parse_string_params(s).ok())
@@ -345,7 +343,7 @@ fn build_string_params(ops: &Vec<String>) -> Result<Vec<OpParams>, Error> {
 }
 
 /// <branch-key-path>:<file>[:<inline>:<target codec>:<hash codec>:<hash length in bits>].
-fn build_file_params(ops: &Vec<String>) -> Result<Vec<OpParams>, Error> {
+fn build_file_params(ops: &[String]) -> Result<Vec<OpParams>, Error> {
     Ok(ops
         .iter()
         .filter_map(|s| parse_file_params(s).ok())
@@ -366,7 +364,7 @@ fn parse_key_params(s: &str, key_path: Option<&str>) -> Result<OpParams, Error> 
         None => Key::try_from(parts.pop_front().ok_or(PlogError::NoKeyPath)?)?,
     };
     let codec = parse_key_codec(parts.pop_front().ok_or(PlogError::NoCodec)?)?;
-    if !parts.is_empty() && !(parts.len() == 2 || parts.len() == 3) {
+    if !(parts.is_empty() || parts.len() == 2 || parts.len() == 3) {
         return Err(PlogError::InvalidKeyParams.into());
     }
     let threshold = parts
@@ -446,7 +444,7 @@ fn parse_file_params(s: &str) -> Result<OpParams, Error> {
 fn parse_vlad_params(s: &str) -> Result<(OpParams, OpParams), Error> {
     let mut parts = s.split(":").collect::<VecDeque<_>>();
     let path = PathBuf::from(parts.pop_front().ok_or(PlogError::NoInputFile)?);
-    if !parts.is_empty() && !(parts.len() == 2 || parts.len() == 3) {
+    if !(parts.is_empty() || parts.len() == 2 || parts.len() == 3) {
         return Err(PlogError::InvalidFileParams.into());
     }
     let codec = match Codec::try_from(parts.pop_front().unwrap_or_default()) {
