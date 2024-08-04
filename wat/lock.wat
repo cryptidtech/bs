@@ -69,6 +69,6 @@
   ;;
   ;;                    [NAME]               [IDX] [LEN]
   (data (i32.const  0)  "/recoverykey" )   ;;    0    12
-  (data (i32.const  8)  "/pubkey"      )   ;;   12     7
-  (data (i32.const 15)  "/hash"        )   ;;   19     5
+  (data (i32.const 12)  "/pubkey"      )   ;;   12     7
+  (data (i32.const 19)  "/hash"        )   ;;   19     5
 )
