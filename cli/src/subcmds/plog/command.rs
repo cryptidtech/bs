@@ -51,7 +51,7 @@ pub enum Command {
         ///
         /// Values are made up of two to five fields separated by colons, the last three fields are
         /// optional. The threshold and limit values are for when you want to create a threshold
-        /// signature group and publish the public key. The revote field is a boolean that
+        /// signature group and publish the public key. The revoke field is a boolean that
         /// determines if revocation should be signalged by first deletinging the key path before
         /// setting a new key.
         ///
@@ -92,7 +92,7 @@ pub enum Command {
         /// 'identity' (i.g. raw bytes), the default hash codec is 'blake3' and the default hash
         /// length is '256'.
         ///
-        /// <branch-key-path>:<file>[:<inline>:<target codec>:<hash codec>:<hash length in bits>]. 
+        /// <branch-key-path>:<file>[:<inline>:<target codec>:<hash codec>:<hash length in bits>].
         ///
         /// Examples:
         ///     '/myfile/:myphoto.jpg'
@@ -113,7 +113,7 @@ pub enum Command {
         /// The cid hashing codec can be one of: 'blake2b', 'blake2s', 'blake3', 'sha2', 'sha3'
         /// The hash length can be one of: '256', '384', '512'
         ///
-        /// Examples: 
+        /// Examples:
         ///     './first_lock.wasm:es256k:sha3'
         ///     './first_lock.wat:eddsa:sha2:256'
         #[structopt(long = "vlad")]
@@ -210,7 +210,7 @@ pub enum Command {
         /// 'identity' (i.g. raw bytes), the default hash codec is 'blake3' and the default hash
         /// length is '256'.
         ///
-        /// <branch-key-path>:<file>[:<inline>:<target codec>:<hash codec>:<hash length in bits>]. 
+        /// <branch-key-path>:<file>[:<inline>:<target codec>:<hash codec>:<hash length in bits>].
         ///
         /// Examples:
         ///     '/myfile/:myphoto.jpg'
@@ -237,5 +237,5 @@ pub enum Command {
         /// The plog to verify and print
         #[structopt(parse(from_os_str))]
         input: Option<PathBuf>,
-    }
+    },
 }
