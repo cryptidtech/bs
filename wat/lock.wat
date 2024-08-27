@@ -1,7 +1,7 @@
 ;; SPDX-License-Identifier: FSL-1.1
 (module
   ;; importing the wacc functions
-  (import "wacc" "_check_signature" (func $check_signature (param i32 i32) (result i32)))
+  (import "wacc" "_check_signature" (func $check_signature (param i32 i32 i32 i32) (result i32)))
   (import "wacc" "_check_preimage"  (func $check_preimage  (param i32 i32) (result i32)))
 
   ;; standard lock function
@@ -10,14 +10,14 @@
     ;; ┌──────────────────┐
     ;; │ <"/entry/proof"> │
     ;; ├──────────────────┤
-    ;; │ <"/entry/">      │
-    ;; ├──────────────────┤
     ;; │        ┆         │
     ;; ┆                  ┆
 
-    ;; check_signature("/recoverykey")
-    i32.const 0
+    ;; check_signature("/recoverykey", "/entry/")
+    i32.const 7
     i32.const 12
+    i32.const 0
+    i32.const 7
     call $check_signature
 
     (if 
@@ -30,8 +30,10 @@
         ;; the threshold signature verify failed so try to verify a public
         ;; key signature as the proof 
 
-        ;; check_signature("/pubkey")
-        i32.const 12
+        ;; check_signature("/pubkey", "/entry/")
+        i32.const 19
+        i32.const 7
+        i32.const 0
         i32.const 7
         call $check_signature
 
@@ -46,7 +48,7 @@
             ;; primage reveal as the proof 
 
             ;; check_preimage("/hash")
-            i32.const 19
+            i32.const 26
             i32.const 5
             call $check_preimage
 
@@ -67,8 +69,9 @@
 
   ;; String constants for referenceing key-value pairs
   ;;
-  ;;                    [NAME]               [IDX] [LEN]
-  (data (i32.const  0)  "/recoverykey" )   ;;    0    12
-  (data (i32.const 12)  "/pubkey"      )   ;;   12     7
-  (data (i32.const 19)  "/hash"        )   ;;   19     5
+  ;;                    [NAME]                [IDX] [LEN]
+  (data (i32.const  0)  "/entry/"      )   ;;    0     7
+  (data (i32.const  7)  "/recoverykey" )   ;;    7    12
+  (data (i32.const 19)  "/pubkey"      )   ;;   19     7
+  (data (i32.const 26)  "/hash"        )   ;;   26     5
 )

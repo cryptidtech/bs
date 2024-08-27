@@ -1,7 +1,7 @@
 ;; SPDX-License-Identifier: FSL-1.1
 (module
   ;; importing the wacc functions
-  (import "wacc" "_check_signature" (func $check_signature (param i32 i32) (result i32)))
+  (import "wacc" "_check_signature" (func $check_signature (param i32 i32 i32 i32) (result i32)))
 
   ;; function to execute the signature check for the first entry in a plog
   (func $main (export "move_every_zig") (param) (result i32)
@@ -15,14 +15,14 @@
     ;; ┌──────────────────┐
     ;; │ <"/entry/proof"> │
     ;; ├──────────────────┤
-    ;; │ <"/entry/">      │
-    ;; ├──────────────────┤
     ;; │        ┆         │
     ;; ┆                  ┆
 
-    ;; check_signature("/entrykey")
-    i32.const 0
+    ;; check_signature("/entrykey", "/entry/")
+    i32.const 7
     i32.const 9
+    i32.const 0
+    i32.const 7
     call $check_signature
     return
   )
@@ -33,5 +33,6 @@
   ;; String constants for referenceing key-value pairs
   ;;
   ;;                    [NAME]              [IDX] [LEN]
-  (data (i32.const  0)  "/entrykey" )  ;;   0     9
+  (data (i32.const  0)  "/entry/"   )  ;;      0     7
+  (data (i32.const  7)  "/entrykey" )  ;;      7     9
 )
