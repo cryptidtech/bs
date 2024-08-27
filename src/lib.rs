@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: FSL-1.1
-//!
+//! BetterSign
 #![warn(missing_docs)]
 //#![feature(trace_macros)]
 #![deny(

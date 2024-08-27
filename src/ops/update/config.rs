@@ -14,7 +14,7 @@ pub struct Config {
 
     /// remove lock scripts
     pub remove_entry_lock_scripts: Vec<String>,
-    
+
     /// entry unlock script
     pub entry_unlock_script: Option<PathBuf>,
 
@@ -33,8 +33,13 @@ impl Config {
     }
 
     /// lock scripts we're adding
-    pub fn add_lock_script<S: AsRef<str>, P: AsRef<Path>>(mut self, key_path: &S, path: &P) -> Self {
-        self.add_entry_lock_scripts.push((key_path.as_ref().to_string(), path.as_ref().to_path_buf()));
+    pub fn add_lock_script<S: AsRef<str>, P: AsRef<Path>>(
+        mut self,
+        key_path: &S,
+        path: &P,
+    ) -> Self {
+        self.add_entry_lock_scripts
+            .push((key_path.as_ref().to_string(), path.as_ref().to_path_buf()));
         self
     }
 
@@ -52,13 +57,14 @@ impl Config {
 
     /// lock scripts we're removing
     pub fn remove_lock_script<S: AsRef<str>>(mut self, key_path: &S) -> Self {
-        self.remove_entry_lock_scripts.push(key_path.as_ref().to_string());
+        self.remove_entry_lock_scripts
+            .push(key_path.as_ref().to_string());
         self
     }
 
     /// the ops we're recording
-    pub fn with_ops(mut self, ops: &Vec<OpParams>) -> Self {
-        self.entry_ops.append(&mut ops.clone());
+    pub fn with_ops(mut self, ops: &[OpParams]) -> Self {
+        self.entry_ops.append(&mut ops.to_vec());
         self
     }
 }

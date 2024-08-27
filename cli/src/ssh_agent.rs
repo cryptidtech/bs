@@ -9,7 +9,7 @@ use ssh_agent_client_rs::Client;
 use ssh_key::PublicKey;
 use std::{cell::RefCell, convert::TryFrom, env, ffi::OsString, path::PathBuf};
 
-const SSH_AUTH_SOCK: &'static str = "SSH_AUTH_SOCK";
+const SSH_AUTH_SOCK: &str = "SSH_AUTH_SOCK";
 
 /// Keychain struct
 pub struct SshAgent {
@@ -100,7 +100,7 @@ impl Keychain for SshAgent {
         let data = key.data_view()?;
         let key_bytes = data.key_bytes()?;
         let public_key =
-            PublicKey::from_bytes(key_bytes.as_slice()).map_err(|e| SshError::SshKey(e))?;
+            PublicKey::from_bytes(key_bytes.as_slice()).map_err(SshError::SshKey)?;
 
         // send a sign request to the ssh agent
         match self.client.borrow_mut().sign(&public_key, msg) {

@@ -9,8 +9,8 @@ use multisig::Multisig;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, convert::TryFrom, fs::File, path::PathBuf};
 
-const KEY_FILE: &'static str = "keyfile.json";
-const ORG_DIRS: &'static [&'static str; 3] = &["tech", "cryptid", "bettersign"];
+const KEY_FILE: &str = "keyfile.json";
+const ORG_DIRS: &[&str; 3] = &["tech", "cryptid", "bettersign"];
 
 /// Keychain struct
 #[derive(Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -27,14 +27,14 @@ impl LocalFile {
     pub fn initialize(path: &PathBuf) -> Result<(), Error> {
         debug!("creating default keyfile: {}", path.display());
         let keyfile = LocalFile::default();
-        let f = File::create(&path)?;
+        let f = File::create(path)?;
         serde_json::to_writer_pretty(f, &keyfile)?;
         Ok(())
     }
     /// try to load the keychain from disk
     pub fn try_load(path: &PathBuf) -> Result<Self, Error> {
         debug!("loading keyfile: {}", path.display());
-        let f = File::options().read(true).write(false).open(&path)?;
+        let f = File::options().read(true).write(false).open(path)?;
         let mut lf: LocalFile = serde_json::from_reader(f)?;
         lf.path = path.clone();
         Ok(lf)
@@ -56,7 +56,7 @@ impl TryFrom<Option<PathBuf>> for LocalFile {
         let keyfile_path =
             initialize_local_file(path, ORG_DIRS, KEY_FILE, |pb| LocalFile::initialize(&pb))?;
 
-        Ok(LocalFile::try_load(&keyfile_path)?)
+        LocalFile::try_load(&keyfile_path)
     }
 }
 
@@ -75,7 +75,7 @@ impl Keychain for LocalFile {
         for h in self.keys.keys() {
             debug!("checking: {}", h);
         }
-        match self.keys.get(&fingerprint) {
+        match self.keys.get(fingerprint) {
             Some(k) => Ok(k.clone()),
             None => Err(Error::NoKey(fingerprint.to_string())),
         }

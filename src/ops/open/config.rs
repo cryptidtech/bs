@@ -17,7 +17,7 @@ pub struct Config {
 
     /// entry lock script
     pub entry_lock_script: Option<PathBuf>,
-    
+
     /// entry unlock script
     pub entry_unlock_script: Option<PathBuf>,
 
@@ -57,8 +57,8 @@ impl Config {
     }
 
     /// add additional ops
-    pub fn with_additional_ops(mut self, ops: &Vec<OpParams>) -> Self {
-        self.additional_ops.append(&mut ops.clone());
+    pub fn with_additional_ops(mut self, ops: &[OpParams]) -> Self {
+        self.additional_ops.append(&mut ops.to_vec());
         self
     }
 }
