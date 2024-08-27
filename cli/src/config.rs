@@ -12,8 +12,8 @@ use std::{
     rc::Rc,
 };
 
-const CONFIG_FILE: &'static str = "config.toml";
-const ORG_DIRS: &'static [&'static str; 3] = &["tech", "cryptid", "bettersign"];
+const CONFIG_FILE: &str = "config.toml";
+const ORG_DIRS: &[&str; 3] = &["tech", "cryptid", "bettersign"];
 
 /// The configuration for the bs crate loaded from disk using the correct OS
 /// path to look for a file

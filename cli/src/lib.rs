@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: FSL-1.1
-//!
+//! Command Line Interface for BetterSign
 #![warn(missing_docs)]
 //#![feature(trace_macros)]
 #![deny(
@@ -24,7 +24,7 @@ pub use fs::{initialize_data_dir, initialize_local_file};
 
 /// Keychain interface
 pub mod keychain;
-pub use keychain::{Backend, Keychain, KeychainConfig, KeyEntry};
+pub use keychain::{Backend, KeyEntry, Keychain, KeychainConfig};
 
 /// Local file keychain
 pub mod local_file;
