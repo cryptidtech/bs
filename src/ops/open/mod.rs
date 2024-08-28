@@ -97,7 +97,7 @@ where
         let lock_path = config
             .entry_lock_script
             .ok_or::<Error>(OpenError::NoEntryLockScript.into())?;
-        script::Loader::new(&lock_path).try_build()?
+        script::Loader::new(lock_path).try_build()?
     };
 
     // load the entry unlock script
@@ -105,7 +105,7 @@ where
         let unlock_path = config
             .entry_unlock_script
             .ok_or::<Error>(OpenError::NoEntryUnlockScript.into())?;
-        script::Loader::new(&unlock_path).try_build()?
+        script::Loader::new(unlock_path).try_build()?
     };
 
     // 3. Construct the first entry, calling back to get the entry signed

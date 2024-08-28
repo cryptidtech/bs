@@ -69,7 +69,7 @@ where
         let unlock_path = config
             .entry_unlock_script
             .ok_or::<Error>(UpdateError::NoEntryUnlockScript.into())?;
-        script::Loader::new(&unlock_path).try_build()?
+        script::Loader::new(unlock_path).try_build()?
     };
 
     // get the entry signing key
