@@ -1,0 +1,36 @@
+[package]
+name = "multicid"
+version.workspace = true
+edition.workspace = true
+authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
+description = "Multicodec compatible content identifier implementation"
+readme = "README.md"
+license = "Apache-2.0"
+
+[features]
+default = ["serde"]
+dag_cbor = ["serde_cbor", "serde_cbor/tags"]
+
+[dependencies]
+multibase.workspace = true
+multicodec.workspace = true
+multihash.workspace = true
+multikey.workspace = true
+multisig.workspace = true
+multitrait.workspace = true
+multiutil.workspace = true
+rand.workspace = true
+rand_core_6.workspace = true
+rng.workspace = true
+serde = { workspace = true, optional = true }
+serde_cbor = { workspace = true, optional = true }
+thiserror.workspace = true
+
+[dev-dependencies]
+hex.workspace = true
+serde_cbor.workspace = true
+serde_json.workspace = true
+serde_test.workspace = true
+
+[lints]
+workspace = true

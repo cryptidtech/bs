@@ -1,0 +1,27 @@
+[package]
+name = "multiutil"
+version.workspace = true
+edition.workspace = true
+authors = ["Dave Huseby <dwh@linuxprogrammer.org>"]
+description = "Multiformat utility functions and types"
+readme = "README.md"
+license = "Apache-2.0"
+
+[features]
+default = ["serde"]
+
+[dependencies]
+multibase.workspace = true
+multicodec.workspace = true
+multitrait.workspace = true
+serde = { workspace = true, optional = true }
+thiserror.workspace = true
+
+[dev-dependencies]
+hex.workspace = true
+serde_cbor.workspace = true
+serde_json.workspace = true
+serde_test.workspace = true
+
+[lints]
+workspace = true

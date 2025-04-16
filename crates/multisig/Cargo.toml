@@ -1,0 +1,43 @@
+[package]
+name = "multisig"
+version.workspace = true
+edition.workspace = true
+authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
+description = "Multisig self-describing multicodec implementation for digital signatures"
+readme = "README.md"
+license = "Apache-2.0"
+
+[features]
+default = ["serde"]
+
+[dependencies]
+blsful = { version = "2.5.7" }
+elliptic-curve.workspace = true
+multibase.workspace = true
+multicodec.workspace = true
+multihash.workspace = true
+multitrait.workspace = true
+multiutil.workspace = true
+serde = { workspace = true, optional = true }
+ssh-encoding = { version = "0.2.0" }
+thiserror.workspace = true
+unsigned-varint.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+ssh-key = { version = "0.6", default-features = false, features = [
+  "alloc",
+  "ecdsa",
+  "ed25519",
+] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+ssh-key = { version = "0.6", features = ["crypto"] }
+
+[dev-dependencies]
+hex.workspace = true
+serde_cbor.workspace = true
+serde_json.workspace = true
+serde_test.workspace = true
+
+[lints]
+workspace = true

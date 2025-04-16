@@ -1,0 +1,39 @@
+[package]
+name = "multihash"
+version.workspace = true
+edition.workspace = true
+authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
+description = "Multihash self-describing cryptographic hash data"
+readme = "README.md"
+license = "Apache-2.0"
+
+[features]
+default = ["serde"]
+
+[dependencies]
+blake2 = "0.10"
+blake3 = { version = "1.5.1", features = ["traits-preview", "zeroize"] }
+digest = "0.10"
+hex.workspace = true
+md-5 = "0.10"
+multibase.workspace = true
+multicodec.workspace = true
+multitrait.workspace = true
+multiutil.workspace = true
+ripemd = "0.1.3"
+serde = { workspace = true, optional = true }
+sha1 = "0.10"
+sha2 = "0.10"
+sha3 = "0.10"
+thiserror.workspace = true
+typenum = "1.17"
+unsigned-varint = { version = "0.8", features = ["std"]}
+
+[dev-dependencies]
+hex.workspace = true
+serde_test.workspace = true
+serde_json.workspace = true
+serde_cbor.workspace = true
+
+[lints]
+workspace = true

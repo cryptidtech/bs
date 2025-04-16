@@ -1,28 +1,53 @@
-[package]
-name = "bs"
-version = "1.0.5"
-authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
-edition = "2018"
-description = "BetterSign signing tool"
-repository = "https://github.com/cryptidtech/bs"
-readme = "README.md"
-keywords = ["provenance logs", "decentralized identity"]
-license = "Functional Source License 1.1"
-
-[dependencies]
-best-practices = { version = "0.1", git = "https://github.com/cryptidtech/best-practices.git" }
-log = "0.4"
-multibase = { version = "1.0", git = "https://github.com/cryptidtech/rust-multibase.git" }
-multicid = { version = "1.0", git = "https://github.com/cryptidtech/multicid.git" }
-multicodec = { version = "1.0", git = "https://github.com/cryptidtech/rust-multicodec.git" }
-multihash = { version = "1.0", git = "https://github.com/cryptidtech/multihash.git" }
-multikey = { version = "1.0", git = "https://github.com/cryptidtech/multikey.git" }
-multisig = { version = "1.0", git = "https://github.com/cryptidtech/multisig.git" }
-provenance-log = { version = "1.0", git = "ssh://git@github.com/cryptidtech/provenance-log.git" }
-rand = "0.8"
-serde_cbor = "0.11.2"
-thiserror = "1.0"
-wacc = { version = "1.0", git = "ssh://git@github.com/cryptidtech/wacc.git" }
-
 [workspace]
-members = ["cli"]
+resolver = "2"
+default-members = ["crates/bs"]
+members = [
+  "crates/*",
+  "cli",
+]
+
+[workspace.package]
+version = "1.0.0"
+edition = "2021"
+authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
+description = "The BetterSign Provenance-Based Identity Solution"
+readme = "README.md"
+license = "FSL-1.1 OR Apache-2.0"
+
+[workspace.lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = [
+  'cfg(feature, values("cargo-clippy"))',
+  'cfg(fuzzing)',
+]}
+
+[workspace.dependencies]
+# Crate ependencies
+bs = { path = "crates/bs" }
+multibase = { path = "crates/multibase" }
+multicid = { path = "crates/multicid" }
+multicodec = { path = "crates/multicodec" }
+multihash = { path = "crates/multihash" }
+multikey = { path = "crates/multikey" }
+multisig = { path = "crates/multisig" }
+multitrait = { path = "crates/multitrait" }
+multiutil = { path = "crates/multiutil" }
+provenance-log = { path = "crates/provenance-log" }
+rng = { path = "crates/rng" }
+wacc = { path = "crates/wacc" }
+
+# Core dependencies
+best-practices = { version = "0.1.0", git = "https://github.com/cryptidtech/best-practices.git" }
+elliptic-curve = "0.13.8"
+hex = "0.4.3"
+rand = { version = "0.9.0", features = ["os_rng"] }
+rand_core = "0.9.3"
+rand_6 = { version = "0.6.4", package = "rand" }
+rand_core_6 = { version = "0.6.4", package = "rand_core" }
+serde = { version = "1.0.219", default-features = false, features = ["alloc", "derive"]}
+serde_cbor = { version = "0.11.2", features = ["tags"]}
+serde_json = { version = "1.0.104"}
+serde_test = { version = "1.0.104"}
+thiserror = "2.0.12"
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+unsigned-varint = { version = "0.8.0", features = ["std"] }

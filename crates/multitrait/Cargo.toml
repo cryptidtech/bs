@@ -1,0 +1,19 @@
+[package]
+name = "multitrait"
+version.workspace = true
+edition.workspace = true
+authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
+description = "Common traits for multiformats types"
+readme = "README.md"
+license = "Apache-2.0"
+
+[features]
+default = ["std"]
+std = ["unsigned-varint/std"]
+
+[dependencies]
+thiserror.workspace = true
+unsigned-varint.workspace = true
+
+[lints]
+workspace = true

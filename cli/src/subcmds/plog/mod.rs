@@ -11,7 +11,6 @@ use bs::{
     ops::{open, update},
     update::OpParams,
 };
-use log::debug;
 use multibase::Base;
 use multicid::{Cid, EncodedCid, EncodedVlad, Vlad};
 use multicodec::Codec;
@@ -20,7 +19,9 @@ use multikey::{mk, Multikey, Views};
 use multisig::Multisig;
 use multiutil::{BaseEncoded, CodecInfo, DetectedEncoder, EncodingInfo};
 use provenance_log::{Key, Log, Script};
+use rng::StdRng;
 use std::{collections::VecDeque, convert::TryFrom, path::PathBuf};
+use tracing::debug;
 use wacc::Pairs;
 
 /// processes plog subcommands
@@ -57,7 +58,7 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
                  limit: usize|
                  -> Result<Multikey, bs::Error> {
                     debug!("Generating {} key ({} of {})...", codec, threshold, limit);
-                    let mut rng = rand::rngs::OsRng;
+                    let mut rng = StdRng::from_os_rng();
                     let mk = mk::Builder::new_from_random_bytes(codec, &mut rng)?.try_build()?;
                     let fingerprint = mk.fingerprint_view()?.fingerprint(Codec::Blake3)?;
                     let ef = EncodedMultihash::new(Base::Base32Z, fingerprint);
@@ -131,7 +132,7 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
                  limit: usize|
                  -> Result<Multikey, bs::Error> {
                     debug!("Generating {} key ({} of {})...", codec, threshold, limit);
-                    let mut rng = rand::rngs::OsRng;
+                    let mut rng = StdRng::from_os_rng();
                     let mk = mk::Builder::new_from_random_bytes(codec, &mut rng)?.try_build()?;
                     let fingerprint = mk.fingerprint_view()?.fingerprint(Codec::Blake3)?;
                     let ef = EncodedMultihash::new(Base::Base32Z, fingerprint);
@@ -483,7 +484,7 @@ fn parse_key_codec(s: &str) -> Result<Codec, Error> {
         "es256k" => Codec::Secp256K1Priv,
         "blsg1" => Codec::Bls12381G1Priv,
         "blsg2" => Codec::Bls12381G2Priv,
-        "lamport" => Codec::LamportPriv,
+        "lamport" => Codec::LamportMsig,
         _ => return Err(Error::InvalidKeyType(s.to_string())),
     })
 }

@@ -6,7 +6,7 @@
 //use bs::prelude::*;
 use bs_cli::prelude::*;
 //use commands::prelude::*;
-//use log::debug;
+//use tracing::debug;
 //use multicodec::Codec;
 //use multihash::EncodedMultihash;
 //use multikey::{mk, EncodedMultikey, Views};
@@ -80,7 +80,7 @@ enum Command {
     Plog {
         /// Provenance log subcommand
         #[structopt(subcommand)]
-        cmd: subcmds::plog::Command,
+        cmd: Box<subcmds::plog::Command>,
     },
 }
 
@@ -99,10 +99,15 @@ async fn main() -> Result<(), Error> {
     let opt = Opt::from_args();
 
     // set up the logger
-    stderrlog::new()
-        .quiet(opt.quiet)
-        .verbosity(opt.verbosity)
-        .init()
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_target(false)
+        .with_writer(std::io::stderr)
+        .with_ansi(true)
+        .with_line_number(true)
+        .with_file(true)
+        .without_time()
+        .try_init()
         .map_err(bs_cli::Error::Log)?;
 
     // load the config
@@ -112,7 +117,7 @@ async fn main() -> Result<(), Error> {
         // process a config command
         Command::Config { cmd } => subcmds::config::go(cmd, &config).await,
         // process a plog command
-        Command::Plog { cmd } => subcmds::plog::go(cmd, &config).await,
+        Command::Plog { cmd } => subcmds::plog::go(*cmd, &config).await,
     };
 
     if let Err(ref e) = ret {

@@ -16,12 +16,12 @@ pub enum Error {
     /// I/O error
     #[error(transparent)]
     Io(#[from] std::io::Error),
-    /// A log crate error
-    #[error(transparent)]
-    Log(#[from] log::SetLoggerError),
     /// An infallible error
     #[error(transparent)]
     Inf(#[from] std::convert::Infallible),
+    /// A log error
+    #[error(transparent)]
+    Log(#[from] Box<dyn std::error::Error + Send + Sync>),
 
     /// BestPractices error
     #[error(transparent)]

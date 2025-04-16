@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1
-use crate::{initialize_local_file, Backend, Error, Keychain, KeychainConfig, KeyEntry, LocalFile, SshAgent};
-use log::debug;
+use crate::{
+    initialize_local_file, Backend, Error, KeyEntry, Keychain, KeychainConfig, LocalFile, SshAgent,
+};
 use multihash::EncodedMultihash;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -11,6 +12,7 @@ use std::{
     path::PathBuf,
     rc::Rc,
 };
+use tracing::debug;
 
 const CONFIG_FILE: &str = "config.toml";
 const ORG_DIRS: &[&str; 3] = &["tech", "cryptid", "bettersign"];
@@ -38,7 +40,7 @@ pub struct Config {
 #[derive(Clone, Default)]
 struct SshConfig {
     use_agent: bool,
-    sshagent: Option<String>
+    sshagent: Option<String>,
 }
 
 impl Config {
@@ -50,7 +52,10 @@ impl Config {
         sshagent: bool,
         sshagentenv: String,
     ) -> Result<Self, Error> {
-        debug!("Config::from_path({:?}, {:?}, {}, {})", path, keyfile, sshagent, sshagentenv);
+        debug!(
+            "Config::from_path({:?}, {:?}, {}, {})",
+            path, keyfile, sshagent, sshagentenv
+        );
         //initialize the bettersign config file if needed
         let use_agent = sshagent;
         let env_var = sshagentenv.clone();
@@ -60,7 +65,10 @@ impl Config {
             let config = Config {
                 path: pb.clone(),
                 handle: None,
-                ssh_config: SshConfig { use_agent, sshagent: Some(env_var) },
+                ssh_config: SshConfig {
+                    use_agent,
+                    sshagent: Some(env_var),
+                },
                 keychain,
             };
             let toml = toml::to_string(&config)?;
@@ -69,11 +77,17 @@ impl Config {
             Ok(())
         })?;
 
-        debug!("Loading config from: {}", config_path.as_os_str().to_string_lossy());
+        debug!(
+            "Loading config from: {}",
+            config_path.as_os_str().to_string_lossy()
+        );
         let toml = fs::read_to_string(&config_path)?;
         let mut config: Self = toml::from_str(&toml)?;
         config.path = config_path.clone();
-        config.ssh_config = SshConfig { use_agent: sshagent, sshagent: Some(sshagentenv) };
+        config.ssh_config = SshConfig {
+            use_agent: sshagent,
+            sshagent: Some(sshagentenv),
+        };
         Ok(config)
     }
 

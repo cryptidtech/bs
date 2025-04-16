@@ -1,0 +1,58 @@
+[package]
+name = "multikey"
+version.workspace = true
+edition.workspace = true
+authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
+description = "Multikey self-describing cryptographic key data"
+readme = "README.md"
+license = "Apache-2.0"
+
+[features]
+default = ["serde"]
+wasm = ["getrandom/wasm_js"] # needed for CI testing on wasm32-unknown-unknown
+
+[dependencies]
+bcrypt-pbkdf = "0.10"
+blsful = "2.5"
+chacha20 = "0.9"
+ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
+elliptic-curve.workspace = true
+hex.workspace = true
+k256 = "0.13"
+multibase.workspace = true
+multicodec.workspace = true
+multihash.workspace = true
+multisig.workspace = true
+multitrait.workspace = true
+multiutil.workspace = true
+poly1305 = "0.8"
+rand.workspace = true
+rand_core_6.workspace = true
+rng.workspace = true
+sec1 = "0.7"
+serde = { workspace = true, optional = true }
+ssh-encoding = { version = "0.2" }
+thiserror.workspace = true
+typenum = "1.17"
+unsigned-varint.workspace = true
+vsss-rs = "5.1.0"
+zeroize = "1.7"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+ssh-key = { version = "0.6", default-features = false, features = [
+  "alloc",
+  "ecdsa",
+  "ed25519",
+] }
+getrandom = { version = "0.3.2", features = ["wasm_js"], optional = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+ssh-key = { version = "0.6", features = ["alloc", "crypto", "ed25519"] }
+
+[dev-dependencies]
+serde_cbor.workspace = true
+serde_json.workspace = true
+serde_test.workspace = true
+
+[lints]
+workspace = true

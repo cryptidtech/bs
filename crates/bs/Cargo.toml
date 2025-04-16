@@ -1,0 +1,25 @@
+[package]
+name = "bs"
+version.workspace = true
+edition.workspace = true
+authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
+description = "The BetterSign provenance-based identity system"
+readme = "README.md"
+license = "Functional Source License 1.1"
+
+[dependencies]
+best-practices.workspace = true
+multicid.workspace = true
+multicodec.workspace = true
+multihash.workspace = true
+multikey.workspace = true
+multisig.workspace = true
+provenance-log.workspace = true
+rand.workspace = true
+serde_cbor.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+wacc.workspace = true
+
+[lints]
+workspace = true

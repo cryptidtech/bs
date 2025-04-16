@@ -1,0 +1,40 @@
+[package]
+name = "provenance-log"
+version.workspace = true
+edition.workspace = true
+authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
+description = "Programmable cryptographic provenance logs"
+readme = "README.md"
+keywords = ["provenance", "provenance logs", "multiformats"]
+license = "Functional Source License 1.1"
+
+[features]
+default = ["serde"]
+dag_cbor = ["serde_cbor", "serde_cbor/tags", "multicid/dag_cbor"]
+
+[dependencies]
+multibase.workspace = true
+multicid.workspace = true
+multicodec.workspace = true
+multihash.workspace = true
+multikey.workspace = true
+multisig.workspace = true
+multitrait.workspace = true
+multiutil.workspace = true
+rand.workspace = true
+serde = { workspace = true, optional = true }
+serde_cbor = { workspace = true, optional = true }
+test-log = "0.2.16"
+thiserror.workspace = true
+tracing.workspace = true
+wacc.workspace = true
+
+[dev-dependencies]
+hex.workspace = true
+rand.workspace = true
+serde_cbor.workspace = true
+serde_json.workspace = true
+serde_test.workspace = true
+
+[lints]
+workspace = true

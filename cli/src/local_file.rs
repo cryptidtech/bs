@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: FSL-1.1
-use crate::{initialize_local_file, Error, Keychain, KeyEntry};
-use log::debug;
+use crate::{initialize_local_file, Error, KeyEntry, Keychain};
 use multibase::Base;
 use multicodec::Codec;
 use multihash::EncodedMultihash;
@@ -8,6 +7,7 @@ use multikey::{Multikey, Views};
 use multisig::Multisig;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, convert::TryFrom, fs::File, path::PathBuf};
+use tracing::debug;
 
 const KEY_FILE: &str = "keyfile.json";
 const ORG_DIRS: &[&str; 3] = &["tech", "cryptid", "bettersign"];

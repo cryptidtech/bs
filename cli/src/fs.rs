@@ -1,15 +1,14 @@
 // SPDX-License-Identifier: FSL-1.1
 use crate::Error;
 use directories::ProjectDirs;
-use log::debug;
 use std::{fs, path::PathBuf};
+use tracing::debug;
 
 /// initialize the data directory
 pub fn initialize_data_dir<'a>(
     path: Option<PathBuf>,
     org_dirs: &'a [&'a str; 3],
-) -> Result<PathBuf, Error>
-{
+) -> Result<PathBuf, Error> {
     // get the path or look it up via ProjectDirs crate
     let path = {
         match path {
