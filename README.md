@@ -6,7 +6,7 @@
 
 # BetterSign
 
-[![Solving Global PKI, Decentralized Identity, and Provable Provenance all at Once](https://img.youtube.com/vi/LxU4wG4ryFo/default.jpg)(https://www.youtube.com/watch?v=LxU4wG4ryFo)]
+[<img src="https://img.youtube.com/vi/LxU4wG4ryFo/default.jpg" width="50%" />](https://www.youtube.com/watch?v=LxU4wG4ryFo)
 
 ## Introduction
 
