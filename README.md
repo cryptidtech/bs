@@ -6,6 +6,8 @@
 
 # BetterSign
 
+[![Solving Global PKI, Decentralized Identity, and Provable Provenance all at Once](https://img.youtube.com/vi/LxU4wG4ryFo/default.jpg)(https://www.youtube.com/watch?v=LxU4wG4ryFo)]
+
 ## Introduction
 
 BetterSign (`bs`) is a new signing tool designed to use provenance based
@@ -32,29 +34,34 @@ therefore lack the ability to prove the history of control and modification of
 any digital data, let alone cryptographic keys. With the creation of
 blockchains and distributed consensus popularizing the idea of immutable
 records of transactions over time, we've learned the value of maintaining logs
-to document the provenance of data over large spans of time despite the
-unbounded memory requirement that results. In a world where there is old data
-signed with old keys, there must be some cryptographically verifiable record
-preserving and linking old keys to the new keys; provenance logs are design to
-be the simplest and most decentralized solution for that.
+to document the provenance of data despite the associated unbounded memory
+requirement. In a world where there is old data signed with old keys, there
+must be some cryptographically verifiable record preserving and linking old
+keys to the new keys; provenance logs are design to be the simplest and most
+decentralized solution for that.
 
 To finally improve the global PKI system, it seems logical to start from
 scratch and construct an identity solution based entirely off of a provenance
 logging structure. It also is apparent that identity transactions are either
-1-party or 3-party transactions and therefore do not require the distributed
-consensus necessary for trustful 2-party transactions. This opens the door for
-provenance logs that grow in trust in several ways. They can accumulate 1st
-party self-attestations along with proofs of work (i.e. content creation of all
-kinds or verifiable acts of service). They may also record references to 3rd
-party corroborating attestation sources for realtime, late-binding verification
-from multiple trustworthy societal institutions or organizations. In the end,
-this solution is very good at overcoming the analog-to-digital problem of
-encoding verifiability. The security rests in the statistical improbability of
-corrupting and/or falsifying proof from an increasing number of trustworthy
-insitutions while also making verification time-sensitive and responsive to
-shifting facts on the ground. This corroboration based security model gives
-statistical assurances of what is true and is the native model for provenance
-logs.
+1-party ("trust me, bro") or 3-party ("they vouch for me") transactions and
+therefore do not require the distributed consensus necessary for trustful
+2-party transactions. This opens the door for provenance logs that grow in
+trust in several ways:
+
+1. They can accumulate 1st party self-attestations along with proofs of work
+   (i.e. content creation of all kinds or verifiable acts of service). 
+
+2. They may also record references to 3rd party corroborating attestation
+   sources for realtime, late-binding verification from multiple trustworthy
+   societal institutions or organizations. 
+
+In the end, this solution is very good at overcoming the analog-to-digital
+problem of encoding verifiability. The security rests in the statistical
+improbability of corrupting and/or falsifying proof from an increasing number
+of trustworthy insitutions while also making verification time-sensitive and
+responsive to shifting facts on the ground. This corroboration based security
+model gives statistical assurances of what is true and is the native model for
+provenance logs.
 
 Provenance logs are a form of time-based log with the added feature of
 cryptographically enforced write priviledges which may be delegated and
@@ -72,32 +79,34 @@ README][PROVREADME].
 
 When discussing distributed systems we speak of networks of peers connected
 together with links. A network consists of peers with links that reference
-other peers. The links are an identifier that may reference the peer, a service
-provided by a peer, or data stored by a peer. A link does not necessarily imply
-an active network connection but does imply that one will be created when the
-link is used to execute the distributed functions of the network.
+other peers. The links are an identifier that either reference a peer, a
+service provided by a peer, or data stored by a peer. A link does not
+necessarily imply an active network connection but does imply that one will be
+created when the link is used to execute the distributed functions of the
+network.
 
 All distributed systems are chaotic in nature meaning that the range and trends
 in network behavior observed over time are impossible to predict from the
 current conditions. However, distributed systems may be categorized into two
 buckets based on their long-term stability and resilience in the face of the
 corrosive effects of time. One category—*unstable* systems—are those that exist
-at a point in time but due to the design characteristics dictating peer and
-link behavior they are *not* biased towards stability and never trend towards
-*metastability*. These unstable systems often have many small localized
-networks of peers but they never seem to conglomerate into a single long-term
-network. You never get *THE* network—as in *THE* World Wide Web—arrising
-spontaneously from *unstable* preconditions. The primary example of an
-*unstable* network is the global identity "Web of Trust". Despite decades old
+at a given point in time—say t0—but due to the design characteristics of the
+peer and links they are *not* biased towards stability and never trend towards
+*metastability*. Unstable systems often have many small localized networks of
+peers but they never seem to conglomerate into a single long-term network. You
+never get *THE* network—as in *THE* World Wide Web—arrising spontaneously from
+*unstable* preconditions. The primary example of an *unstable* network is the
+various attempts at building a global "Web of Trust". Despite decades old
 standards and long-established market conditions, we still do not have *THE*
-Web of Trust. This is likely due to the characteristics of pubkey links.
+Web of Trust. This is likely due to using pubkeys as the identifiers and links
+in the network.
 
-The other category—*metastable* systems—are those with peer and node
-characteristics that bias the chaos towards the accretion of a single, stable
-network. These *metastable* networks start with a set of preconditions that
-make *THE* network innevitable from the common usage patterns. The primary
-example in this category is *THE* World Wide Web. This is also likely due to
-the characteristics of URL links in the system.
+The other category—*metastable* systems—are those with peer and link
+characteristics that bias it towards the accretion of a single, stable network.
+These *metastable* networks start with a set of preconditions that make *THE*
+network innevitable from the common usage patterns. The primary example in this
+category is *THE* World Wide Web. This is also likely due to the
+characteristics of URL links in the system.
 
 One key insight that comes from comparing pubkey links with URL links is that
 pubkeys links can only be in one of two states—*valid* or *invalid*—while URLs
@@ -380,62 +389,62 @@ provenance log stored in content addressable storage.
 
 To reduce the tight binding and fragility of VLADs, they are encoded using the
 self-describiing [multiformats standard][MULTIFORMATS]. A VLAD therefore begins
-with the multicodec sigil identifying itself as a VLAD (e.g. `0x07`) followed
-by two multiformat encoded values, a nonce (e.g. `0x3b`) followed by a content
-addres CID (e.g. `0x01` v1, `0x02` v2, or `0x03` v3). Below are examples of
-different VLADs.
+with the multicodec sigil identifying itself as a VLAD (e.g. `0x1207`) followed
+by two multiformat encoded values, a nonce (e.g. `0x123b`) followed by a
+content addres CID (e.g. `0x01` v1, `0x02` v2, or `0x03` v3). Below are
+examples of different VLADs.
 
-A [nonce][NONCE] is encoded using the multicodec sigil `0x3b` followed by a
+A [nonce][NONCE] is encoded using the multicodec sigil `0x123b` followed by a
 varuint specifying the number of octets in the nonce followed by the nonce
 octets; like so:
 
 ```
-  number of nonce
-       octets
-         │
-0x3b <varuint> N(octet)
- │                 │
-nonce        variable number
-sigil        of nonce octets
+    number of nonce
+         octets
+           │
+0x123b <varuint> N(octet)
+ │                   │
+nonce          variable number
+sigil          of nonce octets
 ```
 
 A "plain" VLAD consisting of a nonce and CID looks like:
 
 ```
-   nonce data
-        │
-0x07 <nonce> <cid>
- │             │
-VLAD      WASM content
-sigil       address
+     nonce data
+          │
+0x1207 <nonce> <cid>
+ │               │
+VLAD        WASM content
+sigil         address
 ```
 
 A "signed" VLAD consisting of a [multisig][MULTISIG] encoded signature nonce
 and CID looks like following:
 
 ```
-        nonce data
-            │
-0x07 <multisig nonce> <cid>
- │                      │
-VLAD              WASM content
-sigil                address
+          nonce data
+              │
+0x1207 <multisig nonce> <cid>
+ │                        │
+VLAD                WASM content
+sigil                  address
 
 
-                          number of
-                        multisig octets
-                              │
-<multisig nonce> ::= 0x3b <varuint> <multisig>
-                      ╱                 │
-            nonce sigil          multisig octets
+                            number of
+                          multisig octets
+                                │
+<multisig nonce> ::= 0x123b <varuint> <multisig>
+                        ╱                 │
+              nonce sigil          multisig octets
 
 
-             multisig    optional combined
-              sigil      signature message
-                │                 │
-<multisig> ::= 0x39 <varuint> <message> <attributes>
-                       ╱                      │
-          signing codec              signature attributes
+               multisig    optional combined
+                sigil      signature message
+                  │                 │
+<multisig> ::= 0x1239 <varuint> <message> <attributes>
+                         ╱                      │
+            signing codec              signature attributes
 
 
 <message> ::= <varbytes>
