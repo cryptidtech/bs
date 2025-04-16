@@ -6,7 +6,7 @@
 
 # BetterSign
 
-[<img src="https://img.youtube.com/vi/LxU4wG4ryFo/default.jpg" width="50%" />](https://www.youtube.com/watch?v=LxU4wG4ryFo)
+[<img src="https://img.youtube.com/vi/LxU4wG4ryFo/hqdefault.jpg" width="100%" />](https://www.youtube.com/watch?v=LxU4wG4ryFo)
 
 ## Introduction
 
