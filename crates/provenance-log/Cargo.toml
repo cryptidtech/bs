@@ -24,7 +24,7 @@ multiutil.workspace = true
 rand.workspace = true
 serde = { workspace = true, optional = true }
 serde_cbor = { workspace = true, optional = true }
-test-log = "0.2.16"
+test-log.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 wacc.workspace = true

@@ -20,7 +20,9 @@ multitrait.workspace = true
 multiutil.workspace = true
 serde = { workspace = true, optional = true }
 ssh-encoding = { version = "0.2.0" }
+test-log.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
 unsigned-varint.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

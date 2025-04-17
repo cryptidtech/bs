@@ -367,7 +367,6 @@ impl Builder {
         let sigshare = sigshare.as_raw_value();
         let identifier = sigshare.identifier();
         let value = sigshare.value_vec();
-        println!("sigshare len: {}", value.len());
         let codec = match value.len() {
             48 => Codec::Bls12381G1ShareMsig, // large pubkeys, small signatures
             96 => Codec::Bls12381G2ShareMsig, // small pubkeys, large signatures

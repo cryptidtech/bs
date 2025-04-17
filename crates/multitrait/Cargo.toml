@@ -12,7 +12,9 @@ default = ["std"]
 std = ["unsigned-varint/std"]
 
 [dependencies]
+test-log.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
 unsigned-varint.workspace = true
 
 [lints]

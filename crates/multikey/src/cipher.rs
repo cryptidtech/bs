@@ -84,12 +84,15 @@ impl Builder {
 #[cfg(test)]
 mod tests {
     use rng::StdRng;
+    use test_log::test;
+    use tracing::{span, Level};
 
     use super::*;
     use crate::{kdf, mk, Views};
 
     #[test]
     fn test_chacha20() {
+        let _ = span!(Level::INFO, "test_chacha20").entered();
         let salt = hex::decode("8bb78be51ac7cc98f44e38947ff8a128764ec039b89687a790dfa8444ba97682")
             .unwrap();
         // create a kdf multikey

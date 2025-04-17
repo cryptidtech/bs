@@ -56,19 +56,24 @@ impl Lipmaa for u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use test_log::test;
+    use tracing::{span, Level};
 
     #[test]
     fn valid_zero() {
+        let _ = span!(Level::INFO, "valid_zero").entered();
         0.is_lipmaa();
     }
 
     #[test]
     fn lipmaa_one() {
-        assert_eq!(0.is_lipmaa(), false);
+        let _ = span!(Level::INFO, "lipmaa_one").entered();
+        assert!(!0.is_lipmaa());
     }
 
     #[test]
     fn lipmaa_four() {
+        let _ = span!(Level::INFO, "lipmaa_four").entered();
         assert!(4.is_lipmaa());
     }
 }

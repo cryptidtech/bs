@@ -9,39 +9,35 @@ mod tests {
     use multitrait::Null;
     use serde::{Deserialize, Serialize};
     use serde_test::{assert_tokens, Configure, Token};
+    use test_log::test;
+    use tracing::{span, Level};
 
     #[test]
     fn test_serde_binary() {
+        let _ = span!(Level::INFO, "test_serde_binary").entered();
         let c = Codec::Ed25519Pub;
         assert_tokens(&c.compact(), &[Token::BorrowedBytes(&[0xED, 0x01])])
     }
 
     #[test]
     fn test_serde_readable() {
+        let _ = span!(Level::INFO, "test_serde_readable").entered();
         let c = Codec::Ed25519Pub;
         assert_tokens(&c.readable(), &[Token::BorrowedStr("ed25519-pub")])
     }
 
     #[test]
     fn test_null_serde_compact() {
+        let _ = span!(Level::INFO, "test_null_serde_compact").entered();
         let c = Codec::null();
-        assert_tokens(
-            &c.compact(),
-            &[
-                Token::BorrowedBytes(&[0x00])
-            ]
-        );
+        assert_tokens(&c.compact(), &[Token::BorrowedBytes(&[0x00])]);
     }
 
     #[test]
     fn test_null_serde_readable() {
+        let _ = span!(Level::INFO, "test_null_serde_readable").entered();
         let c = Codec::null();
-        assert_tokens(
-            &c.readable(),
-            &[
-                Token::BorrowedStr("identity")
-            ]
-        );
+        assert_tokens(&c.readable(), &[Token::BorrowedStr("identity")]);
     }
 
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -51,6 +47,7 @@ mod tests {
 
     #[test]
     fn test_serde_macros() {
+        let _ = span!(Level::INFO, "test_serde_macros").entered();
         let w1 = Wrapper {
             v: Codec::Ed25519Pub,
         };
@@ -65,6 +62,7 @@ mod tests {
 
     #[test]
     fn test_cbor_reader_writer() {
+        let _ = span!(Level::INFO, "test_cbor_reader_writer").entered();
         let w1 = Wrapper {
             v: Codec::Ed25519Pub,
         };
@@ -77,6 +75,7 @@ mod tests {
 
     #[test]
     fn test_json_reader_writer() {
+        let _ = span!(Level::INFO, "test_json_reader_writer").entered();
         let w1 = Wrapper {
             v: Codec::Ed25519Pub,
         };

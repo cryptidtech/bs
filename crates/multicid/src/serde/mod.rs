@@ -11,9 +11,12 @@ mod tests {
     use multikey::nonce;
     use multitrait::Null;
     use serde_test::{assert_tokens, Configure, Token};
+    use test_log::test;
+    use tracing::{span, Level};
 
     #[test]
     fn test_cidv0_serde_encoded_string() {
+        let _ = span!(Level::INFO, "test_cidv0_serde_encoded_string").entered();
         let v0 = cid::Builder::default()
             .with_hash(
                 &mh::Builder::new_from_bytes(Codec::Sha2256, b"for great justice, move every zig!")
@@ -34,6 +37,7 @@ mod tests {
 
     #[test]
     fn test_cidv0_serde_readable() {
+        let _ = span!(Level::INFO, "test_cidv0_serde_readable").entered();
         let v0 = cid::Builder::default()
             .with_hash(
                 &mh::Builder::new_from_bytes(Codec::Sha2256, b"for great justice, move every zig!")
@@ -47,17 +51,25 @@ mod tests {
         assert_tokens(
             &v0.readable(),
             &[
-                Token::Struct { name: "cid", len: 3, },
+                Token::Struct {
+                    name: "cid",
+                    len: 3,
+                },
                 Token::BorrowedStr("version"),
                 Token::U64(0),
                 Token::BorrowedStr("encoding"),
                 Token::BorrowedStr("dag-pb"),
                 Token::BorrowedStr("hash"),
-                Token::Struct { name: "multihash", len: 2, },
+                Token::Struct {
+                    name: "multihash",
+                    len: 2,
+                },
                 Token::BorrowedStr("codec"),
                 Token::BorrowedStr("sha2-256"),
                 Token::BorrowedStr("hash"),
-                Token::BorrowedStr("f20e28c7aeb3a876b25ed822472e47a696fe25214c1672f0972195f9b64eea41e7e"),
+                Token::BorrowedStr(
+                    "f20e28c7aeb3a876b25ed822472e47a696fe25214c1672f0972195f9b64eea41e7e",
+                ),
                 Token::StructEnd,
                 Token::StructEnd,
             ],
@@ -66,6 +78,7 @@ mod tests {
 
     #[test]
     fn test_cidv0_serde_json() {
+        let _ = span!(Level::INFO, "test_cidv0_serde_json").entered();
         let v0 = cid::Builder::default()
             .with_hash(
                 &mh::Builder::new_from_bytes(Codec::Sha2256, b"for great justice, move every zig!")
@@ -84,6 +97,7 @@ mod tests {
     #[cfg(not(feature = "dag_cbor"))]
     #[test]
     fn test_cidv0_serde_cbor() {
+        let _ = span!(Level::INFO, "test_cidv0_serde_cbor").entered();
         let v0 = cid::Builder::default()
             .with_hash(
                 &mh::Builder::new_from_bytes(Codec::Sha2256, b"for great justice, move every zig!")
@@ -107,6 +121,7 @@ mod tests {
     #[cfg(feature = "dag_cbor")]
     #[test]
     fn test_cidv0_serde_dag_cbor() {
+        let _ = span!(Level::INFO, "test_cidv0_serde_dag_cbor").entered();
         let v0 = cid::Builder::default()
             .with_hash(
                 &mh::Builder::new_from_bytes(Codec::Sha2256, b"for great justice, move every zig!")
@@ -131,6 +146,7 @@ mod tests {
 
     #[test]
     fn test_cidv1_serde_encoded_string() {
+        let _ = span!(Level::INFO, "test_cidv1_serde_encoded_string").entered();
         let v1 = cid::Builder::new(Codec::Cidv1)
             .with_target_codec(Codec::DagCbor)
             .with_hash(
@@ -152,6 +168,7 @@ mod tests {
 
     #[test]
     fn test_cidv1_serde_readable() {
+        let _ = span!(Level::INFO, "test_cidv1_serde_readable").entered();
         let v1 = cid::Builder::new(Codec::Cidv1)
             .with_target_codec(Codec::DagCbor)
             .with_hash(
@@ -189,6 +206,7 @@ mod tests {
     #[cfg(not(feature = "dag_cbor"))]
     #[test]
     fn test_cidv1_serde_cbor() {
+        let _ = span!(Level::INFO, "test_cidv1_serde_cbor").entered();
         let v1 = cid::Builder::new(Codec::Cidv1)
             .with_target_codec(Codec::Raw)
             .with_hash(
@@ -215,6 +233,7 @@ mod tests {
     #[cfg(feature = "dag_cbor")]
     #[test]
     fn test_cidv1_serde_dag_cbor() {
+        let _ = span!(Level::INFO, "test_cidv1_serde_dag_cbor").entered();
         let v1 = cid::Builder::new(Codec::Cidv1)
             .with_target_codec(Codec::Raw)
             .with_hash(
@@ -234,6 +253,7 @@ mod tests {
 
     #[test]
     fn test_vlad_serde_encoded_string() {
+        let _ = span!(Level::INFO, "test_vlad_serde_encoded_string").entered();
         let bytes = hex::decode("d15c4fb2911ae1337f102bcaf4c0088d36345b88b243968e834c5ffa17907832")
             .unwrap();
         let nonce = nonce::Builder::new_from_bytes(&bytes).try_build().unwrap();
@@ -265,6 +285,7 @@ mod tests {
 
     #[test]
     fn test_vlad_serde_readable() {
+        let _ = span!(Level::INFO, "test_vlad_serde_readable").entered();
         let bytes = hex::decode("d15c4fb2911ae1337f102bcaf4c0088d36345b88b243968e834c5ffa17907832")
             .unwrap();
         let nonce = nonce::Builder::new_from_bytes(&bytes).try_build().unwrap();
@@ -328,6 +349,7 @@ mod tests {
 
     #[test]
     fn test_vlad_serde_json() {
+        let _ = span!(Level::INFO, "test_vlad_serde_json").entered();
         let bytes = hex::decode("d15c4fb2911ae1337f102bcaf4c0088d36345b88b243968e834c5ffa17907832")
             .unwrap();
         let nonce = nonce::Builder::new_from_bytes(&bytes).try_build().unwrap();
@@ -358,6 +380,7 @@ mod tests {
     #[cfg(not(feature = "dag_cbor"))]
     #[test]
     fn test_vlad_serde_cbor() {
+        let _ = span!(Level::INFO, "test_vlad_serde_cbor").entered();
         let bytes = hex::decode("d15c4fb2911ae1337f102bcaf4c0088d36345b88b243968e834c5ffa17907832")
             .unwrap();
         let nonce = nonce::Builder::new_from_bytes(&bytes).try_build().unwrap();
@@ -389,6 +412,7 @@ mod tests {
     #[cfg(feature = "dag_cbor")]
     #[test]
     fn test_vlad_serde_dag_cbor() {
+        let _ = span!(Level::INFO, "test_vlad_serde_dag_cbor").entered();
         let bytes = hex::decode("d15c4fb2911ae1337f102bcaf4c0088d36345b88b243968e834c5ffa17907832")
             .unwrap();
         let nonce = nonce::Builder::new_from_bytes(&bytes).try_build().unwrap();
@@ -419,80 +443,91 @@ mod tests {
 
     #[test]
     fn test_null_cid_serde_compact() {
+        let _ = span!(Level::INFO, "test_null_cid_serde_compact").entered();
         let c = cid::Cid::null();
-        assert_tokens(
-            &c.compact(),
-            &[
-                Token::BorrowedBytes(&[1, 0, 0, 0])
-            ]
-        );
+        assert_tokens(&c.compact(), &[Token::BorrowedBytes(&[1, 0, 0, 0])]);
     }
 
     #[test]
     fn test_null_cid_serde_readable() {
+        let _ = span!(Level::INFO, "test_null_cid_serde_readable").entered();
         let c = cid::Cid::null();
         assert_tokens(
             &c.readable(),
             &[
-                Token::Struct { name: "cid", len: 3, },
+                Token::Struct {
+                    name: "cid",
+                    len: 3,
+                },
                 Token::BorrowedStr("version"),
                 Token::U64(1),
                 Token::BorrowedStr("encoding"),
                 Token::BorrowedStr("identity"),
                 Token::BorrowedStr("hash"),
-                Token::Struct { name: "multihash", len: 2, },
+                Token::Struct {
+                    name: "multihash",
+                    len: 2,
+                },
                 Token::BorrowedStr("codec"),
                 Token::BorrowedStr("identity"),
                 Token::BorrowedStr("hash"),
                 Token::BorrowedStr("f00"),
                 Token::StructEnd,
                 Token::StructEnd,
-            ]
+            ],
         );
     }
 
     #[test]
     fn test_encoded_null_cid_serde_readable() {
+        let _ = span!(Level::INFO, "test_encoded_null_cid_serde_readable").entered();
         let c: cid::EncodedCid = cid::Cid::null().into();
-        assert_tokens(
-            &c.readable(),
-            &[
-                Token::BorrowedStr("z2UzHM"),
-            ]
-        );
+        assert_tokens(&c.readable(), &[Token::BorrowedStr("z2UzHM")]);
     }
 
     #[test]
     fn test_null_vlad_serde_compact() {
+        let _ = span!(Level::INFO, "test_null_vlad_serde_compact").entered();
         let v = vlad::Vlad::null();
         assert_tokens(
             &v.compact(),
-            &[
-                Token::BorrowedBytes(&[135, 36, 187, 36, 0, 1, 0, 0, 0]),
-            ]
+            &[Token::BorrowedBytes(&[135, 36, 187, 36, 0, 1, 0, 0, 0])],
         );
     }
 
     #[test]
     fn test_null_vlad_serde_readable() {
+        let _ = span!(Level::INFO, "test_null_vlad_serde_readable").entered();
         let v = vlad::Vlad::null();
         assert_tokens(
             &v.readable(),
             &[
-                Token::Struct { name: "vlad", len: 2, },
+                Token::Struct {
+                    name: "vlad",
+                    len: 2,
+                },
                 Token::BorrowedStr("nonce"),
-                Token::Struct { name: "nonce", len: 1, },
+                Token::Struct {
+                    name: "nonce",
+                    len: 1,
+                },
                 Token::BorrowedStr("nonce"),
                 Token::BorrowedStr("f00"),
                 Token::StructEnd,
                 Token::BorrowedStr("cid"),
-                Token::Struct { name: "cid", len: 3, },
+                Token::Struct {
+                    name: "cid",
+                    len: 3,
+                },
                 Token::BorrowedStr("version"),
                 Token::U64(1),
                 Token::BorrowedStr("encoding"),
                 Token::BorrowedStr("identity"),
                 Token::BorrowedStr("hash"),
-                Token::Struct { name: "multihash", len: 2, },
+                Token::Struct {
+                    name: "multihash",
+                    len: 2,
+                },
                 Token::BorrowedStr("codec"),
                 Token::BorrowedStr("identity"),
                 Token::BorrowedStr("hash"),
@@ -500,18 +535,14 @@ mod tests {
                 Token::StructEnd,
                 Token::StructEnd,
                 Token::StructEnd,
-            ]
+            ],
         );
     }
 
     #[test]
     fn test_encoded_null_vlad_serde_readable() {
+        let _ = span!(Level::INFO, "test_encoded_null_vlad_serde_readable").entered();
         let v: vlad::EncodedVlad = vlad::Vlad::null().into();
-        assert_tokens(
-            &v.readable(),
-            &[
-                Token::BorrowedStr("bq4slwjaaaeaaaaa"),
-            ]
-        );
+        assert_tokens(&v.readable(), &[Token::BorrowedStr("bq4slwjaaaeaaaaa")]);
     }
 }

@@ -14,7 +14,9 @@ default = ["serde"]
 [dependencies]
 multitrait.workspace = true
 serde = { workspace = true, optional = true }
+test-log.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 serde_cbor.workspace = true

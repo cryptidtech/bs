@@ -203,9 +203,12 @@ mod tests {
     use multikey::EncodedMultikey;
     use multiutil::{base_name, BaseIter};
     use rng::StdRng;
+    use test_log::test;
+    use tracing::{span, Level};
 
     #[test]
     fn test_default() {
+        let _ = span!(Level::INFO, "test_default").entered();
         // build a nonce
         let mut rng = StdRng::from_os_rng();
         let nonce = nonce::Builder::new_from_random_bytes(32, &mut rng)
@@ -235,6 +238,7 @@ mod tests {
 
     #[test]
     fn test_binary_roundtrip() {
+        let _ = span!(Level::INFO, "test_binary_roundtrip").entered();
         // build a nonce
         let mut rng = StdRng::from_os_rng();
         let nonce = nonce::Builder::new_from_random_bytes(32, &mut rng)
@@ -266,6 +270,7 @@ mod tests {
 
     #[test]
     fn test_encoded_roundtrip() {
+        let _ = span!(Level::INFO, "test_encoded_roundtrip").entered();
         // build a nonce
         let mut rng = StdRng::from_os_rng();
         let nonce = nonce::Builder::new_from_random_bytes(32, &mut rng)
@@ -297,6 +302,7 @@ mod tests {
 
     #[test]
     fn test_encodings_roundtrip() {
+        let _ = span!(Level::INFO, "test_encodings_roundtrip").entered();
         // build a nonce
         let mut rng = StdRng::from_os_rng();
         let nonce = nonce::Builder::new_from_random_bytes(32, &mut rng)
@@ -336,6 +342,7 @@ mod tests {
 
     #[test]
     fn test_naked_encodings() {
+        let _ = span!(Level::INFO, "test_naked_encodings").entered();
         let naked_encoded = vec![
             (Base::Base2, "0100001110010010010111011001001000010000010101011111101010101001010111011011010101100111011110001011001010000011011111110011110101111000001110010110111101101010001100011010111111110100101011000010111000010011101101111000001111111100011100000001011001011101000101111111111001001001110010010001000000000000101110001000101000100000001010111100100101101101011011001011000001000010110110110000001110110101110001110010011100110001110110101011110001100100100001101000000110011011010111100101010101101111011110100111100100100011100000100110111111000011001100001010010010101001001101010000111100110110100100011111110001001111000100001100010101101001111110110000101110010101001111110001001101110011011100011011110100011110111101010011100101000111001011111001000110010111001000001011010010110101011010010100001101011110011001010100100100000000110111110"),
             (Base::Base8, "74162227311020253752512733254736131203376365701626755214327764530270235570177434013135057771116221000056105040127445553313010266601665616234616653614441500633274525573647444340467703141222511520746644376117041425517660562517611563343364367523450713710627101322653224153631244400676"),
@@ -366,6 +373,7 @@ mod tests {
 
     #[test]
     fn test_signed_vlad() {
+        let _ = span!(Level::INFO, "test_signed_vlad").entered();
         // build a cid
         let cid = cid::Builder::new(Codec::Cidv1)
             .with_target_codec(Codec::DagCbor)
@@ -403,6 +411,7 @@ mod tests {
 
     #[test]
     fn test_null() {
+        let _ = span!(Level::INFO, "test_null").entered();
         let v1 = Vlad::null();
         assert!(v1.is_null());
         let v2 = Vlad::default();

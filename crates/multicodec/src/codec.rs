@@ -200,14 +200,18 @@ macro_rules! build_codec_enum {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use test_log::test;
+    use tracing::{span, Level};
 
     #[test]
     fn test_default() {
+        let _ = span!(Level::INFO, "test_default").entered();
         assert_eq!(Codec::Identity, Codec::default());
     }
 
     #[test]
     fn test_null() {
+        let _ = span!(Level::INFO, "test_null").entered();
         let c1 = Codec::null();
         assert!(c1.is_null());
         let c2 = Codec::default();
@@ -217,37 +221,44 @@ mod tests {
 
     #[test]
     fn test_to_code() {
+        let _ = span!(Level::INFO, "test_to_code").entered();
         assert_eq!(0xED, Codec::Ed25519Pub.code());
     }
 
     #[test]
     fn test_from_code() {
+        let _ = span!(Level::INFO, "test_from_code").entered();
         assert_eq!(Codec::Ed25519Pub, Codec::try_from(0xED).unwrap());
     }
 
     #[test]
     fn test_into_code() {
+        let _ = span!(Level::INFO, "test_into_code").entered();
         assert_eq!(0xED_u64, <Codec as Into<u64>>::into(Codec::Ed25519Pub));
     }
 
     #[test]
     fn test_to_str() {
+        let _ = span!(Level::INFO, "test_to_str").entered();
         assert_eq!("ed25519-pub", Codec::Ed25519Pub.as_str());
     }
 
     #[test]
     fn test_from_str() {
+        let _ = span!(Level::INFO, "test_from_str").entered();
         assert_eq!(Codec::Ed25519Pub, Codec::try_from("ed25519-pub").unwrap());
     }
 
     #[test]
     fn test_encode_into() {
+        let _ = span!(Level::INFO, "test_encode_into").entered();
         let v: Vec<u8> = Codec::Ed25519Pub.into();
         assert_eq!(vec![0xED, 0x01], v);
     }
 
     #[test]
     fn test_debug_format() {
+        let _ = span!(Level::INFO, "test_debug_format").entered();
         assert_eq!(
             "ed25519-pub (0xed)".to_string(),
             format!("{:?}", Codec::Ed25519Pub)

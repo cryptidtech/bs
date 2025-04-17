@@ -210,8 +210,7 @@ impl Builder {
             return Err(CidError::LegacyCid.into());
         }
         Ok(EncodedCid::new(
-            self.base_encoding
-                .unwrap_or_else(Cid::preferred_encoding),
+            self.base_encoding.unwrap_or_else(Cid::preferred_encoding),
             self.try_build()?,
         ))
     }
@@ -240,9 +239,12 @@ impl Builder {
 mod tests {
     use super::*;
     use multihash::mh;
+    use test_log::test;
+    use tracing::{span, Level};
 
     #[test]
     fn test_default() {
+        let _ = span!(Level::INFO, "test_default").entered();
         let v1 = Cid::default();
         assert_eq!(Codec::Cidv1, v1.codec());
         assert_eq!(Codec::DagCbor, v1.target_codec);
@@ -251,6 +253,7 @@ mod tests {
 
     #[test]
     fn test_v0() {
+        let _ = span!(Level::INFO, "test_v0").entered();
         let v0 = Builder::default()
             .with_hash(
                 &mh::Builder::new_from_bytes(Codec::Sha2256, b"for great justice, move every zig!")
@@ -268,6 +271,7 @@ mod tests {
 
     #[test]
     fn test_unknown_decode() {
+        let _ = span!(Level::INFO, "test_unknown_decode").entered();
         // this does not assume it is a legacy v0 encoded CID
         let v0_1 = EncodedCid::try_from("Qmdb16CztyugMSs5anEPrJ6bLeo39bTGcM13zNPqjqUidT").unwrap();
         assert_eq!(Codec::Identity, v0_1.codec());
@@ -275,17 +279,23 @@ mod tests {
         assert_eq!(Codec::Sha2256, v0_1.hash.codec());
 
         // this does not assume a multibase encoded CID
-        let v0_2 = EncodedCid::try_from("bafybeihcrr5owouhnms63areolshu2lp4jjbjqlhf4exegk7tnso5ja6py").unwrap();
+        let v0_2 =
+            EncodedCid::try_from("bafybeihcrr5owouhnms63areolshu2lp4jjbjqlhf4exegk7tnso5ja6py")
+                .unwrap();
         assert_eq!(Codec::Cidv1, v0_2.codec());
         assert_eq!(Codec::DagPb, v0_2.target_codec);
         assert_eq!(Codec::Sha2256, v0_2.hash.codec());
 
-        let v0_3 = EncodedCid::try_from("f01701220e28c7aeb3a876b25ed822472e47a696fe25214c1672f0972195f9b64eea41e7e").unwrap();
+        let v0_3 = EncodedCid::try_from(
+            "f01701220e28c7aeb3a876b25ed822472e47a696fe25214c1672f0972195f9b64eea41e7e",
+        )
+        .unwrap();
         assert_eq!(Codec::Cidv1, v0_3.codec());
         assert_eq!(Codec::DagPb, v0_3.target_codec);
         assert_eq!(Codec::Sha2256, v0_3.hash.codec());
 
-        let v0_4 = EncodedCid::try_from("uAXASIOKMeus6h2sl7YIkcuR6aW_iUhTBZy8Jchlfm2TupB5-").unwrap();
+        let v0_4 =
+            EncodedCid::try_from("uAXASIOKMeus6h2sl7YIkcuR6aW_iUhTBZy8Jchlfm2TupB5-").unwrap();
         assert_eq!(Codec::Cidv1, v0_4.codec());
         assert_eq!(Codec::DagPb, v0_4.target_codec);
         assert_eq!(Codec::Sha2256, v0_4.hash.codec());
@@ -303,6 +313,7 @@ mod tests {
 
     #[test]
     fn test_v0_binary_roundtrip() {
+        let _ = span!(Level::INFO, "test_v0_binary_roundtrip").entered();
         let v0 = Builder::default()
             .with_hash(
                 &mh::Builder::new_from_bytes(Codec::Sha2256, b"for great justice, move every zig!")
@@ -318,6 +329,7 @@ mod tests {
 
     #[test]
     fn test_v0_encoded_roundtrip() {
+        let _ = span!(Level::INFO, "test_v0_encoded_roundtrip").entered();
         let v0 = Builder::default()
             .with_hash(
                 &mh::Builder::new_from_bytes(Codec::Sha2256, b"for great justice, move every zig!")
@@ -334,6 +346,7 @@ mod tests {
 
     #[test]
     fn test_v1() {
+        let _ = span!(Level::INFO, "test_v1").entered();
         let v1 = Builder::new(Codec::Cidv1)
             .with_target_codec(Codec::DagCbor)
             .with_hash(
@@ -352,6 +365,7 @@ mod tests {
 
     #[test]
     fn test_v1_binary_roundtrip() {
+        let _ = span!(Level::INFO, "test_v1_binary_roundtrip").entered();
         let v1 = Builder::new(Codec::Cidv1)
             .with_target_codec(Codec::DagCbor)
             .with_hash(
@@ -368,6 +382,7 @@ mod tests {
 
     #[test]
     fn test_v1_encoded_roundtrip() {
+        let _ = span!(Level::INFO, "test_v1_encoded_roundtrip").entered();
         let v1 = Builder::new(Codec::Cidv1)
             .with_target_codec(Codec::DagCbor)
             .with_base_encoding(Base::Base32Lower)
@@ -386,6 +401,7 @@ mod tests {
 
     #[test]
     fn test_null() {
+        let _ = span!(Level::INFO, "test_null").entered();
         let cid1 = Cid::null();
         assert!(cid1.is_null());
         let cid2 = Cid::default();

@@ -24,7 +24,9 @@ rand_core_6.workspace = true
 rng.workspace = true
 serde = { workspace = true, optional = true }
 serde_cbor = { workspace = true, optional = true }
+test-log.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 hex.workspace = true

@@ -18,16 +18,23 @@ impl wacc::Pairs for Kvp<'_> {
     fn get(&self, key: &str) -> Option<wacc::Value> {
         let k = match Key::try_from(key) {
             Ok(k) => k,
-            _ => return None
+            _ => return None,
         };
         match self.kvp.get(&k) {
-            Some(ref v) => {
-                match v {
-                    Value::Nil => Some(wacc::Value::Bin { hint: key.to_string(), data: Vec::default() }),
-                    Value::Str(ref s) => Some(wacc::Value::Str { hint: key.to_string(), data: s.clone() }),
-                    Value::Data(ref v) => Some(wacc::Value::Bin { hint: key.to_string(), data: v.clone() }),
-                }
-            }
+            Some(ref v) => match v {
+                Value::Nil => Some(wacc::Value::Bin {
+                    hint: key.to_string(),
+                    data: Vec::default(),
+                }),
+                Value::Str(ref s) => Some(wacc::Value::Str {
+                    hint: key.to_string(),
+                    data: s.clone(),
+                }),
+                Value::Data(ref v) => Some(wacc::Value::Bin {
+                    hint: key.to_string(),
+                    data: v.clone(),
+                }),
+            },
             None => {
                 if let Some(entry) = self.entry {
                     entry.get(key)
@@ -41,18 +48,33 @@ impl wacc::Pairs for Kvp<'_> {
     fn put(&mut self, key: &str, value: &wacc::Value) -> Option<wacc::Value> {
         let k = match Key::try_from(key) {
             Ok(k) => k,
-            _ => return None
+            _ => return None,
         };
         let v = match value {
-            wacc::Value::Str { hint: _, data: ref s } => Value::Str(s.clone()),
-            wacc::Value::Bin { hint: _, data: ref v } => Value::Data(v.clone()),
-            _ => return None
+            wacc::Value::Str {
+                hint: _,
+                data: ref s,
+            } => Value::Str(s.clone()),
+            wacc::Value::Bin {
+                hint: _,
+                data: ref v,
+            } => Value::Data(v.clone()),
+            _ => return None,
         };
         match self.kvp.insert(k, v) {
-            Some(Value::Nil) => Some(wacc::Value::Bin { hint: key.to_string(), data: Vec::default() }),
-            Some(Value::Str(s)) => Some(wacc::Value::Str { hint: key.to_string(), data: s }),
-            Some(Value::Data(v)) => Some(wacc::Value::Bin { hint: key.to_string(), data: v }),
-            None => None
+            Some(Value::Nil) => Some(wacc::Value::Bin {
+                hint: key.to_string(),
+                data: Vec::default(),
+            }),
+            Some(Value::Str(s)) => Some(wacc::Value::Str {
+                hint: key.to_string(),
+                data: s,
+            }),
+            Some(Value::Data(v)) => Some(wacc::Value::Bin {
+                hint: key.to_string(),
+                data: v,
+            }),
+            None => None,
         }
     }
 }
@@ -171,9 +193,12 @@ mod tests {
     use super::*;
     use crate::{entry, Script};
     use multicid::Vlad;
+    use test_log::test;
+    use tracing::{span, Level};
 
     #[test]
     fn test_default() {
+        let _ = span!(Level::INFO, "test_default").entered();
         let p = Kvp::default();
         assert_eq!(p.seqno(), None);
         assert_eq!(p.len(), 0);
@@ -217,6 +242,7 @@ mod tests {
 
     #[test]
     fn test_one_entry() {
+        let _ = span!(Level::INFO, "test_one_entry").entered();
         let entry = entry::Builder::default()
             .with_vlad(&Vlad::default())
             .add_lock(&Script::default())
@@ -225,16 +251,12 @@ mod tests {
                 "/one".try_into().unwrap(),
                 Value::Str("foo".to_string()),
             ))
-            .add_op(&Op::Noop(
-                "/foo".try_into().unwrap(),
-            ))
+            .add_op(&Op::Noop("/foo".try_into().unwrap()))
             .add_op(&Op::Update(
                 "/two".try_into().unwrap(),
                 Value::Str("bar".to_string()),
             ))
-            .add_op(&Op::Noop(
-                "/bar".try_into().unwrap(),
-            ))
+            .add_op(&Op::Noop("/bar".try_into().unwrap()))
             .add_op(&Op::Update(
                 "/three".try_into().unwrap(),
                 Value::Str("baz".to_string()),

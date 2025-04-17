@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: FSL-1.1
 use crate::{error::KeyError, Error};
-use std::fmt;
 use multibase::Base;
 use multitrait::TryDecodeFrom;
 use multiutil::{EncodingInfo, Varbytes};
-
+use std::fmt;
 
 /// the separator for the parts of a key
 pub const KEY_SEPARATOR: char = '/';
@@ -38,7 +37,12 @@ impl Key {
         }
         let moar = Self::try_from(s.as_ref())?;
         let _ = self.parts.pop();
-        self.parts.append(&mut moar.parts[1..].iter().map(|s| s.to_string()).collect::<Vec<_>>());
+        self.parts.append(
+            &mut moar.parts[1..]
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>(),
+        );
         self.s = self.parts.join(&KEY_SEPARATOR.to_string());
         Ok(())
     }
@@ -236,7 +240,10 @@ impl TryFrom<String> for Key {
             }
             filtered
         };
-        let parts = filtered.split(KEY_SEPARATOR).map(|s| s.to_string()).collect::<Vec<_>>();
+        let parts = filtered
+            .split(KEY_SEPARATOR)
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>();
         let s = parts.join(&KEY_SEPARATOR.to_string());
         Ok(Self { parts, s })
     }
@@ -257,6 +264,8 @@ impl fmt::Display for Key {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use test_log::test;
+    use tracing::{span, Level};
 
     #[test]
     #[should_panic]
@@ -272,6 +281,7 @@ mod tests {
 
     #[test]
     fn test_default() {
+        let _ = span!(Level::INFO, "test_default").entered();
         let k = Key::default();
         assert!(k.is_branch());
         assert!(!k.is_leaf());
@@ -281,6 +291,7 @@ mod tests {
 
     #[test]
     fn test_branch() {
+        let _ = span!(Level::INFO, "test_branch").entered();
         let k = Key::try_from("/foo/bar/baz/").unwrap();
         assert!(k.is_branch());
         assert!(!k.is_leaf());
@@ -292,6 +303,7 @@ mod tests {
 
     #[test]
     fn test_leaf() {
+        let _ = span!(Level::INFO, "test_leaf").entered();
         let k = Key::try_from("/foo/bar/baz").unwrap();
         assert!(!k.is_branch());
         assert!(k.is_leaf());
@@ -303,6 +315,7 @@ mod tests {
 
     #[test]
     fn longest_branch_one() {
+        let _ = span!(Level::INFO, "longest_branch_one").entered();
         let l = Key::try_from("/foo/bar/baz").unwrap();
         let r = Key::try_from("/foo/bar").unwrap();
         let mk = l.longest_common_branch(&r);
@@ -313,6 +326,7 @@ mod tests {
 
     #[test]
     fn longest_branch_two() {
+        let _ = span!(Level::INFO, "longest_branch_two").entered();
         let l = Key::try_from("/foo/bar/baz").unwrap();
         let r = Key::try_from("/blah/boo").unwrap();
         let mk = l.longest_common_branch(&r);
@@ -323,6 +337,7 @@ mod tests {
 
     #[test]
     fn longest_branch_three() {
+        let _ = span!(Level::INFO, "longest_branch_three").entered();
         let l = Key::try_from("/").unwrap();
         let r = Key::try_from("/blah/boo").unwrap();
         let mk = l.longest_common_branch(&r);
@@ -333,6 +348,7 @@ mod tests {
 
     #[test]
     fn longest_branch_four() {
+        let _ = span!(Level::INFO, "longest_branch_four").entered();
         let l = Key::try_from("/").unwrap();
         let r = Key::try_from("/").unwrap();
         let mk = l.longest_common_branch(&r);
@@ -343,6 +359,7 @@ mod tests {
 
     #[test]
     fn longest_branch_five() {
+        let _ = span!(Level::INFO, "longest_branch_five").entered();
         let l = Key::try_from("/foo/bar/baz/blah/").unwrap();
         let r = Key::try_from("/foo/bar/baz/blah/").unwrap();
         let mk = l.longest_common_branch(&r);
@@ -353,6 +370,7 @@ mod tests {
 
     #[test]
     fn sort_keys() {
+        let _ = span!(Level::INFO, "sort_keys").entered();
         let mut v: Vec<Key> = vec![
             Key::try_from("/bar/").unwrap(),
             Key::try_from("/").unwrap(),
@@ -381,6 +399,7 @@ mod tests {
 
     #[test]
     fn push_leaf() {
+        let _ = span!(Level::INFO, "push_leaf").entered();
         let mut b = Key::try_from("/foo/bar/").unwrap();
         b.push("/baz").unwrap();
         assert!(b.is_leaf());
@@ -389,6 +408,7 @@ mod tests {
 
     #[test]
     fn push_branch() {
+        let _ = span!(Level::INFO, "push_branch").entered();
         let mut b = Key::try_from("/foo/bar/").unwrap();
         b.push("/baz/").unwrap();
         assert!(b.is_branch());
@@ -397,6 +417,7 @@ mod tests {
 
     #[test]
     fn test_as_ref() {
+        let _ = span!(Level::INFO, "test_as_ref").entered();
         let b = Key::try_from("/foo/bar").unwrap();
         assert_eq!(b.as_ref(), "/foo/bar");
     }

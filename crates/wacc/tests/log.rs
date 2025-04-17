@@ -108,7 +108,7 @@ impl Stack for Stk {
 
 #[test]
 fn test_log_wast() {
-    let _span_ = span!(Level::INFO, "test_log_wast").entered();
+    let _ = span!(Level::INFO, "test_log_wast").entered();
     let kvp = Kvp::default();
     let mut pstack = Stk::default();
     let mut rstack = Stk::default();
@@ -125,7 +125,7 @@ fn test_log_wast() {
 
 #[test]
 fn test_invalid_utf8_wast() {
-    let _span_ = span!(Level::INFO, "test_invalid_utf8_wast").entered();
+    let _ = span!(Level::INFO, "test_invalid_utf8_wast").entered();
     let kvp = Kvp::default();
     let mut pstack = Stk::default();
     let mut rstack = Stk::default();
@@ -147,7 +147,7 @@ fn test_invalid_utf8_wast() {
 
 #[test]
 fn test_log_wasm() {
-    let _span_ = span!(Level::INFO, "test_log_wasm").entered();
+    let _ = span!(Level::INFO, "test_log_wasm").entered();
     let kvp = Kvp::default();
     let mut pstack = Stk::default();
     let mut rstack = Stk::default();

@@ -108,7 +108,7 @@ impl Stack for Stk {
 
 #[test]
 fn test_branch_wast() {
-    let _span_ = span!(Level::INFO, "test_branch_wast").entered();
+    let _ = span!(Level::INFO, "test_branch_wast").entered();
     let kvp = Kvp::default();
     let mut pstack = Stk::default();
     let mut rstack = Stk::default();
@@ -125,7 +125,7 @@ fn test_branch_wast() {
 
 #[test]
 fn test_branch_wasm() {
-    let _span_ = span!(Level::INFO, "test_branch_wasm").entered();
+    let _ = span!(Level::INFO, "test_branch_wasm").entered();
     let kvp = Kvp::default();
     let mut pstack = Stk::default();
     let mut rstack = Stk::default();

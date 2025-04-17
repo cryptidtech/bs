@@ -916,9 +916,12 @@ mod tests {
     use multisig::EncodedMultisig;
     use rng::StdRng;
     use ssh_key::private::Ed25519Keypair;
+    use test_log::test;
+    use tracing::{info, span, Level};
 
     #[test]
     fn test_random() {
+        let _ = span!(Level::INFO, "test_random").entered();
         for codec in KEY_CODECS {
             let mut rng = StdRng::from_os_rng();
             let mk = Builder::new_from_random_bytes(codec, &mut rng)
@@ -949,6 +952,7 @@ mod tests {
 
     #[test]
     fn test_encoded_random() {
+        let _ = span!(Level::INFO, "test_encoded_random").entered();
         for codec in KEY_CODECS {
             let mut rng = StdRng::from_os_rng();
             let mk = Builder::new_from_random_bytes(codec, &mut rng)
@@ -965,6 +969,7 @@ mod tests {
 
     #[test]
     fn test_random_public_ssh_key_roundtrip() {
+        let _ = span!(Level::INFO, "test_random_public_ssh_key_roundtrip").entered();
         for codec in KEY_CODECS {
             let mut rng = StdRng::from_os_rng();
             let mk = Builder::new_from_random_bytes(codec, &mut rng)
@@ -985,6 +990,7 @@ mod tests {
 
     #[test]
     fn test_random_private_ssh_key_roundtrip() {
+        let _ = span!(Level::INFO, "test_random_private_ssh_key_roundtrip").entered();
         for codec in KEY_CODECS {
             let mut rng = StdRng::from_os_rng();
             let mk = Builder::new_from_random_bytes(codec, &mut rng)
@@ -1004,6 +1010,7 @@ mod tests {
 
     #[test]
     fn test_ssh_key_roundtrip() {
+        let _ = span!(Level::INFO, "test_ssh_key_roundtrip").entered();
         for codec in KEY_CODECS {
             let mut rng = StdRng::from_os_rng();
             let sk1 = Builder::new_from_random_bytes(codec, &mut rng)
@@ -1034,6 +1041,7 @@ mod tests {
 
     #[test]
     fn test_encryption_roundtrip() {
+        let _ = span!(Level::INFO, "test_encryption_roundtrip").entered();
         for codec in KEY_CODECS {
             let mut rng = StdRng::from_os_rng();
             let mk1 = Builder::new_from_random_bytes(codec, &mut rng)
@@ -1123,6 +1131,7 @@ mod tests {
 
     #[test]
     fn test_signing_detached_roundtrip() {
+        let _ = span!(Level::INFO, "test_signing_detached_roundtrip").entered();
         for codec in KEY_CODECS {
             let mut rng = StdRng::from_os_rng();
             let mk = Builder::new_from_random_bytes(codec, &mut rng)
@@ -1151,7 +1160,7 @@ mod tests {
                 signmk.sign(msg.as_slice(), false, None).unwrap()
             };
             let sig = EncodedMultisig::new(Base::Base16Lower, signature.clone());
-            println!("signaure: {}", sig);
+            info!("codec: {codec}:\npubkey: {}\nsignaure: {}", pk, sig);
 
             let verifymk = mk.verify_view().unwrap();
             assert!(verifymk.verify(&signature, Some(msg.as_slice())).is_ok());
@@ -1160,6 +1169,7 @@ mod tests {
 
     #[test]
     fn test_signing_merged_roundtrip() {
+        let _ = span!(Level::INFO, "test_signing_merged_roundtrip").entered();
         for codec in KEY_CODECS {
             let mut rng = StdRng::from_os_rng();
             let mk = Builder::new_from_random_bytes(codec, &mut rng)
@@ -1197,6 +1207,7 @@ mod tests {
 
     #[test]
     fn test_bls_key_combine() {
+        let _ = span!(Level::INFO, "test_bls_key_combine").entered();
         let mut rng = StdRng::from_os_rng();
         let mk1 = Builder::new_from_random_bytes(Codec::Bls12381G1Priv, &mut rng)
             .unwrap()
@@ -1241,6 +1252,7 @@ mod tests {
 
     #[test]
     fn test_bls_share_ssh_key_roundtrip() {
+        let _ = span!(Level::INFO, "test_bls_share_ssh_key_roundtrip").entered();
         let mut rng = StdRng::from_os_rng();
         let mk = Builder::new_from_random_bytes(Codec::Bls12381G1Priv, &mut rng)
             .unwrap()
@@ -1273,6 +1285,7 @@ mod tests {
 
     #[test]
     fn test_from_ssh_pubkey() {
+        let _ = span!(Level::INFO, "test_from_ssh_pubkey").entered();
         let mut rng = StdRng::from_os_rng();
         let kp = KeypairData::Ed25519(Ed25519Keypair::random(&mut rng));
         let sk = PrivateKey::new(kp, "test key").unwrap();
@@ -1296,6 +1309,7 @@ mod tests {
 
     #[test]
     fn test_from_ssh_privkey() {
+        let _ = span!(Level::INFO, "test_from_ssh_privkey").entered();
         let mut rng = StdRng::from_os_rng();
         let kp = KeypairData::Ed25519(Ed25519Keypair::random(&mut rng));
         let sk = PrivateKey::new(kp, "test key").unwrap();
@@ -1318,6 +1332,7 @@ mod tests {
 
     #[test]
     fn test_pub_from_string() {
+        let _ = span!(Level::INFO, "test_pub_from_string").entered();
         let s = "fba24ed010874657374206b6579010120f9ddcd5118319cc69e6985ef3f4ee3b6c591d46255e1ae5569c8662111b7d3c2".to_string();
         let mk = EncodedMultikey::try_from(s.as_str()).unwrap();
         let attr = mk.attr_view().unwrap();
@@ -1334,6 +1349,7 @@ mod tests {
 
     #[test]
     fn test_priv_from_string() {
+        let _ = span!(Level::INFO, "test_priv_from_string").entered();
         let s = "fba2480260874657374206b657901012064e58adf88f85cbec6a0448a0803f9d28cf9231a7141be413f83cf6aa883cd04".to_string();
         let mk = EncodedMultikey::try_from(s.as_str()).unwrap();
         let attr = mk.attr_view().unwrap();
@@ -1350,6 +1366,7 @@ mod tests {
 
     #[test]
     fn test_pub_from_vec() {
+        let _ = span!(Level::INFO, "test_pub_from_vec").entered();
         let b = hex::decode("ba24ed010874657374206b6579010120f9ddcd5118319cc69e6985ef3f4ee3b6c591d46255e1ae5569c8662111b7d3c2").unwrap();
         let mk = Multikey::try_from(b.as_slice()).unwrap();
         let attr = mk.attr_view().unwrap();
@@ -1365,6 +1382,7 @@ mod tests {
 
     #[test]
     fn test_priv_from_vec() {
+        let _ = span!(Level::INFO, "test_priv_from_vec").entered();
         let b = hex::decode("ba2480260874657374206b657901012064e58adf88f85cbec6a0448a0803f9d28cf9231a7141be413f83cf6aa883cd04").unwrap();
         let mk = Multikey::try_from(b.as_slice()).unwrap();
         let attr = mk.attr_view().unwrap();
@@ -1380,6 +1398,7 @@ mod tests {
 
     #[test]
     fn test_null() {
+        let _ = span!(Level::INFO, "test_null").entered();
         let mk1 = Multikey::null();
         assert!(mk1.is_null());
         let mk2 = Multikey::default();
@@ -1389,6 +1408,7 @@ mod tests {
 
     #[test]
     fn test_from_seed() {
+        let _ = span!(Level::INFO, "test_from_seed").entered();
         let seed = hex::decode("f9ddcd5118319cc69e6985ef3f4ee3b6c591d46255e1ae5569c8662111b7d3c2")
             .unwrap();
         let mk = Builder::new_from_seed(Codec::Ed25519Priv, seed.as_slice())

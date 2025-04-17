@@ -32,7 +32,9 @@ rng.workspace = true
 sec1 = "0.7"
 serde = { workspace = true, optional = true }
 ssh-encoding = { version = "0.2" }
+test-log.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
 typenum = "1.17"
 unsigned-varint.workspace = true
 vsss-rs = "5.1.0"

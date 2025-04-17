@@ -32,7 +32,8 @@ pub const HASH_CODECS: [Codec; 23] = [
     Codec::Sha3224,
     Codec::Sha3256,
     Codec::Sha3384,
-    Codec::Sha3512];
+    Codec::Sha3512,
+];
 
 /// the safe hash codecs current supported
 pub const SAFE_HASH_CODECS: [Codec; 8] = [
@@ -43,7 +44,8 @@ pub const SAFE_HASH_CODECS: [Codec; 8] = [
     Codec::Blake3,
     Codec::Sha3256,
     Codec::Sha3384,
-    Codec::Sha3512];
+    Codec::Sha3512,
+];
 
 /// the multicodec sigil for multihash
 pub const SIGIL: Codec = Codec::Multihash;
@@ -236,9 +238,12 @@ impl Builder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use test_log::test;
+    use tracing::{span, Level};
 
     #[test]
     fn test_matrix() {
+        let _ = span!(Level::INFO, "test_matrix").entered();
         let hashers = vec![
             Codec::Blake2B224,
             Codec::Blake2B256,
@@ -306,6 +311,7 @@ mod tests {
 
     #[test]
     fn test_binary_roundtrip() {
+        let _ = span!(Level::INFO, "test_binary_roundtrip").entered();
         let mh1 = Builder::new_from_bytes(Codec::Sha3384, b"for great justice, move every zig!")
             .unwrap()
             .try_build()
@@ -317,6 +323,7 @@ mod tests {
 
     #[test]
     fn test_encoded() {
+        let _ = span!(Level::INFO, "test_encoded").entered();
         let mh = Builder::new_from_bytes(Codec::Sha3256, b"for great justice, move every zig!")
             .unwrap()
             .with_base_encoding(Base::Base58Btc)
@@ -330,16 +337,23 @@ mod tests {
 
     #[test]
     fn test_matching() {
+        let _ = span!(Level::INFO, "test_matching").entered();
         let mh1 = Builder::new_from_bytes(Codec::Sha3256, b"for great justice, move every zig!")
             .unwrap()
             .try_build()
             .unwrap();
-        let mh2 = Multihash::try_from(hex::decode("16206b761d3b2e7675e088e337a82207b55711d3957efdb877a3d261b0ca2c38e201").unwrap().as_ref()).unwrap();
+        let mh2 = Multihash::try_from(
+            hex::decode("16206b761d3b2e7675e088e337a82207b55711d3957efdb877a3d261b0ca2c38e201")
+                .unwrap()
+                .as_ref(),
+        )
+        .unwrap();
         assert_eq!(mh1, mh2);
     }
 
     #[test]
     fn test_null() {
+        let _ = span!(Level::INFO, "test_null").entered();
         let mh1 = Multihash::null();
         assert!(mh1.is_null());
         let mh2 = Multihash::default();
@@ -349,9 +363,13 @@ mod tests {
 
     #[test]
     fn test_multihash_sha1() {
+        let _ = span!(Level::INFO, "test_multihash_sha1").entered();
         // test cases from: https://github.com/multiformats/multihash?tab=readme-ov-file#example
         let bases = vec![
-            (Base::Base16Lower, "f111488c2f11fb2ce392acb5b2986e640211c4690073e"),
+            (
+                Base::Base16Lower,
+                "f111488c2f11fb2ce392acb5b2986e640211c4690073e",
+            ),
             (Base::Base32Upper, "BCEKIRQXRD6ZM4OJKZNNSTBXGIAQRYRUQA47A"),
             (Base::Base58Btc, "z5dsgvJGnvAfiR3K6HCBc4hcokSfmjj"),
             (Base::Base64, "mERSIwvEfss45KstbKYbmQCEcRpAHPg"),
@@ -370,12 +388,25 @@ mod tests {
 
     #[test]
     fn test_multihash_sha2_256() {
+        let _ = span!(Level::INFO, "test_multihash_sha2_256").entered();
         // test cases from: https://github.com/multiformats/multihash?tab=readme-ov-file#example
         let bases = vec![
-            (Base::Base16Lower, "f12209cbc07c3f991725836a3aa2a581ca2029198aa420b9d99bc0e131d9f3e2cbe47"),
-            (Base::Base32Upper, "BCIQJZPAHYP4ZC4SYG2R2UKSYDSRAFEMYVJBAXHMZXQHBGHM7HYWL4RY"),
-            (Base::Base58Btc, "zQmYtUc4iTCbbfVSDNKvtQqrfyezPPnFvE33wFmutw9PBBk"),
-            (Base::Base64, "mEiCcvAfD+ZFyWDajqipYHKICkZiqQgudmbwOEx2fPiy+Rw"),
+            (
+                Base::Base16Lower,
+                "f12209cbc07c3f991725836a3aa2a581ca2029198aa420b9d99bc0e131d9f3e2cbe47",
+            ),
+            (
+                Base::Base32Upper,
+                "BCIQJZPAHYP4ZC4SYG2R2UKSYDSRAFEMYVJBAXHMZXQHBGHM7HYWL4RY",
+            ),
+            (
+                Base::Base58Btc,
+                "zQmYtUc4iTCbbfVSDNKvtQqrfyezPPnFvE33wFmutw9PBBk",
+            ),
+            (
+                Base::Base64,
+                "mEiCcvAfD+ZFyWDajqipYHKICkZiqQgudmbwOEx2fPiy+Rw",
+            ),
         ];
 
         for (b, h) in bases {
@@ -388,5 +419,4 @@ mod tests {
             assert_eq!(h, s.as_str());
         }
     }
-
 }

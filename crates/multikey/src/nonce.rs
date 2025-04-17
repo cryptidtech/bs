@@ -169,9 +169,12 @@ mod tests {
     use super::*;
     use crate::{mk, Views};
     use rng::StdRng;
+    use test_log::test;
+    use tracing::{span, Level};
 
     #[test]
     fn test_random() {
+        let _ = span!(Level::INFO, "test_random").entered();
         let mut rng = StdRng::from_os_rng();
         let n = Builder::new_from_random_bytes(32, &mut rng)
             .try_build()
@@ -183,6 +186,7 @@ mod tests {
 
     #[test]
     fn test_binary_roundtrip() {
+        let _ = span!(Level::INFO, "test_binary_roundtrip").entered();
         let mut rng = StdRng::from_os_rng();
         let n = Builder::new_from_random_bytes(32, &mut rng)
             .try_build()
@@ -193,6 +197,7 @@ mod tests {
 
     #[test]
     fn test_encoded_roundtrip() {
+        let _ = span!(Level::INFO, "test_encoded_roundtrip").entered();
         let mut rng = StdRng::from_os_rng();
         let n = Builder::new_from_random_bytes(32, &mut rng)
             .try_build_encoded()
@@ -205,6 +210,7 @@ mod tests {
 
     #[test]
     fn test_nonce_multisig_roundtrip() {
+        let _ = span!(Level::INFO, "test_nonce_multisig_roundtrip").entered();
         let mut rng = StdRng::from_os_rng();
         let mk = mk::Builder::new_from_random_bytes(Codec::Ed25519Priv, &mut rng)
             .unwrap()
@@ -227,6 +233,7 @@ mod tests {
 
     #[test]
     fn test_null() {
+        let _ = span!(Level::INFO, "test_null").entered();
         let n1 = Nonce::null();
         assert!(n1.is_null());
         let n2 = Nonce::default();

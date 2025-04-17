@@ -98,15 +98,18 @@ impl fmt::Debug for Stk {
 mod tests {
     use super::*;
     use test_log::test;
+    use tracing::{span, Level};
 
     #[test]
     fn test_debug_empty() {
+        let _ = span!(Level::INFO, "test_debug_empty").entered();
         let s = Stk::default();
         info!("\n{:?}", &s);
     }
 
     #[test]
     fn test_debug_non_empty() {
+        let _ = span!(Level::INFO, "test_debug_non_empty").entered();
         let mut s = Stk::default();
         s.push(b"foo".to_vec().into());
         s.push("bar".to_string().into());
@@ -115,6 +118,7 @@ mod tests {
 
     #[test]
     fn test_debug_non_empty_pop() {
+        let _ = span!(Level::INFO, "test_debug_non_pop").entered();
         let mut s = Stk::default();
         s.push(b"foo".to_vec().into());
         s.push("bar".to_string().into());
@@ -124,6 +128,7 @@ mod tests {
 
     #[test]
     fn test_push_binary() {
+        let _ = span!(Level::INFO, "test_push_binary").entered();
         let mut s = Stk::default();
         s.push(b"foo".to_vec().into());
         assert_eq!(s.len(), 1);
@@ -138,6 +143,7 @@ mod tests {
 
     #[test]
     fn test_push_string() {
+        let _ = span!(Level::INFO, "test_push_string").entered();
         let mut s = Stk::default();
         s.push("foo".to_string().into());
         assert_eq!(s.len(), 1);
@@ -152,6 +158,7 @@ mod tests {
 
     #[test]
     fn test_push_success() {
+        let _ = span!(Level::INFO, "test_push_success").entered();
         let mut s = Stk::default();
         s.push(1.into());
         assert_eq!(s.len(), 1);
@@ -160,6 +167,7 @@ mod tests {
 
     #[test]
     fn test_push_failure() {
+        let _ = span!(Level::INFO, "test_push_failure").entered();
         let mut s = Stk::default();
         s.push(Value::Failure("bad".to_string()));
         assert_eq!(s.len(), 1);
@@ -168,6 +176,7 @@ mod tests {
 
     #[test]
     fn test_pop() {
+        let _ = span!(Level::INFO, "test_pop").entered();
         let mut s = Stk::default();
         s.push(1.into());
         s.push(2.into());
@@ -180,6 +189,7 @@ mod tests {
 
     #[test]
     fn test_peek() {
+        let _ = span!(Level::INFO, "test_peek").entered();
         let mut s = Stk::default();
         s.push(1.into());
         s.push(2.into());

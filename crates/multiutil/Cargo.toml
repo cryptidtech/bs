@@ -15,6 +15,7 @@ multibase.workspace = true
 multicodec.workspace = true
 multitrait.workspace = true
 serde = { workspace = true, optional = true }
+test-log.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]

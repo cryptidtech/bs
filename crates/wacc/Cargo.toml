@@ -14,7 +14,7 @@ multikey.workspace = true
 multisig.workspace = true
 multitrait.workspace = true
 multiutil.workspace = true
-test-log = { version = "0.2.17", features = ["trace", "color"] }
+test-log.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 wasmtime = "31.0.0"

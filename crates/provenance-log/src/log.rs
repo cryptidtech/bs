@@ -581,6 +581,8 @@ mod tests {
     use multihash::mh;
     use multikey::{EncodedMultikey, Multikey, Views};
     use std::path::PathBuf;
+    use test_log::test;
+    use tracing::{span, Level};
 
     fn load_script(path: &Key, file_name: &str) -> Script {
         let mut pb = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -609,6 +611,7 @@ mod tests {
 
     #[test]
     fn test_default() {
+        let _ = span!(Level::INFO, "test_default").entered();
         let log = Log::default();
         assert_eq!(Vlad::default(), log.vlad);
         assert_eq!(log.iter().next(), None);
@@ -616,6 +619,7 @@ mod tests {
 
     #[test]
     fn test_builder() {
+        let _ = span!(Level::INFO, "test_builder").entered();
         let ephemeral = EncodedMultikey::try_from(
             "fba2480260874657374206b6579010120cbd87095dc5863fcec46a66a1d4040a73cb329f92615e165096bd50541ee71c0"
         )
@@ -683,16 +687,17 @@ mod tests {
         assert!(!log.head.is_null());
         assert_eq!(log.foot, log.head);
         assert_eq!(Some(entry), log.iter().next().cloned());
-        let mut verify_iter = log.verify();
-        while let Some(ret) = verify_iter.next() {
+        let verify_iter = log.verify();
+        for ret in verify_iter {
             if let Some(e) = ret.err() {
-                println!("verify failed: {}", e.to_string());
+                println!("verify failed: {}", e);
             }
         }
     }
 
     #[test]
     fn test_entry_iterator() {
+        let _ = span!(Level::INFO, "test_entry_iterator").entered();
         let ephemeral = EncodedMultikey::try_from(
             "fba2480260874657374206b6579010120cbd87095dc5863fcec46a66a1d4040a73cb329f92615e165096bd50541ee71c0"
         )
@@ -823,14 +828,14 @@ mod tests {
         assert_eq!(Some(&e3), iter.next());
         assert_eq!(Some(&e4), iter.next());
         assert_eq!(None, iter.next());
-        let mut verify_iter = log.verify();
-        while let Some(ret) = verify_iter.next() {
+        let verify_iter = log.verify();
+        for ret in verify_iter {
             match ret {
                 Ok((c, _, _)) => {
                     println!("check count: {}", c);
                 }
                 Err(e) => {
-                    println!("verify failed: {}", e.to_string());
+                    println!("verify failed: {}", e);
                     panic!();
                 }
             }

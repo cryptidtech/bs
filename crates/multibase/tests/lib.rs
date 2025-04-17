@@ -1,4 +1,6 @@
 use multibase::{decode, encode, Base, Base::*};
+use test_log::test;
+use tracing::{span, Level};
 
 fn encode_decode_assert(input: &[u8], test_cases: Vec<(Base, &str)>) {
     for (base, output) in test_cases {
@@ -9,18 +11,21 @@ fn encode_decode_assert(input: &[u8], test_cases: Vec<(Base, &str)>) {
 
 #[test]
 fn test_bases_code() {
+    let _ = span!(Level::INFO, "test_bases_code").entered();
     assert_eq!(Identity.code(), '\x00');
     assert_eq!(Base2.code(), '0');
 }
 
 #[test]
 fn test_bases_from_code() {
+    let _ = span!(Level::INFO, "test_bases_from_code").entered();
     assert_eq!(Base::from_code('\x00').unwrap(), Identity);
     assert_eq!(Base::from_code('0').unwrap(), Base2);
 }
 
 #[test]
 fn test_round_trip() {
+    let _ = span!(Level::INFO, "test_round_trip").entered();
     let test_cases: &[&str] = &[
         "helloworld",
         "we all want decentralization",
@@ -36,6 +41,7 @@ fn test_round_trip() {
 
 #[test]
 fn test_basic() {
+    let _ = span!(Level::INFO, "test_basic").entered();
     let input = b"yes mani !";
     let test_cases = vec![
         (Identity, "\x00yes mani !"),
@@ -71,6 +77,7 @@ fn test_basic() {
 
 #[test]
 fn preserves_leading_zero() {
+    let _ = span!(Level::INFO, "preserves_leading_zero").entered();
     let input = b"\x00yes mani !";
     let test_cases = vec![
         (Identity, "\x00\x00yes mani !"),
@@ -103,6 +110,7 @@ fn preserves_leading_zero() {
 
 #[test]
 fn preserves_two_leading_zeroes() {
+    let _ = span!(Level::INFO, "preserves_two_leading_zeroes").entered();
     let input = b"\x00\x00yes mani !";
     let test_cases = vec![
         (Identity, "\x00\x00\x00yes mani !"),
@@ -135,6 +143,7 @@ fn preserves_two_leading_zeroes() {
 
 #[test]
 fn case_insensitivity() {
+    let _ = span!(Level::INFO, "case_insensitivity").entered();
     let input = b"hello world";
     let test_cases = vec![
         (Base16Lower, "f68656c6c6f20776F726C64"),

@@ -42,19 +42,23 @@ pub mod prelude {
 #[cfg(test)]
 mod test {
     use super::prelude::*;
+    use test_log::test;
+    use tracing::{span, Level};
 
     #[test]
     fn test_bool() {
+        let _ = span!(Level::INFO, "test_bool").entered();
         let tbuf = true.encode_into();
         let (tval, _) = bool::try_decode_from(&tbuf).unwrap();
-        assert_eq!(true, tval);
+        assert!(tval);
         let fbuf = false.encode_into();
         let (fval, _) = bool::try_decode_from(&fbuf).unwrap();
-        assert_eq!(false, fval);
+        assert!(!fval);
     }
 
     #[test]
     fn test_u8() {
+        let _ = span!(Level::INFO, "test_u8").entered();
         let buf = 0xff_u8.encode_into();
         let (num, _) = u8::try_decode_from(&buf).unwrap();
         assert_eq!(0xff_u8, num);
@@ -62,6 +66,7 @@ mod test {
 
     #[test]
     fn test_u16() {
+        let _ = span!(Level::INFO, "test_u16").entered();
         let buf = 0xffee_u16.encode_into();
         let (num, _) = u16::try_decode_from(&buf).unwrap();
         assert_eq!(0xffee_u16, num);
@@ -69,6 +74,7 @@ mod test {
 
     #[test]
     fn test_u32() {
+        let _ = span!(Level::INFO, "test_u32").entered();
         let buf = 0xffeeddcc_u32.encode_into();
         let (num, _) = u32::try_decode_from(&buf).unwrap();
         assert_eq!(0xffeeddcc_u32, num);
@@ -76,6 +82,7 @@ mod test {
 
     #[test]
     fn test_u64() {
+        let _ = span!(Level::INFO, "test_u64").entered();
         let buf = 0xffeeddcc_bbaa9988_u64.encode_into();
         let (num, _) = u64::try_decode_from(&buf).unwrap();
         assert_eq!(0xffeeddcc_bbaa9988_u64, num);
@@ -83,6 +90,7 @@ mod test {
 
     #[test]
     fn test_u128() {
+        let _ = span!(Level::INFO, "test_u128").entered();
         let buf = 0xffeeddcc_bbaa9988_77665544_33221100_u128.encode_into();
         let (num, _) = u128::try_decode_from(&buf).unwrap();
         assert_eq!(0xffeeddcc_bbaa9988_77665544_33221100_u128, num);
@@ -91,6 +99,7 @@ mod test {
     #[cfg(target_pointer_width = "64")]
     #[test]
     fn test_usize() {
+        let _ = span!(Level::INFO, "test_usize").entered();
         let buf = 0xffeeddcc_bbaa9988_usize.encode_into();
         let (num, _) = usize::try_decode_from(&buf).unwrap();
         assert_eq!(0xffeeddcc_bbaa9988_usize, num);
@@ -99,6 +108,7 @@ mod test {
     #[cfg(target_pointer_width = "32")]
     #[test]
     fn test_usize() {
+        let _ = span!(Level::INFO, "test_usize").entered();
         let buf = 0xffeeddcc_usize.encode_into();
         let (num, _) = usize::try_decode_from(&buf).unwrap();
         assert_eq!(0xffeeddcc_usize, num);
@@ -128,12 +138,14 @@ mod test {
 
     #[test]
     fn test_null_value() {
+        let _ = span!(Level::INFO, "test_null_value").entered();
         let f = Foo::null();
         assert!(Null::is_null(&f));
     }
 
     #[test]
     fn test_try_null_value() {
+        let _ = span!(Level::INFO, "test_try_null_value").entered();
         let f = Foo::try_null().unwrap();
         assert!(TryNull::is_null(&f));
     }
