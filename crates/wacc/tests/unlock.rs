@@ -108,7 +108,7 @@ impl Stack for Stk {
 
 #[test]
 fn test_unlock_wast() {
-    let _ = span!(Level::INFO, "test_unlock_wast").entered();
+    let _s = span!(Level::INFO, "test_unlock_wast").entered();
     // set up the key-value pair store
     let mut kvp = Kvp::default();
     let _ = kvp.put("/entry/", &"foo".as_bytes().into());
@@ -138,7 +138,7 @@ fn test_unlock_wast() {
 
 #[test]
 fn test_unlock_wasm() {
-    let _ = span!(Level::INFO, "test_unlock_wasm").entered();
+    let _s = span!(Level::INFO, "test_unlock_wasm").entered();
     // set up the key-value pair store
     let mut kvp = Kvp::default();
     let _ = kvp.put("/entry/", &"foo".as_bytes().into());

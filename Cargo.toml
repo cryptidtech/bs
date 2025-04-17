@@ -37,6 +37,7 @@ wacc = { path = "crates/wacc" }
 
 # Core dependencies
 best-practices = { version = "0.1.0", git = "https://github.com/cryptidtech/best-practices.git" }
+criterion = "0.5.1"
 elliptic-curve = "0.13.8"
 hex = "0.4.3"
 rand = { version = "0.9.0", features = ["os_rng"] }
@@ -52,3 +53,7 @@ thiserror = "2.0.12"
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 unsigned-varint = { version = "0.8.0", features = ["std"] }
+
+[profile.bench]
+opt-level = 3
+debug = false

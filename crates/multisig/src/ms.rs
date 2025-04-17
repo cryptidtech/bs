@@ -11,7 +11,7 @@ use blsful::{inner_types::GroupEncoding, vsss_rs::Share, Signature, SignatureSha
 use multibase::Base;
 use multicodec::Codec;
 use multitrait::{Null, TryDecodeFrom};
-use multiutil::{BaseEncoded, CodecInfo, EncodingInfo, Varbytes, Varuint};
+use multiutil::{BaseEncoded, CodecInfo, EncodingInfo, Varbytes, VarbytesIter, Varuint};
 use std::{collections::BTreeMap, fmt};
 
 /// the list of signature codecs currently supported
@@ -85,13 +85,13 @@ impl From<Multisig> for Vec<u8> {
         // add in the signature codec
         v.append(&mut val.codec.into());
         // add in the message
-        v.append(&mut Varbytes(val.message.clone()).into());
+        v.extend(&mut VarbytesIter::from(&val.message));
         // add in the number of attributes
         v.append(&mut Varuint(val.attributes.len()).into());
         // add in the attributes
         val.attributes.iter().for_each(|(id, attr)| {
             v.append(&mut (*id).into());
-            v.append(&mut Varbytes(attr.clone()).into());
+            v.extend(&mut VarbytesIter::from(attr.as_slice()));
         });
         v
     }

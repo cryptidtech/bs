@@ -61,19 +61,19 @@ mod tests {
 
     #[test]
     fn valid_zero() {
-        let _ = span!(Level::INFO, "valid_zero").entered();
+        let _s = span!(Level::INFO, "valid_zero").entered();
         0.is_lipmaa();
     }
 
     #[test]
     fn lipmaa_one() {
-        let _ = span!(Level::INFO, "lipmaa_one").entered();
+        let _s = span!(Level::INFO, "lipmaa_one").entered();
         assert!(!0.is_lipmaa());
     }
 
     #[test]
     fn lipmaa_four() {
-        let _ = span!(Level::INFO, "lipmaa_four").entered();
+        let _s = span!(Level::INFO, "lipmaa_four").entered();
         assert!(4.is_lipmaa());
     }
 }

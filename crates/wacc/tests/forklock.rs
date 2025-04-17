@@ -115,7 +115,7 @@ impl Stack for Stk {
 
 #[test]
 fn test_branch_lock_wast() {
-    let _ = span!(Level::INFO, "test_branch_lock_wast").entered();
+    let _s = span!(Level::INFO, "test_branch_lock_wast").entered();
     // create the stack to use
     let mut pstack = Stk::default();
     let mut rstack = Stk::default();

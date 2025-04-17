@@ -198,7 +198,7 @@ mod tests {
 
     #[test]
     fn test_default() {
-        let _ = span!(Level::INFO, "test_default").entered();
+        let _s = span!(Level::INFO, "test_default").entered();
         let p = Kvp::default();
         assert_eq!(p.seqno(), None);
         assert_eq!(p.len(), 0);
@@ -242,7 +242,7 @@ mod tests {
 
     #[test]
     fn test_one_entry() {
-        let _ = span!(Level::INFO, "test_one_entry").entered();
+        let _s = span!(Level::INFO, "test_one_entry").entered();
         let entry = entry::Builder::default()
             .with_vlad(&Vlad::default())
             .add_lock(&Script::default())

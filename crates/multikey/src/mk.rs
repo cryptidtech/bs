@@ -9,7 +9,7 @@ use crate::{
 use multibase::Base;
 use multicodec::Codec;
 use multitrait::{Null, TryDecodeFrom};
-use multiutil::{BaseEncoded, CodecInfo, EncodingInfo, Varbytes, Varuint};
+use multiutil::{BaseEncoded, CodecInfo, EncodingInfo, Varbytes, VarbytesIter, Varuint};
 use ssh_key::{
     private::{EcdsaKeypair, KeypairData},
     public::{EcdsaPublicKey, KeyData},
@@ -99,13 +99,13 @@ impl From<Multikey> for Vec<u8> {
         // add in the key codec
         v.append(&mut mk.codec.into());
         // add in the comment
-        v.append(&mut Varbytes(mk.comment.as_bytes().to_vec()).into());
+        v.extend(&mut VarbytesIter::from(mk.comment.as_bytes()));
         // add in the number of codec-specific attributes
         v.append(&mut Varuint(mk.attributes.len()).into());
         // add in the codec-specific attributes
         mk.attributes.iter().for_each(|(id, attr)| {
             v.append(&mut (*id).into());
-            v.append(&mut Varbytes(attr.to_vec()).into());
+            v.extend(&mut VarbytesIter::from(attr.as_slice()));
         });
         v
     }

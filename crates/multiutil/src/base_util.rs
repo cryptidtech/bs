@@ -97,20 +97,25 @@ impl Iterator for BaseIter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use test_log::test;
+    use tracing::{span, Level};
 
     #[test]
     fn test_new_iter() {
+        let _s = span!(Level::INFO, "test_new_iter").entered();
         assert_eq!(BaseIter::new().next(), Some(Base::Identity));
     }
 
     #[test]
     fn test_last_iter() {
+        let _s = span!(Level::INFO, "test_last_iter").entered();
         let mut iter: BaseIter = Base::Base256Emoji.into();
         assert_eq!(iter.next(), None)
     }
 
     #[test]
     fn test_all_iter() {
+        let _s = span!(Level::INFO, "test_all_iter").entered();
         let iter = BaseIter::new();
         for b in iter {
             println!("{}", base_name(b));

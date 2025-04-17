@@ -611,7 +611,7 @@ mod tests {
 
     #[test]
     fn test_default() {
-        let _ = span!(Level::INFO, "test_default").entered();
+        let _s = span!(Level::INFO, "test_default").entered();
         let log = Log::default();
         assert_eq!(Vlad::default(), log.vlad);
         assert_eq!(log.iter().next(), None);
@@ -619,7 +619,7 @@ mod tests {
 
     #[test]
     fn test_builder() {
-        let _ = span!(Level::INFO, "test_builder").entered();
+        let _s = span!(Level::INFO, "test_builder").entered();
         let ephemeral = EncodedMultikey::try_from(
             "fba2480260874657374206b6579010120cbd87095dc5863fcec46a66a1d4040a73cb329f92615e165096bd50541ee71c0"
         )
@@ -697,7 +697,7 @@ mod tests {
 
     #[test]
     fn test_entry_iterator() {
-        let _ = span!(Level::INFO, "test_entry_iterator").entered();
+        let _s = span!(Level::INFO, "test_entry_iterator").entered();
         let ephemeral = EncodedMultikey::try_from(
             "fba2480260874657374206b6579010120cbd87095dc5863fcec46a66a1d4040a73cb329f92615e165096bd50541ee71c0"
         )

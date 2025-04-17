@@ -100,21 +100,26 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
+    use test_log::test;
+    use tracing::{span, Level};
 
     #[test]
     fn test_default() {
+        let _s = span!(Level::INFO, "test_default").entered();
         let v = Varuint::<u64>::default();
         assert_eq!(0_u64, *v);
     }
 
     #[test]
     fn test_to_inner() {
+        let _s = span!(Level::INFO, "test_to_inner").entered();
         let v = Varuint(42_u64);
         assert_eq!(42_u64, v.to_inner());
     }
 
     #[test]
     fn test_default_round_trip() {
+        let _s = span!(Level::INFO, "test_default_round_trip").entered();
         let v1 = Varuint::<u64>::default();
         let v: Vec<u8> = v1.clone().into();
         let v2 = Varuint::<u64>::try_from(v.as_slice()).unwrap();
@@ -123,6 +128,7 @@ mod test {
 
     #[test]
     fn test_encode_decode_round_trip() {
+        let _s = span!(Level::INFO, "test_encode_decode_round_trip").entered();
         let v1 = Varuint(42_u64);
         let (v2, _) = Varuint::<u64>::try_decode_from(&v1.encode_into()).unwrap();
         assert_eq!(v1, v2);
@@ -130,6 +136,7 @@ mod test {
 
     #[test]
     fn test_into_tryfrom_round_trip() {
+        let _s = span!(Level::INFO, "test_into_tryfrom_round_trip").entered();
         let v1 = Varuint(42_u64);
         let data: Vec<u8> = v1.clone().into();
         let v2 = Varuint::<u64>::try_from(data.as_slice()).unwrap();
@@ -138,6 +145,7 @@ mod test {
 
     #[test]
     fn test_debug() {
+        let _s = span!(Level::INFO, "test_debug").entered();
         let v = Varuint(0xed_u64);
         assert_eq!("[237, 1]".to_string(), format!("{:?}", v));
     }

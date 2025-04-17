@@ -6,7 +6,7 @@ use multicid::{cid, Cid, EncodedCid, Vlad};
 use multicodec::Codec;
 use multihash::mh;
 use multitrait::{Null, TryDecodeFrom};
-use multiutil::{BaseEncoded, CodecInfo, EncodingInfo, Varbytes, Varuint};
+use multiutil::{BaseEncoded, CodecInfo, EncodingInfo, Varbytes, VarbytesIter, Varuint};
 use std::{cmp::Ordering, convert::From};
 
 /// the multicodec sigil for a provenance entry
@@ -151,7 +151,7 @@ impl From<Entry> for Vec<u8> {
         // add in the unlock script
         v.append(&mut val.unlock.clone().into());
         // add in the proof
-        v.append(&mut Varbytes(val.proof.clone()).into());
+        v.extend(&mut VarbytesIter::from(&val.proof));
         v
     }
 }
@@ -584,7 +584,7 @@ mod tests {
 
     #[test]
     fn test_builder() {
-        let _ = span!(Level::INFO, "test_builder").entered();
+        let _s = span!(Level::INFO, "test_builder").entered();
         let vlad = Vlad::default();
         let script = Script::default();
         let op = Op::default();
@@ -606,7 +606,7 @@ mod tests {
 
     #[test]
     fn test_builder_next() {
-        let _ = span!(Level::INFO, "test_builder_next").entered();
+        let _s = span!(Level::INFO, "test_builder_next").entered();
         let vlad = Vlad::default();
         let script = Script::default();
         let op = Op::default();
@@ -641,7 +641,7 @@ mod tests {
 
     #[test]
     fn test_entry_iter() {
-        let _ = span!(Level::INFO, "test_entry_iter").entered();
+        let _s = span!(Level::INFO, "test_entry_iter").entered();
         let vlad = Vlad::default();
         let script = Script::default();
         let op = Op::default();
@@ -667,7 +667,7 @@ mod tests {
 
     #[test]
     fn test_sort_locks_change_lock_order() {
-        let _ = span!(Level::INFO, "test_sort_locks_change_lock_order").entered();
+        let _s = span!(Level::INFO, "test_sort_locks_change_lock_order").entered();
         let vlad = Vlad::default();
         let script = Script::default();
         let cid1 = cid::Builder::new(Codec::Cidv1)
@@ -757,7 +757,7 @@ mod tests {
 
     #[test]
     fn test_sort_locks_no_ops() {
-        let _ = span!(Level::INFO, "test_sort_locks_no_ops").entered();
+        let _s = span!(Level::INFO, "test_sort_locks_no_ops").entered();
         let vlad = Vlad::default();
         let script = Script::default();
         let cid1 = cid::Builder::new(Codec::Cidv1)
@@ -820,7 +820,7 @@ mod tests {
 
     #[test]
     fn test_sort_locks() {
-        let _ = span!(Level::INFO, "test_sort_locks").entered();
+        let _s = span!(Level::INFO, "test_sort_locks").entered();
         let vlad = Vlad::default();
         let script = Script::default();
         let cid1 = cid::Builder::new(Codec::Cidv1)
@@ -909,7 +909,7 @@ mod tests {
 
     #[test]
     fn test_preimage() {
-        let _ = span!(Level::INFO, "test_preimage").entered();
+        let _s = span!(Level::INFO, "test_preimage").entered();
         // build a nonce
         let bytes = hex::decode("d15c4fb2911ae1337f102bcaf4c0088d36345b88b243968e834c5ffa17907832")
             .unwrap();

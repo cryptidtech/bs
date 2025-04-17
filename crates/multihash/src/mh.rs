@@ -5,7 +5,7 @@ use digest::{Digest, DynDigest};
 use multibase::Base;
 use multicodec::Codec;
 use multitrait::{Null, TryDecodeFrom};
-use multiutil::{BaseEncoded, CodecInfo, DetectedEncoder, EncodingInfo, Varbytes};
+use multiutil::{BaseEncoded, CodecInfo, DetectedEncoder, EncodingInfo, Varbytes, VarbytesIter};
 use typenum::consts::*;
 
 /// the hash codecs currently supported
@@ -91,7 +91,7 @@ impl From<Multihash> for Vec<u8> {
         // add in the hash codec
         v.append(&mut mh.codec.into());
         // add in the hash data
-        v.append(&mut Varbytes(mh.hash).into());
+        v.extend(&mut VarbytesIter::from(&mh.hash));
         v
     }
 }

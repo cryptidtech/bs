@@ -38,7 +38,7 @@ pub mod serde;
 
 /// Varbytes type for forcing serde of Vec<u8> to/from bytes
 pub mod varbytes;
-pub use varbytes::{EncodedVarbytes, Varbytes};
+pub use varbytes::{EncodedVarbytes, Varbytes, VarbytesIter};
 
 /// Varunit type for handling serde of numeric types
 pub mod varuint;
@@ -59,9 +59,12 @@ pub mod prelude {
 #[cfg(test)]
 mod test {
     use super::prelude::*;
+    use test_log::test;
+    use tracing::{span, Level};
 
     #[test]
     fn test_base_name() {
+        let _s = span!(Level::INFO, "test_base_name").entered();
         assert_eq!(base_name(Base::Base16Upper), "Base16Upper".to_string());
     }
 
@@ -118,40 +121,43 @@ mod test {
         }
     }
 
-    impl Into<Vec<u8>> for Unit {
-        fn into(self) -> Vec<u8> {
-            let mut v = Vec::default();
-            v.extend_from_slice(&self.0);
-            v
+    impl From<Unit> for Vec<u8> {
+        fn from(unit: Unit) -> Vec<u8> {
+            unit.0.to_vec()
         }
     }
 
     #[test]
     fn test_display() {
+        let _s = span!(Level::INFO, "test_display").entered();
         let betu = Unit::encoded_default();
         assert_eq!("f42aa".to_string(), betu.to_string());
     }
 
     #[test]
     fn test_legacy_display() {
+        let _s = span!(Level::INFO, "test_legacy_display").entered();
         let betu = Unit::base58_encoded_default();
         assert_eq!("65F".to_string(), betu.to_string());
     }
 
     #[test]
     fn test_try_from_str() {
+        let _s = span!(Level::INFO, "test_try_from_str").entered();
         let betu = EncodedUnit::try_from("f42aa").unwrap();
         assert_eq!(Unit::encoded_default(), betu);
     }
 
     #[test]
     fn test_try_from_base58_str() {
+        let _s = span!(Level::INFO, "test_try_from_base58_str").entered();
         let betu = Base58EncodedUnit::try_from("65F").unwrap();
         assert_eq!(Unit::base58_encoded_default(), betu);
     }
 
     #[test]
     fn test_string_round_trip() {
+        let _s = span!(Level::INFO, "test_string_round_trip").entered();
         let betu1 = Unit::encoded_default();
         let s = betu1.to_string();
         let betu2 = EncodedUnit::try_from(s.as_str()).unwrap();
@@ -160,6 +166,7 @@ mod test {
 
     #[test]
     fn test_bytes_round_trip() {
+        let _s = span!(Level::INFO, "test_bytes_round_trip").entered();
         let betu1 = Unit::encoded_default();
         let s = betu1.to_string();
         let betu2 = EncodedUnit::try_from(s.as_str()).unwrap();
@@ -168,12 +175,14 @@ mod test {
 
     #[test]
     fn test_smart_pointer() {
+        let _s = span!(Level::INFO, "test_smart_pointer").entered();
         let betu = Unit::encoded_default();
         assert_eq!(betu.value(), 0x42);
     }
 
     #[test]
     fn test_as_ref() {
+        let _s = span!(Level::INFO, "test_as_ref").entered();
         let betu = Unit::encoded_default();
         assert_eq!(&[0x42, 0xAA], betu.to_inner().as_ref());
     }

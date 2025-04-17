@@ -4,7 +4,7 @@ use core::fmt;
 use multibase::Base;
 use multicodec::Codec;
 use multitrait::{Null, TryDecodeFrom};
-use multiutil::{BaseEncoded, CodecInfo, EncodingInfo, Varbytes};
+use multiutil::{BaseEncoded, CodecInfo, EncodingInfo, Varbytes, VarbytesIter};
 
 /// the Nonce multicodec sigil
 pub const SIGIL: Codec = Codec::Nonce;
@@ -65,7 +65,7 @@ impl From<Nonce> for Vec<u8> {
         // add the sigil
         v.append(&mut SIGIL.into());
         // add the nonce bytes
-        v.append(&mut Varbytes(val.nonce.clone()).into());
+        v.extend(&mut VarbytesIter::from(&val.nonce));
         v
     }
 }
@@ -174,7 +174,7 @@ mod tests {
 
     #[test]
     fn test_random() {
-        let _ = span!(Level::INFO, "test_random").entered();
+        let _s = span!(Level::INFO, "test_random").entered();
         let mut rng = StdRng::from_os_rng();
         let n = Builder::new_from_random_bytes(32, &mut rng)
             .try_build()
@@ -186,7 +186,7 @@ mod tests {
 
     #[test]
     fn test_binary_roundtrip() {
-        let _ = span!(Level::INFO, "test_binary_roundtrip").entered();
+        let _s = span!(Level::INFO, "test_binary_roundtrip").entered();
         let mut rng = StdRng::from_os_rng();
         let n = Builder::new_from_random_bytes(32, &mut rng)
             .try_build()
@@ -197,7 +197,7 @@ mod tests {
 
     #[test]
     fn test_encoded_roundtrip() {
-        let _ = span!(Level::INFO, "test_encoded_roundtrip").entered();
+        let _s = span!(Level::INFO, "test_encoded_roundtrip").entered();
         let mut rng = StdRng::from_os_rng();
         let n = Builder::new_from_random_bytes(32, &mut rng)
             .try_build_encoded()
@@ -210,7 +210,7 @@ mod tests {
 
     #[test]
     fn test_nonce_multisig_roundtrip() {
-        let _ = span!(Level::INFO, "test_nonce_multisig_roundtrip").entered();
+        let _s = span!(Level::INFO, "test_nonce_multisig_roundtrip").entered();
         let mut rng = StdRng::from_os_rng();
         let mk = mk::Builder::new_from_random_bytes(Codec::Ed25519Priv, &mut rng)
             .unwrap()
@@ -233,7 +233,7 @@ mod tests {
 
     #[test]
     fn test_null() {
-        let _ = span!(Level::INFO, "test_null").entered();
+        let _s = span!(Level::INFO, "test_null").entered();
         let n1 = Nonce::null();
         assert!(n1.is_null());
         let n2 = Nonce::default();

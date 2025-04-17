@@ -115,7 +115,7 @@ impl Stack for Stk {
 
 #[test]
 fn test_pubkey_lock_wast() {
-    let _ = span!(Level::INFO, "test_pubkey_lock_wast").entered();
+    let _s = span!(Level::INFO, "test_pubkey_lock_wast").entered();
     // create the stack to use
     let mut pstack = Stk::default();
     let mut rstack = Stk::default();
@@ -189,7 +189,7 @@ fn test_pubkey_lock_wast() {
 
 #[test]
 fn test_preimage_lock_wast() {
-    let _ = span!(Level::INFO, "test_preimage_lock_wast").entered();
+    let _s = span!(Level::INFO, "test_preimage_lock_wast").entered();
     // create the stack to use
     let mut pstack = Stk::default();
     let mut rstack = Stk::default();
@@ -276,7 +276,7 @@ fn test_preimage_lock_wast() {
 
 #[test]
 fn test_pubkey_lock_wasm() {
-    let _ = span!(Level::INFO, "test_pubkey_lock_wasm").entered();
+    let _s = span!(Level::INFO, "test_pubkey_lock_wasm").entered();
     // create the stack to use
     let mut pstack = Stk::default();
     let mut rstack = Stk::default();
@@ -346,7 +346,7 @@ fn test_pubkey_lock_wasm() {
 
 #[test]
 fn test_preimage_lock_wasm() {
-    let _ = span!(Level::INFO, "test_preimage_lock_wasm").entered();
+    let _s = span!(Level::INFO, "test_preimage_lock_wasm").entered();
     // create the stack to use
     let mut pstack = Stk::default();
     let mut rstack = Stk::default();

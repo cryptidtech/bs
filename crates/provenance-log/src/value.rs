@@ -3,7 +3,7 @@ use crate::{error::ValueError, Error};
 use core::fmt;
 use multibase::Base;
 use multitrait::{EncodeInto, TryDecodeFrom};
-use multiutil::{EncodingInfo, Varbytes};
+use multiutil::{EncodingInfo, Varbytes, VarbytesIter};
 
 /// the identifiers for the operations performed on the namespace in each entry
 #[repr(u8)]
@@ -151,12 +151,12 @@ impl From<Value> for Vec<u8> {
             Value::Nil => v,
             Value::Str(s) => {
                 // add in the string
-                v.append(&mut Varbytes(s.as_bytes().to_vec()).into());
+                v.extend(&mut VarbytesIter::from(s.as_bytes()));
                 v
             }
             Value::Data(b) => {
                 // add in the data
-                v.append(&mut Varbytes(b.clone()).into());
+                v.extend(&mut VarbytesIter::from(&b));
                 v
             }
         }

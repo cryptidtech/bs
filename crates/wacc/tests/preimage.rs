@@ -119,7 +119,7 @@ impl Stack for Stk {
 
 #[test]
 fn test_preimage_wast() {
-    let _ = span!(Level::INFO, "test_preimage_wast").entered();
+    let _s = span!(Level::INFO, "test_preimage_wast").entered();
     // create the stack to use
     let mut pstack = Stk::default();
     let mut rstack = Stk::default();
@@ -202,7 +202,7 @@ fn test_preimage_wast() {
 
 #[test]
 fn test_preimage_wasm() {
-    let _ = span!(Level::INFO, "test_preimage_wasm").entered();
+    let _s = span!(Level::INFO, "test_preimage_wasm").entered();
     // create the stack to use
     let mut pstack = Stk::default();
     let mut rstack = Stk::default();

@@ -340,7 +340,7 @@ mod tests {
 
     #[test]
     fn sort_scripts() {
-        let _ = span!(Level::INFO, "sort_scripts").entered();
+        let _s = span!(Level::INFO, "sort_scripts").entered();
         let cid = Cid::default();
         let mut v: Vec<Script> = vec![
             Builder::from_code_cid(&cid)
