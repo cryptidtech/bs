@@ -81,26 +81,30 @@ async fn main() -> Result<(), Error> {
         .with_file(true)
         .without_time()
         .try_init()
-        .map_err(bs_cli::Error::Log)?;
+        .map_err(Error::Log)?;
 
     // load the config
     let config = Config::from_path(opt.config, opt.keyfile, opt.sshagent, opt.sshagentenv)?;
 
-    let ret = match opt.cmd {
-        Some(cmd) => match cmd {
+    let command_reader: Box<dyn Iterator<Item = Command>> = match opt.cmd {
+        Some(command) => Box::new(std::iter::once(command)),
+        None => Box::new(repl::ReplHelper::read()),
+    };
+
+    for command in command_reader {
+        let ret = match command {
             // process a config command
             Command::Config { cmd } => subcmds::config::go(cmd, &config).await,
             // process a plog command
-            Command::Plog { cmd } => subcmds::plog::go(*cmd, &config).await,
-        },
-        None => repl::ReplHelper::run().await,
-    };
+            Command::Plog { cmd } => plog::go(*cmd, &config).await,
+        };
 
-    if let Err(ref e) = ret {
-        eprintln!("{}", e);
-        Opt::clap().print_help().unwrap();
-        println!();
-        ret?
+        if let Err(ref e) = ret {
+            eprintln!("{}", e);
+            Opt::clap().print_help().unwrap();
+            println!();
+            ret?
+        }
     }
 
     // save any config changes
