@@ -4,15 +4,13 @@ use wasmtime::{Config, Engine, Linker, Module, Store};
 
 /// Builder type for constructing WacVm instances
 #[derive(Default)]
-pub struct Builder<'a>
-{
+pub struct Builder<'a> {
     fuel: Option<u64>,
     bytes: Vec<u8>,
     context: Option<Context<'a>>,
 }
 
-impl<'a> Builder<'a>
-{
+impl<'a> Builder<'a> {
     /// create a new builder
     pub fn new() -> Self {
         Self {
@@ -48,10 +46,14 @@ impl<'a> Builder<'a>
         let engine = Engine::new(&config).map_err(|e| Error::Wasmtime(e.to_string()))?;
 
         // try to compile the script
-        let aot = engine.precompile_module(&self.bytes).map_err(|e| Error::Wasmtime(e.to_string()))?;
+        let aot = engine
+            .precompile_module(&self.bytes)
+            .map_err(|e| Error::Wasmtime(e.to_string()))?;
 
         // configure the module
-        let module = unsafe { Module::deserialize(&engine, aot).map_err(|e| Error::Wasmtime(e.to_string()))? };
+        let module = unsafe {
+            Module::deserialize(&engine, aot).map_err(|e| Error::Wasmtime(e.to_string()))?
+        };
 
         // get the context
         let context = match self.context {

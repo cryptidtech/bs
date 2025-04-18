@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: FSL-1.1
 use crate::Error;
-use provenance_log::{Key, script, Script};
-use std::{convert::TryFrom, path::{Path, PathBuf}};
+use provenance_log::{script, Key, Script};
+use std::{
+    convert::TryFrom,
+    path::{Path, PathBuf},
+};
 
 /// the provenance log Script loader/builder
 #[derive(Clone, Debug, Default)]
@@ -18,7 +21,7 @@ impl Loader {
     pub fn new<P: AsRef<Path>>(path: P) -> Self {
         Self {
             path: path.as_ref().to_path_buf(),
-            .. Default::default()
+            ..Default::default()
         }
     }
 

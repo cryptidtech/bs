@@ -36,6 +36,14 @@ pub use ssh_agent::SshAgent;
 
 /// cli subcommands
 pub mod subcmds;
+
+/// cli commands
+pub mod cmds;
+pub use cmds::Command;
+
+/// cli repl
+pub mod repl;
+
 pub use subcmds::prelude::*;
 
 /// ...and in the darkness bind them

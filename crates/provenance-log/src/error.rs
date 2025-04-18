@@ -6,7 +6,7 @@ pub enum Error {
     /// Entry error
     #[error(transparent)]
     Entry(#[from] EntryError),
-    /// Key error 
+    /// Key error
     #[error(transparent)]
     Key(#[from] KeyError),
     /// Kvp error
@@ -83,7 +83,7 @@ pub enum EntryError {
 #[derive(Clone, Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum KeyError {
-    /// Empty key string 
+    /// Empty key string
     #[error("the key string is empty")]
     EmptyKey,
     /// Missing root key separator

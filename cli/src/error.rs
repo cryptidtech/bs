@@ -67,6 +67,10 @@ pub enum Error {
     #[error("Deserialization error: {0}")]
     Deserialization(String),
 
+    /// Rustyline error
+    #[error(transparent)]
+    RustylineReadLineError(#[from] rustyline::error::ReadlineError),
+
     /// No valid application config path found
     #[error("No valid config path found")]
     NoHome,

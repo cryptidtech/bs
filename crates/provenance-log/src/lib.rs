@@ -44,7 +44,7 @@ pub use script::{EncodedScript, Script, ScriptId};
 #[cfg(feature = "serde")]
 pub mod serde;
 
-/// The parameter and return value stack type 
+/// The parameter and return value stack type
 pub mod stack;
 pub use stack::Stk;
 

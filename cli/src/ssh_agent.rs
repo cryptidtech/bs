@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: FSL-1.1
-use crate::{error::SshError, Error, Keychain, KeyEntry};
+use crate::{error::SshError, Error, KeyEntry, Keychain};
 use multicodec::Codec;
 use multihash::EncodedMultihash;
 use multikey::{mk, Multikey, Views};
@@ -56,7 +56,7 @@ impl Keychain for SshAgent {
         for pk in &pubkeys {
             if let Ok(mk) = mk::Builder::new_from_ssh_public_key(pk)?.try_build() {
                 let fv = mk.fingerprint_view()?;
-                keys.push(KeyEntry{
+                keys.push(KeyEntry {
                     fingerprint: Some(fv.fingerprint(Codec::Sha3256)?.into()),
                     pubkey: mk.clone(),
                     threshold: 1,
@@ -99,8 +99,7 @@ impl Keychain for SshAgent {
         // generate an ssh public key from the key data
         let data = key.data_view()?;
         let key_bytes = data.key_bytes()?;
-        let public_key =
-            PublicKey::from_bytes(key_bytes.as_slice()).map_err(SshError::SshKey)?;
+        let public_key = PublicKey::from_bytes(key_bytes.as_slice()).map_err(SshError::SshKey)?;
 
         // send a sign request to the ssh agent
         match self.client.borrow_mut().sign(&public_key, msg) {

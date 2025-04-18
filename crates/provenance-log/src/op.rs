@@ -117,12 +117,12 @@ pub enum Op {
 }
 
 impl Op {
-    /// get the key in the op 
+    /// get the key in the op
     pub fn path(&self) -> Key {
         match self {
             Self::Noop(p) => p.clone(),
             Self::Delete(p) => p.clone(),
-            Self::Update(p, _) => p.clone()
+            Self::Update(p, _) => p.clone(),
         }
     }
 }

@@ -150,7 +150,10 @@ impl BaseCodec for Base36Lower {
         } else {
             // The input is case insensitive, hence lowercase it
             let lowercased = input.as_ref().to_ascii_lowercase();
-            Ok(base_x::decode(encoding::BASE36_LOWER_PERMISSIVE, &lowercased)?)
+            Ok(base_x::decode(
+                encoding::BASE36_LOWER_PERMISSIVE,
+                &lowercased,
+            )?)
         }
     }
 }
@@ -170,7 +173,10 @@ impl BaseCodec for Base36Upper {
         } else {
             // The input is case insensitive, hence uppercase it
             let uppercased = input.as_ref().to_ascii_uppercase();
-            Ok(base_x::decode(encoding::BASE36_UPPER_PERMISSIVE, &uppercased)?)
+            Ok(base_x::decode(
+                encoding::BASE36_UPPER_PERMISSIVE,
+                &uppercased,
+            )?)
         }
     }
 }

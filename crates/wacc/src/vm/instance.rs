@@ -4,8 +4,7 @@ use wasmtime::{Linker, Module, Store};
 
 /// Represents an instance of a WACC containing the options, code, as well as
 /// the application state and Wac execution context.
-pub struct Instance<'a>
-{
+pub struct Instance<'a> {
     /// Virtual machine linker
     pub linker: Linker<Context<'a>>,
 
@@ -16,8 +15,7 @@ pub struct Instance<'a>
     pub store: Store<Context<'a>>,
 }
 
-impl Instance<'_>
-{
+impl Instance<'_> {
     /// Executes the instance to completion
     pub fn run(&mut self, fname: &str) -> Result<bool, Error> {
         let instance = self
