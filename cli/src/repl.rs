@@ -637,7 +637,7 @@ fn help() {
     println!(
         r#"Commands:
 config <subcommand> [parameters]
-plot <subcommand> [parameters]
+plog <subcommand> [parameters]
 help
 quit
 
