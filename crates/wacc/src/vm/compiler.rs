@@ -4,13 +4,11 @@ use wasmtime::{Config, Engine};
 
 /// Compiler type for compiling wasm scripts
 #[derive(Default)]
-pub struct Compiler
-{
+pub struct Compiler {
     bytes: Vec<u8>,
 }
 
-impl Compiler
-{
+impl Compiler {
     /// create a new builder
     pub fn new() -> Self {
         Self {
@@ -31,6 +29,8 @@ impl Compiler
         let engine = Engine::new(&config).map_err(|e| Error::Wasmtime(e.to_string()))?;
 
         // try to compile the script
-        engine.precompile_module(&self.bytes).map_err(|e| Error::Wasmtime(e.to_string()))
+        engine
+            .precompile_module(&self.bytes)
+            .map_err(|e| Error::Wasmtime(e.to_string()))
     }
 }

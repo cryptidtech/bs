@@ -9,7 +9,7 @@ pub trait Stack {
     /// remove the last top value from the stack
     fn pop(&mut self) -> Option<Value>;
 
-    /// get a reference to the top value on the stack 
+    /// get a reference to the top value on the stack
     fn top(&self) -> Option<Value>;
 
     /// peek at the item at the given index

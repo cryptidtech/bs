@@ -52,7 +52,7 @@ pub enum Command {
         /// Values are made up of two to five fields separated by colons, the last three fields are
         /// optional. The threshold and limit values are for when you want to create a threshold
         /// signature group and publish the public key. The revoke field is a boolean that
-        /// determines if revocation should be signalged by first deletinging the key path before
+        /// determines if revocation should be signaled by first deleting the key path before
         /// setting a new key.
         ///
         /// <key-path>:<key codec>[:<threshold>:<limit>:<revoke>]

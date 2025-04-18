@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: FSL-1.1
-use crate::{Error, error::UpdateError};
+use crate::{error::UpdateError, Error};
 use provenance_log::{Key, Op, OpId, Value};
 use std::convert::TryFrom;
 
@@ -21,7 +21,7 @@ impl Builder {
     pub fn new(id: OpId) -> Self {
         Self {
             id,
-            .. Default::default()
+            ..Default::default()
         }
     }
 
@@ -48,12 +48,8 @@ impl Builder {
         let key_path_string = self.key_path.ok_or(UpdateError::NoOpKeyPath)?;
         let key_path = Key::try_from(key_path_string)?;
         let op = match self.id {
-            OpId::Noop => {
-                Op::Noop(key_path)
-            }
-            OpId::Delete => {
-                Op::Delete(key_path)
-            }
+            OpId::Noop => Op::Noop(key_path),
+            OpId::Delete => Op::Delete(key_path),
             OpId::Update => {
                 let value = self.value.ok_or(UpdateError::NoUpdateOpValue)?;
                 Op::Update(key_path, value)

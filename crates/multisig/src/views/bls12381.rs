@@ -606,9 +606,7 @@ impl ThresholdView for View<'_> {
             // the value from the first share added
             match av.payload_encoding() {
                 Ok(encoding) => Some(encoding),
-                Err(_) => {
-                    encoding
-                }
+                Err(_) => encoding,
             }
         };
 

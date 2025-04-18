@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: FSL-1.1
-use crate::{Key, script::SIGIL, Script, ScriptId};
+use crate::{script::SIGIL, Key, Script, ScriptId};
 use core::fmt;
 use multicid::Cid;
 use multiutil::{EncodedVarbytes, Varbytes};

@@ -150,7 +150,7 @@ impl FingerprintView for View<'_> {
             // get the key bytes
             let bytes = {
                 let kd = self.mk.data_view()?;
-                
+
                 kd.key_bytes()?
             };
             // hash the key bytes using the given codec
@@ -165,7 +165,7 @@ impl ConvView for View<'_> {
         // get the secret key bytes
         let secret_bytes = {
             let kd = self.mk.data_view()?;
-            
+
             kd.secret_bytes()?
         };
 
@@ -193,7 +193,7 @@ impl ConvView for View<'_> {
 
         let key_bytes = {
             let kd = pk.data_view()?;
-            
+
             kd.key_bytes()?
         };
 
@@ -214,7 +214,7 @@ impl ConvView for View<'_> {
     fn to_ssh_private_key(&self) -> Result<ssh_key::PrivateKey, Error> {
         let secret_bytes = {
             let kd = self.mk.data_view()?;
-            
+
             kd.secret_bytes()?
         };
 
@@ -256,7 +256,7 @@ impl SignView for View<'_> {
         // get the secret key bytes
         let secret_bytes = {
             let kd = self.mk.data_view()?;
-            
+
             kd.secret_bytes()?
         };
 
@@ -267,7 +267,7 @@ impl SignView for View<'_> {
                 .map_err(|_| {
                     ConversionsError::SecretKeyFailure("failed to get secret key bytes".to_string())
                 })?;
-            
+
             SigningKey::from_bytes(&bytes)
         };
 
@@ -290,7 +290,7 @@ impl VerifyView for View<'_> {
         let attr = self.mk.attr_view()?;
         let pubmk = if attr.is_secret_key() {
             let kc = self.mk.conv_view()?;
-            
+
             kc.to_public_key()?
         } else {
             self.mk.clone()
@@ -299,7 +299,7 @@ impl VerifyView for View<'_> {
         // get the secret key bytes
         let key_bytes = {
             let kd = pubmk.data_view()?;
-            
+
             kd.key_bytes()?
         };
 

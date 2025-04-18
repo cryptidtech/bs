@@ -39,16 +39,28 @@ impl fmt::Display for KeyEntry {
             msg.push_str(&format!("╭──── pubkey  {}\n", kh));
             msg.push_str(&format!("├───── codec  {}\n", self.pubkey.codec()));
             msg.push_str(&format!("├─── comment  {}\n", self.pubkey.comment));
-            msg.push_str(&format!("├─ threshold  {} of {}\n", self.threshold, self.secret_keys.len()));
+            msg.push_str(&format!(
+                "├─ threshold  {} of {}\n",
+                self.threshold,
+                self.secret_keys.len()
+            ));
             msg.push_str("╰─┬── shares\n");
             for i in (0..self.secret_keys.len()).rev() {
                 let skh = {
                     let cv = self.secret_keys[i].conv_view().unwrap();
                     let pk = cv.to_public_key().unwrap();
                     let fv = pk.fingerprint_view().unwrap();
-                    EncodedMultihash::new(Base::Base32Lower, fv.fingerprint(Codec::Sha3256).unwrap())
+                    EncodedMultihash::new(
+                        Base::Base32Lower,
+                        fv.fingerprint(Codec::Sha3256).unwrap(),
+                    )
                 };
-                let key = format!("{} / {}  {}", (self.secret_keys.len() - i), self.secret_keys.len(), skh);
+                let key = format!(
+                    "{} / {}  {}",
+                    (self.secret_keys.len() - i),
+                    self.secret_keys.len(),
+                    skh
+                );
                 if i == 0 {
                     msg.push_str(&format!("  ╰─── {}\n", key));
                 } else {

@@ -75,8 +75,7 @@ impl<'de> Deserialize<'de> for Codec {
                 while let Some(b) = seq.next_element()? {
                     v.push(b);
                 }
-                Self::Value::try_from(v.as_slice())
-                    .map_err(|e| de::Error::custom(e.to_string()))
+                Self::Value::try_from(v.as_slice()).map_err(|e| de::Error::custom(e.to_string()))
             }
         }
 

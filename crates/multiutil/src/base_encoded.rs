@@ -88,7 +88,7 @@ where
                             base,
                             t,
                             enc: PhantomData,
-                        })
+                        });
                     }
                 }
                 Err(BaseEncodedError::ValueFailed.into())

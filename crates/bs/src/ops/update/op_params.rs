@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1
 
-use multicodec::Codec;
 use multicid::Cid;
+use multicodec::Codec;
 use multikey::Multikey;
 use provenance_log::Key;
 use std::path::PathBuf;
@@ -71,7 +71,7 @@ pub enum OpParams {
     UseStr {
         /// the key-path to store the string under
         key: Key,
-        /// the string data to store 
+        /// the string data to store
         s: String,
     },
 
@@ -86,6 +86,8 @@ pub enum OpParams {
 
 impl Default for OpParams {
     fn default() -> Self {
-        Self::Noop { key: Key::default() }
+        Self::Noop {
+            key: Key::default(),
+        }
     }
 }

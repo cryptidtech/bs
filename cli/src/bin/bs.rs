@@ -54,34 +54,7 @@ struct Opt {
 
     /// Subcommand
     #[structopt(subcommand)]
-    cmd: Command,
-}
-
-#[derive(Debug, StructOpt)]
-enum Command {
-    /// Config commands
-    #[structopt(name = "config")]
-    Config {
-        /// Config sub-command
-        #[structopt(subcommand)]
-        cmd: Option<subcmds::config::Command>,
-    },
-    /*
-    /// Key operations
-    #[structopt(name = "key")]
-    Key {
-        /// Key subcommand
-        #[structopt(subcommand)]
-        cmd: KeyCommand,
-    },
-    */
-    /// Provenance log operations
-    #[structopt(name = "plog")]
-    Plog {
-        /// Provenance log subcommand
-        #[structopt(subcommand)]
-        cmd: Box<subcmds::plog::Command>,
-    },
+    cmd: Option<Command>,
 }
 
 /*
@@ -114,10 +87,13 @@ async fn main() -> Result<(), Error> {
     let config = Config::from_path(opt.config, opt.keyfile, opt.sshagent, opt.sshagentenv)?;
 
     let ret = match opt.cmd {
-        // process a config command
-        Command::Config { cmd } => subcmds::config::go(cmd, &config).await,
-        // process a plog command
-        Command::Plog { cmd } => subcmds::plog::go(*cmd, &config).await,
+        Some(cmd) => match cmd {
+            // process a config command
+            Command::Config { cmd } => subcmds::config::go(cmd, &config).await,
+            // process a plog command
+            Command::Plog { cmd } => subcmds::plog::go(*cmd, &config).await,
+        },
+        None => repl::ReplHelper::run().await,
     };
 
     if let Err(ref e) = ret {
