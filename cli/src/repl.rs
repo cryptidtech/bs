@@ -1,12 +1,13 @@
 use crate::{
     subcmds::{config, plog},
-    Command, Error,
+    Command,
 };
 use colored::Colorize;
 use rustyline::{
     completion::{Completer, FilenameCompleter, Pair},
     highlight::{CmdKind, Highlighter, MatchingBracketHighlighter},
     hint::{Hint, Hinter},
+    history::DefaultHistory,
     validate::MatchingBracketValidator,
     Completer, Context, Helper, Validator,
 };
@@ -404,7 +405,7 @@ impl Default for ReplHelper {
 
 impl ReplHelper {
     /// Run the REPL
-    pub async fn run() -> Result<(), Error> {
+    pub fn read() -> ReplHelperIterator {
         let config = rustyline::Config::builder()
             .history_ignore_space(true)
             .completion_type(rustyline::CompletionType::List)
@@ -416,14 +417,29 @@ impl ReplHelper {
         rl.set_helper(Some(h));
         rl.helper_mut().expect("to get helper").colored_prompt = "bs>".green().to_string();
 
-        let mut input;
-        Self::help();
+        help();
+        ReplHelperIterator { rl }
+    }
+}
 
+/// An iterator for the REPL that yields commands
+/// as long as the user doesn't quit
+pub struct ReplHelperIterator {
+    rl: rustyline::Editor<ReplHelper, DefaultHistory>,
+}
+
+impl Iterator for ReplHelperIterator {
+    type Item = Command;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut input;
         loop {
-            let readline = rl.readline("bs> ");
+            let readline = self.rl.readline("bs> ");
             match readline {
                 Ok(line) => {
-                    rl.add_history_entry(line.as_str())?;
+                    self.rl
+                        .add_history_entry(line.as_str())
+                        .expect("to add history");
                     input = line;
                 }
                 Err(rustyline::error::ReadlineError::Interrupted) => {
@@ -443,7 +459,9 @@ impl ReplHelper {
             if input.is_empty() {
                 continue;
             }
-            rl.add_history_entry(input.as_str())?;
+            self.rl
+                .add_history_entry(input.as_str())
+                .expect("to add history");
             let mut parser = Parser::new(&input);
             parser.skip_ws();
             match parser.simple_value() {
@@ -451,14 +469,14 @@ impl ReplHelper {
                 Ok(word) => match word.as_str() {
                     "config" | "plog" => match Parser::parse_command(&input) {
                         Ok(command) => {
-                            println!("Parsed command: {:?}", command);
+                            return Some(command);
                         }
                         Err(err) => {
                             eprintln!("Error parsing command: {}", err);
                         }
                     },
                     "help" => {
-                        Self::help();
+                        help();
                     }
                     "quit" => {
                         break;
@@ -467,29 +485,7 @@ impl ReplHelper {
                 },
             }
         }
-        Ok(())
-    }
-
-    fn help() {
-        println!(
-            r#"Commands:
-config <subcommand> [parameters]
-plot <subcommand> [parameters]
-help
-quit
-
-Config Subcommands:
-open
-
-Plog Subcommands:
-close
-fork
-merge
-open [key-op=STRING_COMMA_SEPARATED_LIST] [string-op=STRING_COMMA_SEPARATED_LIST] [file-op=STRING_COMMA_SEPARATED_LIST] [vlad=STRING] [pub-key=STRING] [entry-key=STRING] [lock=PATH_TO_SCRIPT] [unlock=PATH_TO_SCRIPT] [output=PATH_TO_FILE]
-print [input=PATH_TO_FILE]
-update [key-op=STRING_COMMA_SEPARATED_LIST] [string-op=STRING_COMMA_SEPARATED_LIST] [file-op=STRING_COMMA_SEPARATED_LIST] [delete-op=STRING_COMMA_SEPARATED_LIST] [entry-signing-key=PATH_TO_FILE] [input=PATH_TO_FILE] [lock=PATH_TO_SCRIPT] [unlock=PATH_TO_SCRIPT] [output=PATH_TO_FILE]
-"#
-        )
+        None
     }
 }
 
@@ -635,4 +631,26 @@ impl CommandHint {
             complete_up_to: self.complete_up_to.saturating_sub(strip_chars),
         }
     }
+}
+
+fn help() {
+    println!(
+        r#"Commands:
+config <subcommand> [parameters]
+plog <subcommand> [parameters]
+help
+quit
+
+Config Subcommands:
+open
+
+Plog Subcommands:
+close
+fork
+merge
+open [key-op=STRING_COMMA_SEPARATED_LIST] [string-op=STRING_COMMA_SEPARATED_LIST] [file-op=STRING_COMMA_SEPARATED_LIST] [vlad=STRING] [pub-key=STRING] [entry-key=STRING] [lock=PATH_TO_SCRIPT] [unlock=PATH_TO_SCRIPT] [output=PATH_TO_FILE]
+print [input=PATH_TO_FILE]
+update [key-op=STRING_COMMA_SEPARATED_LIST] [string-op=STRING_COMMA_SEPARATED_LIST] [file-op=STRING_COMMA_SEPARATED_LIST] [delete-op=STRING_COMMA_SEPARATED_LIST] [entry-signing-key=PATH_TO_FILE] [input=PATH_TO_FILE] [lock=PATH_TO_SCRIPT] [unlock=PATH_TO_SCRIPT] [output=PATH_TO_FILE]
+"#
+    )
 }
