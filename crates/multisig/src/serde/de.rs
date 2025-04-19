@@ -116,7 +116,7 @@ impl<'de> Deserialize<'de> for Multisig {
                             attr.iter()
                                 .try_for_each(|(id, attr)| -> Result<(), V::Error> {
                                     let i = *id;
-                                    let v: Vec<u8> = (**attr).clone().to_inner();
+                                    let v: Vec<u8> = (*attr).clone().to_inner().to_vec();
                                     if a.insert(i, v).is_some() {
                                         return Err(Error::duplicate_field(
                                             "duplicate attribute id",

@@ -43,6 +43,13 @@ macro_rules! build_base_enum {
                     $( Self::$base => $base::decode(input, strict), )*
                 }
             }
+
+            /// Get the symbols for the given base.
+            pub fn symbols(&self, strict: bool) -> String {
+                match self {
+                    $( Self::$base => $base::symbols(strict), )*
+                }
+            }
         }
     }
 }

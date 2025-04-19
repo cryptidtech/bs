@@ -170,7 +170,8 @@ impl<'de> Deserialize<'de> for Multikey {
                             attr.iter()
                                 .try_for_each(|(id, attr)| -> Result<(), V::Error> {
                                     let i = *id;
-                                    let v: Zeroizing<Vec<u8>> = (***attr).clone().into();
+                                    let v: Zeroizing<Vec<u8>> =
+                                        (*attr).clone().to_inner().to_inner().into();
                                     if a.insert(i, v).is_some() {
                                         return Err(Error::duplicate_field(
                                             "duplicate attribute id",

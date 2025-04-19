@@ -24,6 +24,14 @@ macro_rules! derive_base_encoding {
                         Ok($permissive.decode(input.as_ref().as_bytes())?)
                     }
                 }
+
+                fn symbols(strict: bool) -> String {
+                    if strict {
+                        $encoding.specification().symbols
+                    } else {
+                        $permissive.specification().symbols
+                    }
+                }
             }
         )*
     };
@@ -48,6 +56,14 @@ macro_rules! derive_base_x {
                         Ok(base_x::decode($permissive, input.as_ref())?)
                     }
                 }
+
+                fn symbols(strict: bool) -> String {
+                    if strict {
+                        $encoding.to_string()
+                    } else {
+                        $permissive.to_string()
+                    }
+                }
             }
         )*
     };
@@ -59,6 +75,9 @@ pub(crate) trait BaseCodec {
 
     /// Decode with the given string.
     fn decode<I: AsRef<str>>(input: I, strict: bool) -> Result<Vec<u8>>;
+
+    /// Return the symbols of the encoding.
+    fn symbols(strict: bool) -> String;
 }
 
 /// Identity, 8-bit binary (encoder and decoder keeps data unmodified).
@@ -73,6 +92,11 @@ impl BaseCodec for Identity {
     fn decode<I: AsRef<str>>(input: I, _strict: bool) -> Result<Vec<u8>> {
         Ok(input.as_ref().as_bytes().to_vec())
     }
+
+    /// Return the symbols of the encoding.
+    fn symbols(_strict: bool) -> String {
+        String::default()
+    }
 }
 
 /// Base256Emoji (alphabet: 🚀🪐☄🛰🌌🌑🌒🌓🌔🌕🌖🌗🌘🌍🌏🌎🐉☀💻🖥💾💿😂❤😍🤣😊🙏💕😭😘👍😅👏😁🔥🥰💔💖💙😢🤔😆🙄💪😉☺👌🤗💜😔😎😇🌹🤦🎉💞✌✨🤷😱😌🌸🙌😋💗💚😏💛🙂💓🤩😄😀🖤😃💯🙈👇🎶😒🤭❣😜💋👀😪😑💥🙋😞😩😡🤪👊🥳😥🤤👉💃😳✋😚😝😴🌟😬🙃🍀🌷😻😓⭐✅🥺🌈😈🤘💦✔😣🏃💐☹🎊💘😠☝😕🌺🎂🌻😐🖕💝🙊😹🗣💫💀👑🎵🤞😛🔴😤🌼😫⚽🤙☕🏆🤫👈😮🙆🍻🍃🐶💁😲🌿🧡🎁⚡🌞🎈❌✊👋😰🤨😶🤝🚶💰🍓💢🤟🙁🚨💨🤬✈🎀🍺🤓😙💟🌱😖👶🥴▶➡❓💎💸⬇😨🌚🦋😷🕺⚠🙅😟😵👎🤲🤠🤧📌🔵💅🧐🐾🍒😗🤑🌊🤯🐷☎💧😯💆👆🎤🙇🍑❄🌴💣🐸💌📍🥀🤢👅💡💩👐📸👻🤐🤮🎼🥵🚩🍎🍊👼💍📣🥂)
@@ -86,6 +110,11 @@ impl BaseCodec for Base256Emoji {
 
     fn decode<I: AsRef<str>>(input: I, _strict: bool) -> Result<Vec<u8>> {
         Emoji::decode(input.as_ref()).map_err(|e| e.into())
+    }
+
+    fn symbols(_strict: bool) -> String {
+        let s: String = Emoji::ALPHABET.iter().collect();
+        s
     }
 }
 
@@ -156,6 +185,14 @@ impl BaseCodec for Base36Lower {
             )?)
         }
     }
+
+    fn symbols(strict: bool) -> String {
+        if strict {
+            encoding::BASE36_LOWER.to_string()
+        } else {
+            encoding::BASE36_LOWER_PERMISSIVE.to_string()
+        }
+    }
 }
 
 /// Base36, [0-9A-Z] no padding (alphabet: ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789).
@@ -177,6 +214,14 @@ impl BaseCodec for Base36Upper {
                 encoding::BASE36_UPPER_PERMISSIVE,
                 &uppercased,
             )?)
+        }
+    }
+
+    fn symbols(strict: bool) -> String {
+        if strict {
+            encoding::BASE36_UPPER.to_string()
+        } else {
+            encoding::BASE36_UPPER_PERMISSIVE.to_string()
         }
     }
 }
