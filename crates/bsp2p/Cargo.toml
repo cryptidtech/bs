@@ -1,0 +1,14 @@
+[package]
+name = "bsp2p"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "The BetterSign p2p networking layer"
+readme = "README.md"
+license = "Apache 2.0"
+
+[dependencies]
+libp2p = { version = "0.55.0", features = [ "autonat", "dcutr", "dns", "ed25519", "gossipsub", "identify", "kad", "macros", "memory-connection-limits", "noise", "ping", "quic", "relay", "request-response", "rsa", "tcp", "tls", "tokio", "yamux" ] }
+
+[lints]
+workspace = true
