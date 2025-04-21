@@ -6,6 +6,7 @@ use crate::{
     KdfAttrView, KdfView, SignView, ThresholdAttrView, ThresholdView, VerifyView, Views,
 };
 
+use crate::views::mlkem;
 use multibase::Base;
 use multicodec::Codec;
 use multitrait::{Null, TryDecodeFrom};
@@ -206,6 +207,12 @@ impl Views for Multikey {
                 Ok(Box::new(secp256k1::View::try_from(self)?))
             }
             Codec::Chacha20Poly1305 => Ok(Box::new(chacha20::View::try_from(self)?)),
+            Codec::Mlkem512Pub
+            | Codec::Mlkem512Priv
+            | Codec::Mlkem768Pub
+            | Codec::Mlkem768Priv
+            | Codec::Mlkem1024Pub
+            | Codec::Mlkem1024Priv => Ok(Box::new(mlkem::View::try_from(self)?)),
             _ => Err(AttributesError::UnsupportedCodec(self.codec).into()),
         }
     }
@@ -219,6 +226,12 @@ impl Views for Multikey {
         };
         match codec {
             Codec::Chacha20Poly1305 => Ok(Box::new(chacha20::View::try_from(self)?)),
+            Codec::Mlkem512Pub
+            | Codec::Mlkem512Priv
+            | Codec::Mlkem768Pub
+            | Codec::Mlkem768Priv
+            | Codec::Mlkem1024Pub
+            | Codec::Mlkem1024Priv => Ok(Box::new(mlkem::View::try_from(self)?)),
             _ => Err(CipherError::UnsupportedCodec(self.codec).into()),
         }
     }
@@ -239,6 +252,12 @@ impl Views for Multikey {
                 Ok(Box::new(secp256k1::View::try_from(self)?))
             }
             Codec::Chacha20Poly1305 => Ok(Box::new(chacha20::View::try_from(self)?)),
+            Codec::Mlkem512Pub
+            | Codec::Mlkem512Priv
+            | Codec::Mlkem768Pub
+            | Codec::Mlkem768Priv
+            | Codec::Mlkem1024Pub
+            | Codec::Mlkem1024Priv => Ok(Box::new(mlkem::View::try_from(self)?)),
             _ => Err(ConversionsError::UnsupportedCodec(self.codec).into()),
         }
     }
@@ -275,6 +294,12 @@ impl Views for Multikey {
     fn cipher_view<'a>(&'a self, cipher: &'a Multikey) -> Result<Box<dyn CipherView + 'a>, Error> {
         match cipher.codec {
             Codec::Chacha20Poly1305 => Ok(Box::new(chacha20::View::new(self, cipher))),
+            Codec::Mlkem512Pub
+            | Codec::Mlkem512Priv
+            | Codec::Mlkem768Pub
+            | Codec::Mlkem768Priv
+            | Codec::Mlkem1024Pub
+            | Codec::Mlkem1024Priv => Ok(Box::new(mlkem::View::new(self, cipher))),
             _ => Err(CipherError::UnsupportedCodec(self.codec).into()),
         }
     }
@@ -294,6 +319,12 @@ impl Views for Multikey {
             Codec::Secp256K1Pub | Codec::Secp256K1Priv => {
                 Ok(Box::new(secp256k1::View::try_from(self)?))
             }
+            Codec::Mlkem512Pub
+            | Codec::Mlkem512Priv
+            | Codec::Mlkem768Pub
+            | Codec::Mlkem768Priv
+            | Codec::Mlkem1024Pub
+            | Codec::Mlkem1024Priv => Ok(Box::new(mlkem::View::try_from(self)?)),
             _ => Err(ConversionsError::UnsupportedCodec(self.codec).into()),
         }
     }
@@ -314,6 +345,12 @@ impl Views for Multikey {
                 Ok(Box::new(secp256k1::View::try_from(self)?))
             }
             Codec::Chacha20Poly1305 => Ok(Box::new(chacha20::View::try_from(self)?)),
+            Codec::Mlkem512Pub
+            | Codec::Mlkem512Priv
+            | Codec::Mlkem768Pub
+            | Codec::Mlkem768Priv
+            | Codec::Mlkem1024Pub
+            | Codec::Mlkem1024Priv => Ok(Box::new(mlkem::View::try_from(self)?)),
             _ => Err(ConversionsError::UnsupportedCodec(self.codec).into()),
         }
     }

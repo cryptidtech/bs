@@ -14,23 +14,24 @@ wasm = ["getrandom/wasm_js"] # needed for CI testing on wasm32-unknown-unknown
 [dependencies]
 bcrypt-pbkdf = "0.10"
 blsful = "2.5"
-chacha20 = "0.9"
+chacha20poly1305 = "0.10.1"
 ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 elliptic-curve.workspace = true
 hex.workspace = true
 k256 = "0.13"
+ml-kem = { version = "0.2.1"}
 multibase.workspace = true
 multicodec.workspace = true
 multihash.workspace = true
 multisig.workspace = true
 multitrait.workspace = true
 multiutil.workspace = true
-poly1305 = "0.8"
 rand.workspace = true
 rand_core_6.workspace = true
 rng.workspace = true
 sec1 = "0.7"
 serde = { workspace = true, optional = true }
+sha3.workspace = true
 ssh-encoding = { version = "0.2" }
 test-log.workspace = true
 thiserror.workspace = true

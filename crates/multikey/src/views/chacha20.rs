@@ -4,8 +4,10 @@ use crate::{
     AttrId, AttrView, CipherAttrView, CipherView, DataView, Error, FingerprintView, KdfAttrView,
     Multikey, Views,
 };
-use chacha20::cipher::{KeyIvInit, StreamCipher};
-use chacha20::{ChaCha20, Nonce};
+use chacha20poly1305::{
+    aead::{Aead, KeyInit},
+    Key, XChaCha20Poly1305, XNonce,
+};
 use multicodec::Codec;
 use multihash::{mh, Multihash};
 use multitrait::TryDecodeFrom;
@@ -14,12 +16,12 @@ use zeroize::Zeroizing;
 
 use super::bcrypt::SALT_LENGTH;
 
-pub const KEY_SIZE: usize = poly1305::KEY_SIZE;
+pub const KEY_SIZE: usize = 32;
 
 /// Return the length of the [Nonce]
 #[allow(dead_code)]
 pub(crate) fn nonce_length() -> usize {
-    Nonce::default().len()
+    XNonce::default().len()
 }
 
 pub(crate) struct View<'a> {
@@ -101,7 +103,7 @@ impl CipherAttrView for View<'_> {
             .ok_or(CipherError::MissingNonce)?;
 
         let nonce =
-            Nonce::from_exact_iter(nonce.iter().copied()).ok_or(CipherError::InvalidNonce)?;
+            XNonce::from_exact_iter(nonce.iter().copied()).ok_or(CipherError::InvalidNonce)?;
 
         Ok(nonce.to_vec().into())
     }
@@ -163,7 +165,7 @@ impl CipherView for View<'_> {
         };
 
         // create the chacha nonce from the data
-        let n = Nonce::from_exact_iter(nonce.iter().copied()).ok_or(CipherError::InvalidNonce)?;
+        let n = XNonce::from_exact_iter(nonce.iter().copied()).ok_or(CipherError::InvalidNonce)?;
 
         // get the key data from the passed-in Multikey
         let key = {
@@ -176,8 +178,7 @@ impl CipherView for View<'_> {
         };
 
         // create the chacha key from the data
-        let k =
-            chacha20::Key::from_exact_iter(key.iter().copied()).ok_or(CipherError::InvalidKey)?;
+        let k = Key::from_exact_iter(key.iter().copied()).ok_or(CipherError::InvalidKey)?;
 
         // get the encrypted key bytes from the viewed Multikey (self)
         let msg = {
@@ -185,21 +186,19 @@ impl CipherView for View<'_> {
             attr.key_bytes()?
         };
 
-        // // decrypt the key bytes
-        // let dec = chacha20poly1305::open(msg.as_slice(), None, &n, &k)
-        //     .map_err(|_| CipherError::DecryptionFailed)?;
+        let chacha = XChaCha20Poly1305::new(&k);
 
-        let mut chacha = ChaCha20::new(&k, &n);
+        let enc = msg.clone();
 
-        let mut dec = msg.clone();
-
-        chacha.apply_keystream(&mut dec);
+        let dec = chacha
+            .decrypt(&n, &**enc)
+            .map_err(|_| CipherError::DecryptionFailed)?;
 
         // create a new Multikey from the viewed Multikey (self) with the
         // decrypted key and none of the kdf or cipher attributes
         let mut res = self.mk.clone();
         let _ = res.attributes.remove(&AttrId::KeyIsEncrypted);
-        res.attributes.insert(AttrId::KeyData, dec);
+        res.attributes.insert(AttrId::KeyData, Zeroizing::new(dec));
         let _ = res.attributes.remove(&AttrId::CipherCodec);
         let _ = res.attributes.remove(&AttrId::CipherKeyLen);
         let _ = res.attributes.remove(&AttrId::CipherNonce);
@@ -225,7 +224,7 @@ impl CipherView for View<'_> {
             cattr.nonce_bytes()?
         };
 
-        let n = Nonce::from_exact_iter(nonce.iter().copied()).ok_or(CipherError::InvalidNonce)?;
+        let n = XNonce::from_exact_iter(nonce.iter().copied()).ok_or(CipherError::InvalidNonce)?;
 
         // get the key data from the passed-in Multikey
         let key = {
@@ -237,8 +236,7 @@ impl CipherView for View<'_> {
             key
         };
 
-        let k =
-            chacha20::Key::from_exact_iter(key.iter().copied()).ok_or(CipherError::InvalidKey)?;
+        let k = Key::from_exact_iter(key.iter().copied()).ok_or(CipherError::InvalidKey)?;
 
         // get the secret bytes from the viewed Multikey
         let msg = {
@@ -246,12 +244,16 @@ impl CipherView for View<'_> {
             kd.secret_bytes()?
         };
 
-        let mut chacha = ChaCha20::new(&k, &n);
+        let chacha = XChaCha20Poly1305::new(&k);
 
-        let mut enc = msg.clone();
+        let dec = msg.clone();
 
         // apply keystream (encrypt)
-        chacha.apply_keystream(&mut enc);
+        let enc = Zeroizing::new(
+            chacha
+                .encrypt(&n, &**dec)
+                .map_err(|e| CipherError::EncryptionFailed(e.to_string()))?,
+        );
 
         // prepare the cipher attributes
         let cattr = cipher.cipher_attr_view()?;

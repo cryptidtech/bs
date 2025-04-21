@@ -10,8 +10,8 @@ pub(crate) mod bcrypt;
 pub(crate) mod bls12381;
 pub(crate) mod chacha20;
 pub(crate) mod ed25519;
+pub(crate) mod mlkem;
 pub(crate) mod secp256k1;
-
 // Attributes views let you inquire about the Multikey and retrieve data
 // associated with the particular view.
 
