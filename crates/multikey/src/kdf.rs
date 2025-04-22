@@ -104,9 +104,10 @@ mod tests {
             .try_build()
             .unwrap();
 
-        let nonce = hex::decode("714e5abf0f7beae8").unwrap();
+        let nonce = hex::decode("c6691d95f44e18f4cff311e3781eb2fc744de398585a94a3").unwrap();
         let ciphermk = cipher::Builder::new(Codec::Chacha20Poly1305)
             .with_nonce(&nonce)
+            .unwrap()
             .try_build()
             .unwrap();
 

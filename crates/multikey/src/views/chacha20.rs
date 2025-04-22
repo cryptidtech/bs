@@ -19,9 +19,13 @@ use super::bcrypt::SALT_LENGTH;
 pub const KEY_SIZE: usize = 32;
 
 /// Return the length of the [Nonce]
-#[allow(dead_code)]
-pub(crate) fn nonce_length() -> usize {
-    XNonce::default().len()
+pub(crate) fn nonce_length(_codec: Codec) -> Result<usize, Error> {
+    Ok(XNonce::default().len())
+}
+
+/// Return the length of the key
+pub(crate) fn key_length(_codec: Codec) -> Result<usize, Error> {
+    Ok(KEY_SIZE)
 }
 
 pub(crate) struct View<'a> {

@@ -2,8 +2,21 @@
 resolver = "2"
 default-members = ["crates/bs"]
 members = [
-  "crates/*",
   "cli",
+  "crates/bs",
+  #"crates/bsp2p",
+  #"crates/content-addressable",
+  "crates/multibase",
+  "crates/multicid",
+  "crates/multicodec",
+  "crates/multihash",
+  "crates/multikey",
+  "crates/multisig",
+  "crates/multitrait",
+  "crates/multiutil",
+  "crates/provenance-log",
+  "crates/rng",
+  "crates/wacc",
 ]
 
 [workspace.package]

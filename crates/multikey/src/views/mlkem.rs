@@ -39,6 +39,23 @@ pub const ML1024_PUBLIC_KEY_SIZE: usize = 1568;
 pub const ML1024_SECRET_KEY_SIZE: usize = 3168;
 pub const ML1024_CIPHERTEXT_SIZE: usize = 1568;
 
+/// Return the length of the [Nonce]
+#[allow(dead_code)]
+pub(crate) fn nonce_length(_codec: Codec) -> Result<usize, Error> {
+    Ok(32)
+}
+
+/// Return the length of the keys
+#[allow(dead_code)]
+pub(crate) fn key_length(codec: Codec) -> Result<usize, Error> {
+    match codec {
+        Codec::Mlkem512Priv => Ok(1632),
+        Codec::Mlkem768Priv => Ok(2400),
+        Codec::Mlkem1024Priv => Ok(3168),
+        _ => Err(CipherError::UnsupportedCodec(codec).into()),
+    }
+}
+
 pub(crate) struct View<'a> {
     mk: &'a Multikey,
     cipher: Option<&'a Multikey>,
