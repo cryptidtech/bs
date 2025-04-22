@@ -1,11 +1,11 @@
 // SPDX-License-Idnetifier: Apache-2.0
 use crate::{
     error::{AttributesError, CipherError, ConversionsError, KdfError},
-    views::{bcrypt, bls12381, chacha20, ed25519, secp256k1},
+    views::{bcrypt, bls12381, chacha20, ed25519, mlkem, secp256k1},
     AttrId, AttrView, CipherAttrView, CipherView, ConvView, DataView, Error, FingerprintView,
     KdfAttrView, KdfView, SignView, ThresholdAttrView, ThresholdView, VerifyView, Views,
 };
-
+use ml_kem::{EncodedSizeUser, KemCore};
 use multibase::Base;
 use multicodec::Codec;
 use multitrait::{Null, TryDecodeFrom};
@@ -19,7 +19,9 @@ use std::{collections::BTreeMap, fmt};
 use zeroize::Zeroizing;
 
 /// the list of key codecs supported for key generation
-pub const KEY_CODECS: [Codec; 4] = [
+pub const KEY_CODECS: [Codec; 7] = [
+    Codec::Bls12381G1Priv,
+    Codec::Bls12381G2Priv,
     Codec::Ed25519Priv,
     /*
     Codec::LamportSha3256Priv,
@@ -29,9 +31,10 @@ pub const KEY_CODECS: [Codec; 4] = [
     Codec::P384Priv,
     Codec::P521Priv,
     */
+    Codec::Mlkem512Priv,
+    Codec::Mlkem768Priv,
+    Codec::Mlkem1024Priv,
     Codec::Secp256K1Priv,
-    Codec::Bls12381G1Priv,
-    Codec::Bls12381G2Priv,
 ];
 
 /// the list of key share codecs supported
@@ -206,6 +209,12 @@ impl Views for Multikey {
                 Ok(Box::new(secp256k1::View::try_from(self)?))
             }
             Codec::Chacha20Poly1305 => Ok(Box::new(chacha20::View::try_from(self)?)),
+            Codec::Mlkem512Pub
+            | Codec::Mlkem512Priv
+            | Codec::Mlkem768Pub
+            | Codec::Mlkem768Priv
+            | Codec::Mlkem1024Pub
+            | Codec::Mlkem1024Priv => Ok(Box::new(mlkem::View::try_from(self)?)),
             _ => Err(AttributesError::UnsupportedCodec(self.codec).into()),
         }
     }
@@ -219,6 +228,12 @@ impl Views for Multikey {
         };
         match codec {
             Codec::Chacha20Poly1305 => Ok(Box::new(chacha20::View::try_from(self)?)),
+            Codec::Mlkem512Pub
+            | Codec::Mlkem512Priv
+            | Codec::Mlkem768Pub
+            | Codec::Mlkem768Priv
+            | Codec::Mlkem1024Pub
+            | Codec::Mlkem1024Priv => Ok(Box::new(mlkem::View::try_from(self)?)),
             _ => Err(CipherError::UnsupportedCodec(self.codec).into()),
         }
     }
@@ -239,6 +254,12 @@ impl Views for Multikey {
                 Ok(Box::new(secp256k1::View::try_from(self)?))
             }
             Codec::Chacha20Poly1305 => Ok(Box::new(chacha20::View::try_from(self)?)),
+            Codec::Mlkem512Pub
+            | Codec::Mlkem512Priv
+            | Codec::Mlkem768Pub
+            | Codec::Mlkem768Priv
+            | Codec::Mlkem1024Pub
+            | Codec::Mlkem1024Priv => Ok(Box::new(mlkem::View::try_from(self)?)),
             _ => Err(ConversionsError::UnsupportedCodec(self.codec).into()),
         }
     }
@@ -275,6 +296,12 @@ impl Views for Multikey {
     fn cipher_view<'a>(&'a self, cipher: &'a Multikey) -> Result<Box<dyn CipherView + 'a>, Error> {
         match cipher.codec {
             Codec::Chacha20Poly1305 => Ok(Box::new(chacha20::View::new(self, cipher))),
+            Codec::Mlkem512Pub
+            | Codec::Mlkem512Priv
+            | Codec::Mlkem768Pub
+            | Codec::Mlkem768Priv
+            | Codec::Mlkem1024Pub
+            | Codec::Mlkem1024Priv => Ok(Box::new(mlkem::View::new(self, cipher))),
             _ => Err(CipherError::UnsupportedCodec(self.codec).into()),
         }
     }
@@ -294,6 +321,12 @@ impl Views for Multikey {
             Codec::Secp256K1Pub | Codec::Secp256K1Priv => {
                 Ok(Box::new(secp256k1::View::try_from(self)?))
             }
+            Codec::Mlkem512Pub
+            | Codec::Mlkem512Priv
+            | Codec::Mlkem768Pub
+            | Codec::Mlkem768Priv
+            | Codec::Mlkem1024Pub
+            | Codec::Mlkem1024Priv => Ok(Box::new(mlkem::View::try_from(self)?)),
             _ => Err(ConversionsError::UnsupportedCodec(self.codec).into()),
         }
     }
@@ -314,6 +347,12 @@ impl Views for Multikey {
                 Ok(Box::new(secp256k1::View::try_from(self)?))
             }
             Codec::Chacha20Poly1305 => Ok(Box::new(chacha20::View::try_from(self)?)),
+            Codec::Mlkem512Pub
+            | Codec::Mlkem512Priv
+            | Codec::Mlkem768Pub
+            | Codec::Mlkem768Priv
+            | Codec::Mlkem1024Pub
+            | Codec::Mlkem1024Priv => Ok(Box::new(mlkem::View::try_from(self)?)),
             _ => Err(ConversionsError::UnsupportedCodec(self.codec).into()),
         }
     }
@@ -423,6 +462,18 @@ impl Builder {
                 .to_be_bytes()
                 .as_slice()
                 .to_vec(),
+            Codec::Mlkem512Priv => {
+                let (decapsulation_key, _) = ml_kem::MlKem512::generate(rng);
+                decapsulation_key.as_bytes().to_vec()
+            }
+            Codec::Mlkem768Priv => {
+                let (decapsulation_key, _) = ml_kem::MlKem768::generate(rng);
+                decapsulation_key.as_bytes().to_vec()
+            }
+            Codec::Mlkem1024Priv => {
+                let (decapsulation_key, _) = ml_kem::MlKem1024::generate(rng);
+                decapsulation_key.as_bytes().to_vec()
+            }
             _ => return Err(ConversionsError::UnsupportedCodec(codec).into()),
         };
         let mut attributes = Attributes::new();
@@ -481,7 +532,53 @@ impl Builder {
                     ..Default::default()
                 })
             }
+            Ed25519 => {
+                let key_bytes = match sshkey.key_data() {
+                    KeyData::Ed25519(e) => e.0.to_vec(),
+                    _ => {
+                        return Err(ConversionsError::UnsupportedAlgorithm(
+                            sshkey.algorithm().to_string(),
+                        )
+                        .into())
+                    }
+                };
+                let mut attributes = Attributes::new();
+                attributes.insert(AttrId::KeyData, key_bytes.into());
+                Ok(Builder {
+                    codec: Codec::Ed25519Pub,
+                    comment: Some(sshkey.comment().to_string()),
+                    attributes: Some(attributes),
+                    ..Default::default()
+                })
+            }
             Other(name) => match name.as_str() {
+                mlkem::ALGORITHM_NAME_512
+                | mlkem::ALGORITHM_NAME_768
+                | mlkem::ALGORITHM_NAME_1024 => {
+                    let key_bytes = match sshkey.key_data() {
+                        KeyData::Other(pk) => pk.key.as_ref().to_vec(),
+                        _ => {
+                            return Err(ConversionsError::UnsupportedAlgorithm(
+                                sshkey.algorithm().to_string(),
+                            )
+                            .into())
+                        }
+                    };
+                    let mut attributes = Attributes::new();
+                    attributes.insert(AttrId::KeyData, key_bytes.into());
+                    let codec = match name.as_str() {
+                        mlkem::ALGORITHM_NAME_512 => Codec::Mlkem512Pub,
+                        mlkem::ALGORITHM_NAME_768 => Codec::Mlkem768Pub,
+                        mlkem::ALGORITHM_NAME_1024 => Codec::Mlkem1024Pub,
+                        _ => unreachable!(),
+                    };
+                    Ok(Builder {
+                        codec,
+                        comment: Some(sshkey.comment().to_string()),
+                        attributes: Some(attributes),
+                        ..Default::default()
+                    })
+                }
                 secp256k1::ALGORITHM_NAME => {
                     let key_bytes = match sshkey.key_data() {
                         KeyData::Other(pk) => pk.key.as_ref().to_vec(),
@@ -593,25 +690,6 @@ impl Builder {
                 }
                 s => Err(ConversionsError::UnsupportedAlgorithm(s.to_string()).into()),
             },
-            Ed25519 => {
-                let key_bytes = match sshkey.key_data() {
-                    KeyData::Ed25519(e) => e.0.to_vec(),
-                    _ => {
-                        return Err(ConversionsError::UnsupportedAlgorithm(
-                            sshkey.algorithm().to_string(),
-                        )
-                        .into())
-                    }
-                };
-                let mut attributes = Attributes::new();
-                attributes.insert(AttrId::KeyData, key_bytes.into());
-                Ok(Builder {
-                    codec: Codec::Ed25519Pub,
-                    comment: Some(sshkey.comment().to_string()),
-                    attributes: Some(attributes),
-                    ..Default::default()
-                })
-            }
             _ => Err(ConversionsError::UnsupportedAlgorithm(sshkey.algorithm().to_string()).into()),
         }
     }
@@ -669,7 +747,53 @@ impl Builder {
                     ..Default::default()
                 })
             }
+            Ed25519 => {
+                let key_bytes = match sshkey.key_data() {
+                    KeypairData::Ed25519(e) => e.private.to_bytes().to_vec(),
+                    _ => {
+                        return Err(ConversionsError::UnsupportedAlgorithm(
+                            sshkey.algorithm().to_string(),
+                        )
+                        .into())
+                    }
+                };
+                let mut attributes = Attributes::new();
+                attributes.insert(AttrId::KeyData, key_bytes.into());
+                Ok(Builder {
+                    codec: Codec::Ed25519Priv,
+                    comment: Some(sshkey.comment().to_string()),
+                    attributes: Some(attributes),
+                    ..Default::default()
+                })
+            }
             Other(name) => match name.as_str() {
+                mlkem::ALGORITHM_NAME_512
+                | mlkem::ALGORITHM_NAME_768
+                | mlkem::ALGORITHM_NAME_1024 => {
+                    let key_bytes = match sshkey.key_data() {
+                        KeypairData::Other(kp) => kp.private.as_ref().to_vec(),
+                        _ => {
+                            return Err(ConversionsError::UnsupportedAlgorithm(
+                                sshkey.algorithm().to_string(),
+                            )
+                            .into())
+                        }
+                    };
+                    let mut attributes = Attributes::new();
+                    attributes.insert(AttrId::KeyData, key_bytes.into());
+                    let codec = match name.as_str() {
+                        mlkem::ALGORITHM_NAME_512 => Codec::Mlkem512Priv,
+                        mlkem::ALGORITHM_NAME_768 => Codec::Mlkem768Priv,
+                        mlkem::ALGORITHM_NAME_1024 => Codec::Mlkem1024Priv,
+                        _ => unreachable!(),
+                    };
+                    Ok(Builder {
+                        codec,
+                        comment: Some(sshkey.comment().to_string()),
+                        attributes: Some(attributes),
+                        ..Default::default()
+                    })
+                }
                 secp256k1::ALGORITHM_NAME => {
                     let key_bytes = match sshkey.key_data() {
                         KeypairData::Other(kp) => kp.private.as_ref().to_vec(),
@@ -781,25 +905,6 @@ impl Builder {
                 }
                 s => Err(ConversionsError::UnsupportedAlgorithm(s.to_string()).into()),
             },
-            Ed25519 => {
-                let key_bytes = match sshkey.key_data() {
-                    KeypairData::Ed25519(e) => e.private.to_bytes().to_vec(),
-                    _ => {
-                        return Err(ConversionsError::UnsupportedAlgorithm(
-                            sshkey.algorithm().to_string(),
-                        )
-                        .into())
-                    }
-                };
-                let mut attributes = Attributes::new();
-                attributes.insert(AttrId::KeyData, key_bytes.into());
-                Ok(Builder {
-                    codec: Codec::Ed25519Priv,
-                    comment: Some(sshkey.comment().to_string()),
-                    attributes: Some(attributes),
-                    ..Default::default()
-                })
-            }
             _ => Err(ConversionsError::UnsupportedAlgorithm(sshkey.algorithm().to_string()).into()),
         }
     }
@@ -819,6 +924,47 @@ impl Builder {
                 let private_key = PrivateKey::try_from(KeypairData::Ed25519(keypair))
                     .map_err(|e| ConversionsError::Ssh(e.into()))?;
                 Self::new_from_ssh_private_key(&private_key)
+            }
+            Codec::Mlkem512Priv | Codec::Mlkem768Priv | Codec::Mlkem1024Priv => {
+                if seed.len() != 64 {
+                    return Err(ConversionsError::UnsupportedAlgorithm(
+                        "Mlkem seeds must be 64 bytes long".to_string(),
+                    )
+                    .into());
+                }
+                let (d, z) = seed.split_at(32);
+                let d = ml_kem::B32::try_from(d).map_err(|_| {
+                    ConversionsError::UnsupportedAlgorithm(
+                        "Mlkem seed must be 64 bytes long".to_string(),
+                    )
+                })?;
+                let z = ml_kem::B32::try_from(z).map_err(|_| {
+                    ConversionsError::UnsupportedAlgorithm(
+                        "Mlkem seed must be 64 bytes long".to_string(),
+                    )
+                })?;
+                let decapsulation_key = match codec {
+                    Codec::Mlkem512Priv => {
+                        let (dk, _) = ml_kem::MlKem512::generate_deterministic(&d, &z);
+                        dk.as_bytes().to_vec()
+                    }
+                    Codec::Mlkem768Priv => {
+                        let (dk, _) = ml_kem::MlKem768::generate_deterministic(&d, &z);
+                        dk.as_bytes().to_vec()
+                    }
+                    Codec::Mlkem1024Priv => {
+                        let (dk, _) = ml_kem::MlKem1024::generate_deterministic(&d, &z);
+                        dk.as_bytes().to_vec()
+                    }
+                    _ => unreachable!(),
+                };
+                let mut attributes = Attributes::new();
+                attributes.insert(AttrId::KeyData, decapsulation_key.into());
+                Ok(Builder {
+                    codec,
+                    attributes: Some(attributes),
+                    ..Default::default()
+                })
             }
             _ => Err(ConversionsError::UnsupportedCodec(codec).into()),
         }
@@ -921,7 +1067,7 @@ mod tests {
 
     #[test]
     fn test_random() {
-        let _ = span!(Level::INFO, "test_random").entered();
+        let _s = span!(Level::INFO, "test_random").entered();
         for codec in KEY_CODECS {
             let mut rng = StdRng::from_os_rng();
             let mk = Builder::new_from_random_bytes(codec, &mut rng)
@@ -934,14 +1080,17 @@ mod tests {
                 let pk = conv.to_public_key().unwrap();
                 (Into::<Vec<u8>>::into(pk.clone()), EncodedMultikey::from(pk))
             };
-            println!("encoded pubkey: {}: {}", codec, epk);
-            println!("encoded pubkey v: {}: {}", codec, hex::encode(vpk));
-            println!(
+            let sk = mk.data_view().unwrap().secret_bytes().unwrap();
+            info!("{codec} key length: {}", sk.len());
+
+            info!("encoded pubkey: {}: {}", codec, epk);
+            info!("encoded pubkey v: {}: {}", codec, hex::encode(vpk));
+            info!(
                 "encoded privkey: {}: {}",
                 codec,
                 EncodedMultikey::from(mk.clone())
             );
-            println!(
+            info!(
                 "encoded privkey v: {}: {}",
                 codec,
                 hex::encode(Into::<Vec<u8>>::into(mk.clone()))
@@ -952,7 +1101,7 @@ mod tests {
 
     #[test]
     fn test_encoded_random() {
-        let _ = span!(Level::INFO, "test_encoded_random").entered();
+        let _s = span!(Level::INFO, "test_encoded_random").entered();
         for codec in KEY_CODECS {
             let mut rng = StdRng::from_os_rng();
             let mk = Builder::new_from_random_bytes(codec, &mut rng)
@@ -969,7 +1118,7 @@ mod tests {
 
     #[test]
     fn test_random_public_ssh_key_roundtrip() {
-        let _ = span!(Level::INFO, "test_random_public_ssh_key_roundtrip").entered();
+        let _s = span!(Level::INFO, "test_random_public_ssh_key_roundtrip").entered();
         for codec in KEY_CODECS {
             let mut rng = StdRng::from_os_rng();
             let mk = Builder::new_from_random_bytes(codec, &mut rng)
@@ -990,7 +1139,7 @@ mod tests {
 
     #[test]
     fn test_random_private_ssh_key_roundtrip() {
-        let _ = span!(Level::INFO, "test_random_private_ssh_key_roundtrip").entered();
+        let _s = span!(Level::INFO, "test_random_private_ssh_key_roundtrip").entered();
         for codec in KEY_CODECS {
             let mut rng = StdRng::from_os_rng();
             let mk = Builder::new_from_random_bytes(codec, &mut rng)
@@ -1010,7 +1159,7 @@ mod tests {
 
     #[test]
     fn test_ssh_key_roundtrip() {
-        let _ = span!(Level::INFO, "test_ssh_key_roundtrip").entered();
+        let _s = span!(Level::INFO, "test_ssh_key_roundtrip").entered();
         for codec in KEY_CODECS {
             let mut rng = StdRng::from_os_rng();
             let sk1 = Builder::new_from_random_bytes(codec, &mut rng)
@@ -1041,7 +1190,7 @@ mod tests {
 
     #[test]
     fn test_encryption_roundtrip() {
-        let _ = span!(Level::INFO, "test_encryption_roundtrip").entered();
+        let _s = span!(Level::INFO, "test_encryption_roundtrip").entered();
         for codec in KEY_CODECS {
             let mut rng = StdRng::from_os_rng();
             let mk1 = Builder::new_from_random_bytes(codec, &mut rng)
@@ -1065,7 +1214,8 @@ mod tests {
                     .try_build()
                     .unwrap();
                 let ciphermk = cipher::Builder::new(Codec::Chacha20Poly1305)
-                    .with_random_nonce(chacha20::nonce_length(), &mut rng)
+                    .with_random_nonce(&mut rng)
+                    .unwrap()
                     .try_build()
                     .unwrap();
                 // get the kdf view on the cipher multikey so we can generate a
@@ -1131,8 +1281,17 @@ mod tests {
 
     #[test]
     fn test_signing_detached_roundtrip() {
-        let _ = span!(Level::INFO, "test_signing_detached_roundtrip").entered();
+        let _s = span!(Level::INFO, "test_signing_detached_roundtrip").entered();
         for codec in KEY_CODECS {
+            if [
+                Codec::Mlkem512Priv,
+                Codec::Mlkem768Priv,
+                Codec::Mlkem1024Priv,
+            ]
+            .contains(&codec)
+            {
+                continue;
+            }
             let mut rng = StdRng::from_os_rng();
             let mk = Builder::new_from_random_bytes(codec, &mut rng)
                 .unwrap()
@@ -1169,8 +1328,17 @@ mod tests {
 
     #[test]
     fn test_signing_merged_roundtrip() {
-        let _ = span!(Level::INFO, "test_signing_merged_roundtrip").entered();
+        let _s = span!(Level::INFO, "test_signing_merged_roundtrip").entered();
         for codec in KEY_CODECS {
+            if [
+                Codec::Mlkem512Priv,
+                Codec::Mlkem768Priv,
+                Codec::Mlkem1024Priv,
+            ]
+            .contains(&codec)
+            {
+                continue;
+            }
             let mut rng = StdRng::from_os_rng();
             let mk = Builder::new_from_random_bytes(codec, &mut rng)
                 .unwrap()
@@ -1207,7 +1375,7 @@ mod tests {
 
     #[test]
     fn test_bls_key_combine() {
-        let _ = span!(Level::INFO, "test_bls_key_combine").entered();
+        let _s = span!(Level::INFO, "test_bls_key_combine").entered();
         let mut rng = StdRng::from_os_rng();
         let mk1 = Builder::new_from_random_bytes(Codec::Bls12381G1Priv, &mut rng)
             .unwrap()
@@ -1252,7 +1420,7 @@ mod tests {
 
     #[test]
     fn test_bls_share_ssh_key_roundtrip() {
-        let _ = span!(Level::INFO, "test_bls_share_ssh_key_roundtrip").entered();
+        let _s = span!(Level::INFO, "test_bls_share_ssh_key_roundtrip").entered();
         let mut rng = StdRng::from_os_rng();
         let mk = Builder::new_from_random_bytes(Codec::Bls12381G1Priv, &mut rng)
             .unwrap()
@@ -1285,7 +1453,7 @@ mod tests {
 
     #[test]
     fn test_from_ssh_pubkey() {
-        let _ = span!(Level::INFO, "test_from_ssh_pubkey").entered();
+        let _s = span!(Level::INFO, "test_from_ssh_pubkey").entered();
         let mut rng = StdRng::from_os_rng();
         let kp = KeypairData::Ed25519(Ed25519Keypair::random(&mut rng));
         let sk = PrivateKey::new(kp, "test key").unwrap();
@@ -1309,7 +1477,7 @@ mod tests {
 
     #[test]
     fn test_from_ssh_privkey() {
-        let _ = span!(Level::INFO, "test_from_ssh_privkey").entered();
+        let _s = span!(Level::INFO, "test_from_ssh_privkey").entered();
         let mut rng = StdRng::from_os_rng();
         let kp = KeypairData::Ed25519(Ed25519Keypair::random(&mut rng));
         let sk = PrivateKey::new(kp, "test key").unwrap();
@@ -1332,7 +1500,7 @@ mod tests {
 
     #[test]
     fn test_pub_from_string() {
-        let _ = span!(Level::INFO, "test_pub_from_string").entered();
+        let _s = span!(Level::INFO, "test_pub_from_string").entered();
         let s = "fba24ed010874657374206b6579010120f9ddcd5118319cc69e6985ef3f4ee3b6c591d46255e1ae5569c8662111b7d3c2".to_string();
         let mk = EncodedMultikey::try_from(s.as_str()).unwrap();
         let attr = mk.attr_view().unwrap();
@@ -1349,7 +1517,7 @@ mod tests {
 
     #[test]
     fn test_priv_from_string() {
-        let _ = span!(Level::INFO, "test_priv_from_string").entered();
+        let _s = span!(Level::INFO, "test_priv_from_string").entered();
         let s = "fba2480260874657374206b657901012064e58adf88f85cbec6a0448a0803f9d28cf9231a7141be413f83cf6aa883cd04".to_string();
         let mk = EncodedMultikey::try_from(s.as_str()).unwrap();
         let attr = mk.attr_view().unwrap();
@@ -1366,7 +1534,7 @@ mod tests {
 
     #[test]
     fn test_pub_from_vec() {
-        let _ = span!(Level::INFO, "test_pub_from_vec").entered();
+        let _s = span!(Level::INFO, "test_pub_from_vec").entered();
         let b = hex::decode("ba24ed010874657374206b6579010120f9ddcd5118319cc69e6985ef3f4ee3b6c591d46255e1ae5569c8662111b7d3c2").unwrap();
         let mk = Multikey::try_from(b.as_slice()).unwrap();
         let attr = mk.attr_view().unwrap();
@@ -1382,7 +1550,7 @@ mod tests {
 
     #[test]
     fn test_priv_from_vec() {
-        let _ = span!(Level::INFO, "test_priv_from_vec").entered();
+        let _s = span!(Level::INFO, "test_priv_from_vec").entered();
         let b = hex::decode("ba2480260874657374206b657901012064e58adf88f85cbec6a0448a0803f9d28cf9231a7141be413f83cf6aa883cd04").unwrap();
         let mk = Multikey::try_from(b.as_slice()).unwrap();
         let attr = mk.attr_view().unwrap();
@@ -1398,7 +1566,7 @@ mod tests {
 
     #[test]
     fn test_null() {
-        let _ = span!(Level::INFO, "test_null").entered();
+        let _s = span!(Level::INFO, "test_null").entered();
         let mk1 = Multikey::null();
         assert!(mk1.is_null());
         let mk2 = Multikey::default();
@@ -1408,7 +1576,7 @@ mod tests {
 
     #[test]
     fn test_from_seed() {
-        let _ = span!(Level::INFO, "test_from_seed").entered();
+        let _s = span!(Level::INFO, "test_from_seed").entered();
         let seed = hex::decode("f9ddcd5118319cc69e6985ef3f4ee3b6c591d46255e1ae5569c8662111b7d3c2")
             .unwrap();
         let mk = Builder::new_from_seed(Codec::Ed25519Priv, seed.as_slice())

@@ -24,7 +24,7 @@ mod tests {
 
     #[test]
     fn test_serde_macros() {
-        let _ = span!(Level::INFO, "test_serde_macros").entered();
+        let _s = span!(Level::INFO, "test_serde_macros").entered();
         let bytes = hex::decode("7e48467029ffb9f6282b56e9ce131cead6e4bd061a3500697c57ac7034cf86f2")
             .unwrap();
         let sk = Builder::new(Codec::Ed25519Priv)
@@ -59,7 +59,7 @@ mod tests {
 
     #[test]
     fn test_serde_compact() {
-        let _ = span!(Level::INFO, "test_serde_compact").entered();
+        let _s = span!(Level::INFO, "test_serde_compact").entered();
         let bytes = hex::decode("7e48467029ffb9f6282b56e9ce131cead6e4bd061a3500697c57ac7034cf86f2")
             .unwrap();
         let sk = Builder::new(Codec::Ed25519Priv)
@@ -98,7 +98,7 @@ mod tests {
 
     #[test]
     fn test_serde_encoded_string() {
-        let _ = span!(Level::INFO, "test_serde_encoded_string").entered();
+        let _s = span!(Level::INFO, "test_serde_encoded_string").entered();
         let bytes = hex::decode("7e48467029ffb9f6282b56e9ce131cead6e4bd061a3500697c57ac7034cf86f2")
             .unwrap();
         let pk = Builder::new(Codec::Ed25519Priv)
@@ -118,7 +118,7 @@ mod tests {
 
     #[test]
     fn test_serde_readable() {
-        let _ = span!(Level::INFO, "test_serde_readable").entered();
+        let _s = span!(Level::INFO, "test_serde_readable").entered();
         let bytes = hex::decode("7e48467029ffb9f6282b56e9ce131cead6e4bd061a3500697c57ac7034cf86f2")
             .unwrap();
         let sk = Builder::new(Codec::Ed25519Priv)
@@ -158,7 +158,7 @@ mod tests {
 
     #[test]
     fn test_serde_encrypted_secret_key_compact() {
-        let _ = span!(Level::INFO, "test_serde_encrypted_secret_key_compact").entered();
+        let _s = span!(Level::INFO, "test_serde_encrypted_secret_key_compact").entered();
         let bytes = hex::decode("7e48467029ffb9f6282b56e9ce131cead6e4bd061a3500697c57ac7034cf86f2")
             .unwrap();
         let mk1 = Builder::new(Codec::Ed25519Priv)
@@ -185,9 +185,10 @@ mod tests {
                 .try_build()
                 .unwrap();
 
-            let nonce = hex::decode("714e5abf0f7beae8aabbccdd").unwrap();
+            let nonce = hex::decode("c6691d95f44e18f4cff311e3781eb2fc744de398585a94a3").unwrap();
             let ciphermk = cipher::Builder::new(Codec::Chacha20Poly1305)
                 .with_nonce(&nonce)
+                .unwrap()
                 .try_build()
                 .unwrap();
 
@@ -223,20 +224,18 @@ mod tests {
                 // key is encrypted
                 0x00, 0x01, 0x01, // 3 bytes
                 // key data of 32 bytes
-                0x01, 0x20, // 0x20 = 32 byte key
-                0xef, 0x7c, 0xf7, 0x8f, 0x3e, 0x0e, 0x58, 0x82, // 8 bytes
-                0x32, 0xa4, 0x23, 0xdb, 0x1f, 0xdf, 0x02, 0xe2, // 16 bytes
-                0x18, 0xc4, 0x94, 0x4c, 0x35, 0xba, 0x4e, 0xb4, // 24 bytes
-                0x54, 0x96, 0xb5, 0x27, 0x42, 0x53, 0x9d, 0x78, // 32 bytes
+                0x01, 0x30, // 0x30 = 48 byte key
+                234, 228, 132, 152, 190, 12, 188, 130, 175, 153, 39, 191, 169, 224, 126, 240, 21,
+                122, 204, 12, 93, 192, 99, 229, 73, 32, 81, 154, 68, 190, 45, 165, 157, 79, 145,
+                129, 51, 45, 43, 36, 109, 125, 180, 20, 25, 201, 251, 229,
                 // cipher codec
                 0x02, 0x03, 0x80, 0xc0, 0x02, // codec (Chacha20Poly1305)
                 // cipher key len (32)
                 0x03, 0x01, 0x20, // 3 bytes codec
                 // 12 byte cipher nonce
-                0x04, 0x0c, // 0x0c = 12 bytes of nonce
-                0x71, 0x4e, 0x5a, 0xbf, 0x0f, // 6 bytes
-                0x7b, 0xea, 0xe8, 0xaa, 0xbb, 0xcc, 0xdd, // 12 bytes
-                // kdf codec
+                0x04, 24, // 0x0c = 24 bytes of nonce
+                198, 105, 29, 149, 244, 78, 24, 244, 207, 243, 17, 227, 120, 30, 178, 252, 116, 77,
+                227, 152, 88, 90, 148, 163, // kdf codec
                 0x05, 0x03, 0x8d, 0xa0, 0x03, // kdf salt
                 0x06, 0x20, // 2 bytes salt codec
                 0x62, 0x1f, 0x20, 0xcf, 0xda, 0x14, 0x0b, 0xd8, // 8 bytes salt
@@ -251,7 +250,7 @@ mod tests {
 
     #[test]
     fn test_serde_encrypted_secret_key_readable() {
-        let _ = span!(Level::INFO, "test_serde_encrypted_secret_key_readable").entered();
+        let _s = span!(Level::INFO, "test_serde_encrypted_secret_key_readable").entered();
         let bytes = hex::decode("7e48467029ffb9f6282b56e9ce131cead6e4bd061a3500697c57ac7034cf86f2")
             .unwrap();
         let mk1 = Builder::new(Codec::Ed25519Priv)
@@ -277,9 +276,10 @@ mod tests {
                 .with_rounds(10)
                 .try_build()
                 .unwrap();
-            let nonce = hex::decode("714e5abf0f7beae8aabbccdd").unwrap();
+            let nonce = hex::decode("c6691d95f44e18f4cff311e3781eb2fc744de398585a94a3").unwrap();
             let ciphermk = cipher::Builder::new(Codec::Chacha20Poly1305)
                 .with_nonce(&nonce)
+                .unwrap()
                 .try_build()
                 .unwrap();
 
@@ -314,7 +314,7 @@ mod tests {
                 Token::TupleEnd,
                 Token::Tuple { len: 2 },
                 Token::Str("key-data"),
-                Token::Str("f20ef7cf78f3e0e588232a423db1fdf02e218c4944c35ba4eb45496b52742539d78"),
+                Token::Str("f30eae48498be0cbc82af9927bfa9e07ef0157acc0c5dc063e54920519a44be2da59d4f9181332d2b246d7db41419c9fbe5"),
                 Token::TupleEnd,
                 Token::Tuple { len: 2 },
                 Token::Str("cipher-codec"),
@@ -326,7 +326,7 @@ mod tests {
                 Token::TupleEnd,
                 Token::Tuple { len: 2 },
                 Token::Str("cipher-nonce"),
-                Token::Str("f0c714e5abf0f7beae8aabbccdd"),
+                Token::Str("f18c6691d95f44e18f4cff311e3781eb2fc744de398585a94a3"),
                 Token::TupleEnd,
                 Token::Tuple { len: 2 },
                 Token::Str("kdf-codec"),
@@ -348,7 +348,7 @@ mod tests {
 
     #[test]
     fn test_serde_encrypted_secret_key_json() {
-        let _ = span!(Level::INFO, "test_serde_encrypted_secret_key_json").entered();
+        let _s = span!(Level::INFO, "test_serde_encrypted_secret_key_json").entered();
         let bytes = hex::decode("7e48467029ffb9f6282b56e9ce131cead6e4bd061a3500697c57ac7034cf86f2")
             .unwrap();
         let mk1 = Builder::new(Codec::Ed25519Priv)
@@ -375,9 +375,10 @@ mod tests {
                 .try_build()
                 .unwrap();
 
-            let nonce = hex::decode("714e5abf0f7beae8aabbccdd").unwrap();
+            let nonce = hex::decode("c6691d95f44e18f4cff311e3781eb2fc744de398585a94a3").unwrap();
             let ciphermk = cipher::Builder::new(Codec::Chacha20Poly1305)
                 .with_nonce(&nonce)
+                .unwrap()
                 .try_build()
                 .unwrap();
 
@@ -394,7 +395,7 @@ mod tests {
         };
 
         let s = serde_json::to_string(&mk2).unwrap();
-        assert_eq!(s, "{\"codec\":\"ed25519-priv\",\"comment\":\"test key\",\"attributes\":[[\"key-is-encrypted\",\"f0101\"],[\"key-data\",\"f20ef7cf78f3e0e588232a423db1fdf02e218c4944c35ba4eb45496b52742539d78\"],[\"cipher-codec\",\"f0380c002\"],[\"cipher-key-len\",\"f0120\"],[\"cipher-nonce\",\"f0c714e5abf0f7beae8aabbccdd\"],[\"kdf-codec\",\"f038da003\"],[\"kdf-salt\",\"f20621f20cfda140bd8bf83a899167428462929a41e9b68a8467bfc2455e9f98406\"],[\"kdf-rounds\",\"f010a\"]]}".to_string());
+        assert_eq!(s, "{\"codec\":\"ed25519-priv\",\"comment\":\"test key\",\"attributes\":[[\"key-is-encrypted\",\"f0101\"],[\"key-data\",\"f30eae48498be0cbc82af9927bfa9e07ef0157acc0c5dc063e54920519a44be2da59d4f9181332d2b246d7db41419c9fbe5\"],[\"cipher-codec\",\"f0380c002\"],[\"cipher-key-len\",\"f0120\"],[\"cipher-nonce\",\"f18c6691d95f44e18f4cff311e3781eb2fc744de398585a94a3\"],[\"kdf-codec\",\"f038da003\"],[\"kdf-salt\",\"f20621f20cfda140bd8bf83a899167428462929a41e9b68a8467bfc2455e9f98406\"],[\"kdf-rounds\",\"f010a\"]]}".to_string());
 
         let mk3: Multikey = serde_json::from_str(&s).unwrap();
         assert_eq!(mk2, mk3);
@@ -402,7 +403,7 @@ mod tests {
 
     #[test]
     fn test_serde_encrypted_bls_secret_key_share_json() {
-        let _ = span!(
+        let _s = span!(
             Level::INFO,
             "test_serde_encrypted_bls_secret_key_share_json"
         )
@@ -444,9 +445,10 @@ mod tests {
                 .try_build()
                 .unwrap();
 
-            let nonce = hex::decode("714e5abf0f7beae8aabbccdd").unwrap();
+            let nonce = hex::decode("c6691d95f44e18f4cff311e3781eb2fc744de398585a94a3").unwrap();
             let ciphermk = cipher::Builder::new(Codec::Chacha20Poly1305)
                 .with_nonce(&nonce)
+                .unwrap()
                 .try_build()
                 .unwrap();
 
@@ -464,7 +466,7 @@ mod tests {
 
         let s = serde_json::to_string(&mk2).unwrap();
         println!("{}", s);
-        assert_eq!(s, "{\"codec\":\"bls12_381-g1-priv\",\"comment\":\"test key\",\"attributes\":[[\"key-is-encrypted\",\"f0101\"],[\"key-data\",\"f20da4d0758cd8d3debfbf143b6813c94ed6bd40a0ddb0971f3caf51daeec3a3acd\"],[\"cipher-codec\",\"f0380c002\"],[\"cipher-key-len\",\"f0120\"],[\"cipher-nonce\",\"f0c714e5abf0f7beae8aabbccdd\"],[\"kdf-codec\",\"f038da003\"],[\"kdf-salt\",\"f20621f20cfda140bd8bf83a899167428462929a41e9b68a8467bfc2455e9f98406\"],[\"kdf-rounds\",\"f010a\"]]}".to_string());
+        assert_eq!(s, "{\"codec\":\"bls12_381-g1-priv\",\"comment\":\"test key\",\"attributes\":[[\"key-is-encrypted\",\"f0101\"],[\"key-data\",\"f30dfd5744f4d8fd9eb66cc47d23703e8ff666a524db3735ca2d743f913ead78a1032b981002f51e01c03deab0871a68f7a\"],[\"cipher-codec\",\"f0380c002\"],[\"cipher-key-len\",\"f0120\"],[\"cipher-nonce\",\"f18c6691d95f44e18f4cff311e3781eb2fc744de398585a94a3\"],[\"kdf-codec\",\"f038da003\"],[\"kdf-salt\",\"f20621f20cfda140bd8bf83a899167428462929a41e9b68a8467bfc2455e9f98406\"],[\"kdf-rounds\",\"f010a\"]]}".to_string());
 
         let mk3: Multikey = serde_json::from_str(&s).unwrap();
         assert_eq!(mk2, mk3);
@@ -472,7 +474,7 @@ mod tests {
 
     #[test]
     fn test_encoded_public_key() {
-        let _ = span!(Level::INFO, "test_encoded_public_key").entered();
+        let _s = span!(Level::INFO, "test_encoded_public_key").entered();
         let bytes = hex::decode("7e48467029ffb9f6282b56e9ce131cead6e4bd061a3500697c57ac7034cf86f2")
             .unwrap();
         let sk = Builder::new(Codec::Ed25519Priv)
@@ -496,7 +498,7 @@ mod tests {
 
     #[test]
     fn test_nonce_serde_compact() {
-        let _ = span!(Level::INFO, "test_nonce_serde_compact").entered();
+        let _s = span!(Level::INFO, "test_nonce_serde_compact").entered();
         let bytes = hex::decode("76895272c5ce5c0c72b5ec54944ead739482f87048dbbfc13b873008b31d5995")
             .unwrap();
         let n = nonce::Builder::new_from_bytes(&bytes).try_build().unwrap();
@@ -512,7 +514,7 @@ mod tests {
 
     #[test]
     fn test_nonce_serde_encoded_string() {
-        let _ = span!(Level::INFO, "test_nonce_serde_encoded_string").entered();
+        let _s = span!(Level::INFO, "test_nonce_serde_encoded_string").entered();
         let bytes = hex::decode("76895272c5ce5c0c72b5ec54944ead739482f87048dbbfc13b873008b31d5995")
             .unwrap();
         let n = nonce::Builder::new_from_bytes(&bytes)
@@ -529,7 +531,7 @@ mod tests {
 
     #[test]
     fn test_nonce_serde_readable() {
-        let _ = span!(Level::INFO, "test_nonce_serde_readable").entered();
+        let _s = span!(Level::INFO, "test_nonce_serde_readable").entered();
         let bytes = hex::decode("76895272c5ce5c0c72b5ec54944ead739482f87048dbbfc13b873008b31d5995")
             .unwrap();
         let n = nonce::Builder::new_from_bytes(&bytes).try_build().unwrap();
@@ -550,14 +552,14 @@ mod tests {
 
     #[test]
     fn test_null_multikey_serde_compact() {
-        let _ = span!(Level::INFO, "test_null_multikey_serde_compact").entered();
+        let _s = span!(Level::INFO, "test_null_multikey_serde_compact").entered();
         let mk = Multikey::null();
         assert_tokens(&mk.compact(), &[Token::BorrowedBytes(&[186, 36, 0, 0, 0])]);
     }
 
     #[test]
     fn test_null_multikey_serde_readable() {
-        let _ = span!(Level::INFO, "test_null_multikey_serde_readable").entered();
+        let _s = span!(Level::INFO, "test_null_multikey_serde_readable").entered();
         let mk = Multikey::null();
         assert_tokens(
             &mk.readable(),
@@ -580,21 +582,21 @@ mod tests {
 
     #[test]
     fn test_encoded_null_multikey_serde_readable() {
-        let _ = span!(Level::INFO, "test_encoded_null_multikey_serde_readable").entered();
+        let _s = span!(Level::INFO, "test_encoded_null_multikey_serde_readable").entered();
         let mk: EncodedMultikey = Multikey::null().into();
         assert_tokens(&mk.readable(), &[Token::Str("fba24000000")]);
     }
 
     #[test]
     fn test_null_nonce_serde_compact() {
-        let _ = span!(Level::INFO, "test_null_nonce_serde_compact").entered();
+        let _s = span!(Level::INFO, "test_null_nonce_serde_compact").entered();
         let n = nonce::Nonce::null();
         assert_tokens(&n.compact(), &[Token::BorrowedBytes(&[187, 36, 0])]);
     }
 
     #[test]
     fn test_null_nonce_serde_readable() {
-        let _ = span!(Level::INFO, "test_null_nonce_serde_readable").entered();
+        let _s = span!(Level::INFO, "test_null_nonce_serde_readable").entered();
         let n = nonce::Nonce::null();
         assert_tokens(
             &n.readable(),
@@ -612,7 +614,7 @@ mod tests {
 
     #[test]
     fn test_encoded_null_nonce_serde_readable() {
-        let _ = span!(Level::INFO, "test_encoded_null_nonce_serde_readable").entered();
+        let _s = span!(Level::INFO, "test_encoded_null_nonce_serde_readable").entered();
         let n: nonce::EncodedNonce = nonce::Nonce::null().into();
         assert_tokens(&n.readable(), &[Token::Str("fbb2400")]);
     }

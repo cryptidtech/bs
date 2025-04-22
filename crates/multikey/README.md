@@ -18,7 +18,7 @@ cryptography it supports ChaCha-256 keys.
 This implementation supports encrypting/decrypting keys using ChaCha20-Poly1305
 AEAD with keys derived with Bcrypt KDF from a preimage.
 
-When using BLS12-381 keys, this implementations supports threshold key
+When using BLS12-381 keys, this implementation supports threshold key
 splitting and combining as well as threshold signing and verifying.
 
 This crate also supports converting to/from SSH format keys using the

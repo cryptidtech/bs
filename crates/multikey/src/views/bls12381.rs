@@ -1,4 +1,4 @@
-// SPDX-License-Idnetifier: Apache-2.0
+// SPDX-License-Identifier: Apache-2.0
 use crate::{
     error::{
         AttributesError, CipherError, ConversionsError, KdfError, SignError, ThresholdError,
@@ -949,7 +949,7 @@ impl ThresholdView for View<'_> {
                     })?;
                 let key = SecretKey::combine(shares.as_slice())
                     .map_err(|e| ThresholdError::ShareCombineFailed(e.to_string()))?;
-                let key_bytes = key.to_be_bytes().as_ref().to_vec();
+                let key_bytes = key.to_be_bytes().to_vec();
                 Builder::new(Codec::Bls12381G1Priv)
                     .with_comment(&self.mk.comment)
                     .with_key_bytes(&key_bytes)
@@ -967,7 +967,7 @@ impl ThresholdView for View<'_> {
                     })?;
                 let key = SecretKey::combine(shares.as_slice())
                     .map_err(|e| ThresholdError::ShareCombineFailed(e.to_string()))?;
-                let key_bytes = key.to_be_bytes().as_ref().to_vec();
+                let key_bytes = key.to_be_bytes().to_vec();
                 Builder::new(Codec::Bls12381G2Priv)
                     .with_comment(&self.mk.comment)
                     .with_key_bytes(&key_bytes)

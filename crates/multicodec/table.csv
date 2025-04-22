@@ -174,6 +174,8 @@ provenance-log-script,          serialization,  0x120a,         draft,      Veri
 mlkem-512-pub,                  key,            0x120b,         draft,      ML-KEM 512 public key; as specified by FIPS 203
 mlkem-768-pub,                  key,            0x120c,         draft,      ML-KEM 768 public key; as specified by FIPS 203
 mlkem-1024-pub,                 key,            0x120d,         draft,      ML-KEM 1024 public key; as specified by FIPS 203
+fndsa-512-pub,                  key,            0x120e,         draft,      FALCON-512 DSA public key; as specified by FIPS 206
+fndsa-1024-pub,                 key,            0x120f,         draft,      FALCON-1024 DSA public key; as specified by FIPS 206
 multisig,                       multiformat,    0x1239,         draft,      Digital signature multiformat
 multikey,                       multiformat,    0x123a,         draft,      Encryption key multiformat
 nonce,                          nonce,          0x123b,         draft,      Nonce random value
@@ -193,6 +195,11 @@ bls12_381-g2-pub-share,         key,            0x130d,         draft,      BLS1
 bls12_381-g1-priv-share,        key,            0x130e,         draft,      BLS12-381 G1 private key share
 bls12_381-g2-priv-share,        key,            0x130f,         draft,      BLS12-381 G2 private key share
 sm2-priv,                       key,            0x1310,         draft,      SM2 private key
+fndsa-512-priv,                 key,            0x1311,         draft,      FALCON-512 DSA private key; as specified by FIPS 206
+fndsa-1024-priv,                key,            0x1312,         draft,      FALCON-1024 DSA private key; as specified by FIPS 206
+mlkem-512-priv,                 key,            0x1313,         draft,      ML-KEM 512 private key; as specified by FIPS 203
+mlkem-768-priv,                 key,            0x1314,         draft,      ML-KEM 768 private key; as specified by FIPS 203
+mlkem-1024-priv,                key,            0x1315,         draft,      ML-KEM 1024 private key; as specified by FIPS 203
 lamport-sha3-512-pub,           key,            0x1a14,         draft,      Lamport public key based on SHA3-512
 lamport-sha3-384-pub,           key,            0x1a15,         draft,      Lamport public key based on SHA3-384
 lamport-sha3-256-pub,           key,            0x1a16,         draft,      Lamport public key based on SHA3-256
@@ -553,6 +560,8 @@ es256k,                         varsig,         0xd0e7,         draft,      ES25
 bls12_381-g1-sig,               varsig,         0xd0ea,         draft,      G1 signature for BLS12-381
 bls12_381-g2-sig,               varsig,         0xd0eb,         draft,      G2 signature for BLS12-381
 eddsa,                          varsig,         0xd0ed,         draft,      Edwards-Curve Digital Signature Algorithm
+fndsa-512-sig,                  varsig,         0xd0ee,         draft,      FNDSA-512 Signature Algorithm
+fndsa-1024-sig,                 varsig,         0xd0ef,         draft,      FNDSA-1024 Signature Algorithm
 eip-191,                        varsig,         0xd191,         draft,      EIP-191 Ethereum Signed Data Standard
 jwk_jcs-pub,                    key,            0xeb51,         draft,      JSON object containing only the required members of a JWK (RFC 7518 and RFC 7517) representing the public key. Serialisation based on JCS (RFC 8785)
 fil-commitment-unsealed,        filecoin,       0xf101,         permanent,  Filecoin piece or sector data commitment merkle node/root (CommP & CommD)
@@ -590,3 +599,6 @@ es384-msig,                     multisig,       0xd01309,       draft,      ECDS
 es521-msig,                     multisig,       0xd0130a,       draft,      ECDSA P-521 Signature as Multisig
 rs256-msig,                     multisig,       0xd0130b,       draft,      RS256 Signature as Multisig
 scion,                          multiaddr,      0xd02000,       draft,      SCION Internet architecture
+mlkem-512-cap,                  capsule,        0xe00000,       draft,      MLKEM-512 capsule
+mlkem-768-cap,                  capsule,        0xe00001,       draft,      MLKEM-768 capsule
+mlkem-1024-cap,                 capsule,        0xe00002,       draft,      MLKEM-1024 capsule
