@@ -4,8 +4,8 @@ default-members = ["crates/bs"]
 members = [
   "cli",
   "crates/bs",
-  #"crates/bsp2p",
-  #"crates/content-addressable",
+  "crates/bsp2p",
+  "crates/content-addressable",
   "crates/multibase",
   "crates/multicid",
   "crates/multicodec",
