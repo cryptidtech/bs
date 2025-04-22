@@ -244,7 +244,7 @@ mod tests {
 
     #[test]
     fn test_default() {
-        let _ = span!(Level::INFO, "test_default").entered();
+        let _s = span!(Level::INFO, "test_default").entered();
         let v1 = Cid::default();
         assert_eq!(Codec::Cidv1, v1.codec());
         assert_eq!(Codec::DagCbor, v1.target_codec);
@@ -253,7 +253,7 @@ mod tests {
 
     #[test]
     fn test_v0() {
-        let _ = span!(Level::INFO, "test_v0").entered();
+        let _s = span!(Level::INFO, "test_v0").entered();
         let v0 = Builder::default()
             .with_hash(
                 &mh::Builder::new_from_bytes(Codec::Sha2256, b"for great justice, move every zig!")
@@ -271,7 +271,7 @@ mod tests {
 
     #[test]
     fn test_unknown_decode() {
-        let _ = span!(Level::INFO, "test_unknown_decode").entered();
+        let _s = span!(Level::INFO, "test_unknown_decode").entered();
         // this does not assume it is a legacy v0 encoded CID
         let v0_1 = EncodedCid::try_from("Qmdb16CztyugMSs5anEPrJ6bLeo39bTGcM13zNPqjqUidT").unwrap();
         assert_eq!(Codec::Identity, v0_1.codec());
@@ -313,7 +313,7 @@ mod tests {
 
     #[test]
     fn test_v0_binary_roundtrip() {
-        let _ = span!(Level::INFO, "test_v0_binary_roundtrip").entered();
+        let _s = span!(Level::INFO, "test_v0_binary_roundtrip").entered();
         let v0 = Builder::default()
             .with_hash(
                 &mh::Builder::new_from_bytes(Codec::Sha2256, b"for great justice, move every zig!")
@@ -329,7 +329,7 @@ mod tests {
 
     #[test]
     fn test_v0_encoded_roundtrip() {
-        let _ = span!(Level::INFO, "test_v0_encoded_roundtrip").entered();
+        let _s = span!(Level::INFO, "test_v0_encoded_roundtrip").entered();
         let v0 = Builder::default()
             .with_hash(
                 &mh::Builder::new_from_bytes(Codec::Sha2256, b"for great justice, move every zig!")
@@ -346,7 +346,7 @@ mod tests {
 
     #[test]
     fn test_v1() {
-        let _ = span!(Level::INFO, "test_v1").entered();
+        let _s = span!(Level::INFO, "test_v1").entered();
         let v1 = Builder::new(Codec::Cidv1)
             .with_target_codec(Codec::DagCbor)
             .with_hash(
@@ -365,7 +365,7 @@ mod tests {
 
     #[test]
     fn test_v1_binary_roundtrip() {
-        let _ = span!(Level::INFO, "test_v1_binary_roundtrip").entered();
+        let _s = span!(Level::INFO, "test_v1_binary_roundtrip").entered();
         let v1 = Builder::new(Codec::Cidv1)
             .with_target_codec(Codec::DagCbor)
             .with_hash(
@@ -382,7 +382,7 @@ mod tests {
 
     #[test]
     fn test_v1_encoded_roundtrip() {
-        let _ = span!(Level::INFO, "test_v1_encoded_roundtrip").entered();
+        let _s = span!(Level::INFO, "test_v1_encoded_roundtrip").entered();
         let v1 = Builder::new(Codec::Cidv1)
             .with_target_codec(Codec::DagCbor)
             .with_base_encoding(Base::Base32Lower)
@@ -401,7 +401,7 @@ mod tests {
 
     #[test]
     fn test_null() {
-        let _ = span!(Level::INFO, "test_null").entered();
+        let _s = span!(Level::INFO, "test_null").entered();
         let cid1 = Cid::null();
         assert!(cid1.is_null());
         let cid2 = Cid::default();

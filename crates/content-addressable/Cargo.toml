@@ -1,0 +1,44 @@
+[package]
+name = "content-addressable"
+version.workspace = true
+edition.workspace = true
+authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
+description = "Content addressable storage traits and implementations"
+readme = "README.md"
+license = "Apache-2.0"
+
+[features]
+default = ["serde"]
+dag_cbor = ["serde_cbor", "serde_cbor/tags", "multicid/dag_cbor" ]
+
+[dependencies]
+async-trait = "0.1.88"
+multibase.workspace = true
+multicid.workspace = true
+multicodec.workspace = true
+multihash.workspace = true
+multikey.workspace = true
+multitrait.workspace = true
+multiutil.workspace = true
+rand.workspace = true
+rand_core_6.workspace = true
+rng.workspace = true
+serde = { workspace = true, optional = true }
+serde_cbor = { workspace = true, optional = true }
+tempfile = "3.10.1"
+test-log.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+hex.workspace = true
+rand.workspace = true
+rand_core_6.workspace = true
+rng.workspace = true
+serde_cbor.workspace = true
+serde_json.workspace = true
+serde_test.workspace = true
+
+[lints]
+workspace = true

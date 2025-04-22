@@ -54,3 +54,17 @@ pub fn encode<T: AsRef<[u8]>>(base: Base, input: T) -> String {
     encoded.insert(0, base.code());
     encoded
 }
+
+/// Return the symbols for the given base.
+///
+/// # Examples
+///
+/// ```
+/// use multibase::Base;
+///
+/// assert_eq!(Base::Base16Lower.symbols(true), "0123456789abcdef");
+/// assert_eq!(Base::Base16Upper.symbols(true), "0123456789ABCDEF");
+/// ```
+pub fn symbols(base: Base, strict: bool) -> String {
+    base.symbols(strict)
+}
