@@ -9,6 +9,7 @@ use crate::{
     update::{op, script, OpParams},
     Error,
 };
+use bs_traits::{GetKey, Signer};
 use multicid::{cid, vlad, Cid};
 use multicodec::Codec;
 use multihash::mh;
@@ -19,10 +20,10 @@ use std::{fs::read, path::Path};
 use tracing::debug;
 
 /// open a new provenance log based on the config
-pub fn open_plog<F1, F2>(config: Config, get_key: F1, sign_entry: F2) -> Result<Log, Error>
+pub fn open_plog<G, S>(config: Config, get_key: &G, sign_entry: &S) -> Result<Log, Error>
 where
-    F1: Fn(&Key, Codec, usize, usize) -> Result<Multikey, Error>,
-    F2: Fn(&Multikey, &[u8]) -> Result<Multisig, Error>,
+    G: GetKey<Key = Multikey, KeyPath = Key, Codec = Codec>,
+    S: Signer<Key = Multikey, Signature = Multisig>,
 {
     // 0. Set up the list of ops we're going to add
     let mut op_params = Vec::default();
@@ -35,7 +36,7 @@ where
         .try_for_each(|params| -> Result<(), Error> {
             match params {
                 p @ OpParams::KeyGen { .. } => {
-                    let _ = load_key(&mut op_params, p, &get_key)?;
+                    let _ = load_key(&mut op_params, p, get_key)?;
                 }
                 p @ OpParams::CidGen { .. } => {
                     let _ = load_cid(&mut op_params, p, |path| -> Result<Vec<u8>, Error> {
@@ -54,7 +55,7 @@ where
         .vlad_params
         .ok_or::<Error>(OpenError::InvalidVladParams.into())?;
     // get the vlad signing key
-    let vlad_mk = load_key(&mut op_params, &vlad_key_params, &get_key)?;
+    let vlad_mk = load_key(&mut op_params, &vlad_key_params, get_key)?;
     // get the cid for the first lock script
     let mut first_lock_script: Option<Script> = None;
     let cid = load_cid(
@@ -82,7 +83,7 @@ where
         .ok_or::<Error>(OpenError::InvalidKeyParams.into())?;
 
     // get the entry signing key
-    let entry_mk = load_key(&mut op_params, &entrykey_params, &get_key)?;
+    let entry_mk = load_key(&mut op_params, &entrykey_params, get_key)?;
 
     // get the params for the pubkey
     let pubkey_params = config
@@ -90,7 +91,7 @@ where
         .ok_or::<Error>(OpenError::InvalidKeyParams.into())?;
 
     // get the pubkey
-    let _ = load_key(&mut op_params, &pubkey_params, &get_key)?;
+    let _ = load_key(&mut op_params, &pubkey_params, get_key)?;
 
     // load the entry lock script
     let lock_script = {
@@ -162,7 +163,8 @@ where
         // get the serialzied version of the entry with an empty "proof" field
         let ev: Vec<u8> = e.clone().into();
         // call the call back to have the caller sign the data
-        let ms = sign_entry(&entry_mk, &ev)
+        let ms = sign_entry
+            .try_sign(&entry_mk, &ev)
             .map_err(|e| PlogError::from(EntryError::SignFailed(e.to_string())))?;
         // store the signature as proof
         Ok(ms.into())
@@ -179,13 +181,9 @@ where
     Ok(log)
 }
 
-fn load_key<F>(
-    ops: &mut Vec<OpParams>,
-    params: &OpParams,
-    mut get_key: F,
-) -> Result<Multikey, Error>
+fn load_key<G>(ops: &mut Vec<OpParams>, params: &OpParams, get_key: &G) -> Result<Multikey, Error>
 where
-    F: FnMut(&Key, Codec, usize, usize) -> Result<Multikey, Error>,
+    G: GetKey<Key = Multikey, KeyPath = Key, Codec = Codec>,
 {
     debug!("load_key: {:?}", params);
     match params {
@@ -197,7 +195,7 @@ where
             revoke,
         } => {
             // call back to generate the key
-            let mk = get_key(key, *codec, *threshold, *limit)?;
+            let mk = get_key.get_key(key, codec, *threshold, *limit)?;
 
             // get the public key
             let pk = mk.conv_view()?.to_public_key()?;
