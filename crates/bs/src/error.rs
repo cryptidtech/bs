@@ -10,6 +10,10 @@ pub enum Error {
     #[error(transparent)]
     Update(#[from] UpdateError),
 
+    /// Traits error
+    #[error(transparent)]
+    Traits(#[from] bs_traits::Error),
+
     /// BestPractices error
     #[error(transparent)]
     BestPractices(#[from] best_practices::error::Error),

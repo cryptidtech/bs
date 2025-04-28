@@ -4,6 +4,7 @@ default-members = ["crates/bs"]
 members = [
   "cli",
   "crates/bs",
+  "crates/bs-traits",
   "crates/bsp2p",
   "crates/content-addressable",
   "crates/multibase",
@@ -36,6 +37,7 @@ unexpected_cfgs = { level = "warn", check-cfg = [
 [workspace.dependencies]
 # Crate ependencies
 bs = { path = "crates/bs" }
+bs-traits = { path = "crates/bs-traits" }
 multibase = { path = "crates/multibase" }
 multicid = { path = "crates/multicid" }
 multicodec = { path = "crates/multicodec" }
