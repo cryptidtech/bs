@@ -8,6 +8,7 @@ readme = "README.md"
 license = "Functional Source License 1.1"
 
 [dependencies]
+bs-traits.workspace = true
 best-practices.workspace = true
 multicid.workspace = true
 multicodec.workspace = true
