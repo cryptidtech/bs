@@ -13,16 +13,15 @@ pub(crate) struct Proposed;
 impl Pairs for Current {
     fn get(&self, key: &str) -> Option<Value> {
         get(pairs::Either::Current, key)
-            .map(|v| v.clone())
             .map(|v| v.into())
             .or_else(|| {
-                log(&format!("Key not found: {}", key));
+                log(&format!("Key not found: {key}"));
                 None
             })
     }
 
     fn put(&mut self, key: &str, value: &Value) -> Option<Value> {
-        log(&format!("Putting key: {} value: {:?}", key, value));
+        log(&format!("Putting key: {key} value: {value:?}"));
         let val = put(pairs::Either::Current, key, &value.clone().into());
         Some(val.into())
     }
@@ -31,16 +30,15 @@ impl Pairs for Current {
 impl Pairs for Proposed {
     fn get(&self, key: &str) -> Option<Value> {
         get(pairs::Either::Proposed, key)
-            .map(|v| v.clone())
             .map(|v| v.into())
             .or_else(|| {
-                log(&format!("Key not found: {}", key));
+                log(&format!("Key not found: {key}"));
                 None
             })
     }
 
     fn put(&mut self, key: &str, value: &Value) -> Option<Value> {
-        log(&format!("Putting key: {} value: {:?}", key, value));
+        log(&format!("Putting key: {key} value: {value:?}"));
         let val = put(pairs::Either::Proposed, key, &value.clone().into());
         Some(val.into())
     }
@@ -57,7 +55,6 @@ impl From<pairs::Value> for Value {
     }
 }
 
-// From<Value>`  for `pairs::Value`
 impl From<Value> for pairs::Value {
     fn from(value: Value) -> Self {
         match value {
