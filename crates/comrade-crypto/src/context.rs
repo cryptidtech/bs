@@ -588,8 +588,12 @@ mod tests {
         assert!(result.is_ok());
 
         // Check the return stack
-        // The length should be 1
-        // The value should be Success(1)
+        // The length should be 3:
+        // - the first lock script failure, since we didn't provide a signature for /ephemeral
+        // - the second lock script success, since we provided a valid signature for /recoverykey
+        // - the third lock script success, since we provided a valid signature for /pubkey
+        // The value should be Success(2)
+        // - since we had 2 failed checks
         eprintln!("Return stack: {:?}", ctx.rstack);
         assert_eq!(ctx.rstack.len(), 3);
         assert_eq!(ctx.rstack.top().unwrap(), Value::Success(2));
