@@ -9,5 +9,10 @@ license.workspace = true
 
 [dependencies]
 
+[features]
+default = ["core"]
+# enable core features when you want to build a wasm component
+core = []
+
 [lints]
 workspace = true

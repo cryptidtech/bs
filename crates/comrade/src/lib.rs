@@ -2,6 +2,17 @@
 //!
 //! It requires a wasm-component plugin to run. A reference implementation is
 //! provided in the `comrade-component` crate.
+
+/// Core cryptographic constructs which can be used to build components
+mod core;
+pub use core::{Pairs, Value};
+
+/// Opinionated entry API for using Comrade.
+/// Uses the comrade-component reference implementation by default,
+/// and wasm_component_layer for runtime. Either can be substituted
+/// with prefered alternatives as desired.
+mod api;
+
 pub fn add(left: u64, right: u64) -> u64 {
     left + right
 }

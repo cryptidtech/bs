@@ -7,7 +7,7 @@ members = [
   "crates/bs-traits",
   "crates/bsp2p",
   "crates/comrade",
-  "crates/comrade-component",
+  "crates/comrade-component", "crates/comrade-crypto",
   "crates/content-addressable",
   "crates/multibase",
   "crates/multicid",
