@@ -1,6 +1,97 @@
-package component:comrade-component;
+package comrade:api;
+
+interface api {
+    use pairs.{value};
+
+    /// The main API resource 
+    resource api {
+        /// The main API function
+        constructor();
+
+        /// Set the unlock script Fails if the script is not valid.
+        try-unlock: func(script: string) -> result<_, string>;
+
+        /// Tries a lock script 
+        try-lock: func(lock: string) -> result<option<value>, string>;
+    }
+}
+
+interface pairs {
+
+  /// Returns the value of the resource. 
+  put: func(choice: either, key: string, value: value) -> value;
+
+  /// Returns the value of the resource. 
+  /// Get a value from the given key, if it exists.
+  /// Returns some value or None.
+  get: func(choice: either, key: string) -> option<value>;
+
+  /// Either current or proposed 
+  enum either {
+    /// The current kv pairs
+    current,
+
+    /// The proposed kv pairs 
+    proposed
+  }
+
+  /// A binary value and associated hint 
+  record binary {
+    /// The binary value
+    data: list<u8>,
+
+    /// A hint for the binary value
+    hint: string
+  }
+
+  /// A string value and associated hint 
+  record str {
+    /// The string value
+    data: string,
+
+    /// A hint for the string value
+    hint: string
+  }
+
+  /// A variant representing the different types of values that can be stored.
+  variant value {
+    /// A binary value 
+    bin(binary),
+
+    /// A string value 
+    str(str),
+
+    /// Success value 
+    success(u32),
+
+    /// Failure value 
+    failure(string)
+  }
+
+}
+
+interface utils {
+    /// Logs some output from the guest component.
+    log: func(message: string);
+
+    /// Get a random byte from the host system
+    random-byte: func() -> u8;
+}
+
+interface env {
+    now: func() -> u64;
+}
 
 /// An example world for the component to target.
-world example {
-    export hello-world: func() -> string;
+world wacc {
+  
+    /// Utilities provided by host
+    import utils;
+
+    import pairs;
+    /// Re-exports the `pairs` interface for the VM
+    // export pairs;
+
+    /// Export the main api for the component 
+    export api;
 }

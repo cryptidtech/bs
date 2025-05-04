@@ -7,7 +7,8 @@ members = [
   "crates/bs-traits",
   "crates/bsp2p",
   "crates/comrade",
-  "crates/comrade-component", "crates/comrade-crypto",
+  "crates/comrade-component",
+  "crates/comrade-reference",
   "crates/content-addressable",
   "crates/multibase",
   "crates/multicid",
@@ -40,6 +41,7 @@ unexpected_cfgs = { level = "warn", check-cfg = [
 # Crate ependencies
 bs = { path = "crates/bs" }
 bs-traits = { path = "crates/bs-traits" }
+comrade-reference = { path = "crates/comrade-reference" }
 multibase = { path = "crates/multibase" }
 multicid = { path = "crates/multicid" }
 multicodec = { path = "crates/multicodec" }

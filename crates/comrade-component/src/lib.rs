@@ -1,15 +1,61 @@
 #[allow(warnings)]
 mod bindings;
 
-use bindings::Guest;
+mod kv;
+mod logger;
+mod random;
 
-struct Component;
+use crate::{
+    kv::{Current, Proposed},
+    logger::Logger,
+};
+use bindings::comrade::api::pairs;
+use bindings::comrade::api::utils::log;
+use bindings::exports::comrade::api::api::Guest;
+use bindings::exports::comrade::api::api::GuestApi;
+use comrade_reference::Context;
+use std::cell::RefCell;
 
-impl Guest for Component {
-    /// Say hello!
-    fn hello_world() -> String {
-        "Hello, World!".to_string()
+struct Api {
+    context: RefCell<Context<'static>>,
+    unlock: RefCell<Option<String>>,
+}
+
+impl Guest for Api {
+    type Api = Self;
+}
+
+impl GuestApi for Api {
+    fn new() -> Self {
+        log("Creating new Component");
+
+        Self {
+            context: RefCell::new(Context::new(&Current, &Proposed, &Logger)),
+            unlock: RefCell::new(None),
+        }
+    }
+
+    fn try_unlock(&self, unlock: String) -> Result<(), String> {
+        log("try_unlock");
+        self.unlock.borrow_mut().replace(unlock.clone());
+        // self.vm.run(&unlock).map_err(|e| e.to_string())?;
+        self.context.borrow_mut().run(&unlock).map_err(|e| {
+            log(&format!("Error running unlock script: {e}"));
+            format!("Error running unlock script: {e}")
+        })?;
+        Ok(())
+    }
+
+    fn try_lock(&self, lock: String) -> Result<Option<pairs::Value>, String> {
+        log(&format!("try_lock script: {lock}"));
+        self.context.borrow_mut().run(&lock).map_err(|e| {
+            log(&format!("Error running lock script: {e}"));
+            format!("Error running lock script: {e}")
+        })?;
+        // return rstack
+        let rstack = self.context.borrow_mut().rstack();
+        Ok(rstack.map(|v| v.into()))
     }
 }
 
-bindings::export!(Component with_types_in bindings);
+bindings::export!(Api with_types_in bindings);
