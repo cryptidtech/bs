@@ -518,44 +518,42 @@ mod tests {
         assert_eq!(pstack.pop().unwrap(), entry_data_vec.into());
     }
 
-    // test evaluate script
     #[test]
     fn test_eval_scripts() {
+        // unlock
         let entry_key = "/entry/";
 
-        // unlock
         let entry_data = b"for great justice, move every zig!";
         let proof_key = "/entry/proof";
         let proof_data = hex::decode("b92483a6c00600010040eda2eceac1ef60c4d54efc7b50d86b198ba12358749e5069dbe0a5ca6c3e7e78912a21c67a18a4a594f904e7df16f798d929d7a8cee57baca89b4ed0dfd1c801").unwrap();
 
-        let mut kvp_unlock = ContextPairs::default();
         let mut kvp_lock = ContextPairs::default();
-        // entry and proof data needs to be present on both current and proposed stacks
+        let mut kvp_unlock = ContextPairs::default();
+        // "/entry/" needs to be present on both lock and unlock stacks,
         // since they are used in both the unlock and lock scripts
-        kvp_lock.put(entry_key, &entry_data.to_vec().into());
         kvp_unlock.put(entry_key, &entry_data.to_vec().into());
-        // proof only needs to be present on the unlock stack
-        kvp_unlock.put(proof_key, &proof_data.clone().into());
+        kvp_lock.put(entry_key, &entry_data.to_vec().into());
+        // "/entry/proof" only needs to be present on the lock stack,
+        // since that's where the proof is used
+        kvp_lock.put(proof_key, &proof_data.clone().into());
 
-        // /entry/ needs to be current for push("/entry/"), and proposed for check_signature("/pubkey", "/entry/")
+        let unlock = unlock_script(entry_key, proof_key);
 
-        let unlock = unlock_script(entry_key, &format!("{entry_key}proof"));
-
-        // lock
         let first_lock = first_lock_script(entry_key);
         let other_lock = other_lock_script(entry_key);
 
         let locks = [first_lock, other_lock];
 
+        // lock
         let pubkey = "/pubkey";
         let pub_key = hex::decode("ba24ed010874657374206b657901012069c9e8cd599542b5ff7e4cdc4265847feb9785330557edd6a9edae741ed4c3b2").unwrap();
-        kvp_lock.put(pubkey, &pub_key.clone().into());
-        kvp_unlock.put(pubkey, &pub_key.into());
+        // "/pubkey" only needs to be present on unlock stack,
+        kvp_lock.put(pubkey, &pub_key.into());
 
         // If we run the unlock script, then the lock script
         // the results of check_signature should be true
         // since our signature is valid
-        let mut ctx = Context::new(kvp_unlock, kvp_lock, TestLogger);
+        let mut ctx = Context::new(kvp_lock, kvp_unlock, TestLogger);
         let result = ctx.run(&unlock);
         assert!(result.is_ok());
 
