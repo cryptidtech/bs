@@ -567,10 +567,9 @@ mod tests {
         assert_eq!(pstack.pop().unwrap(), proof_data.into());
         assert_eq!(pstack.pop().unwrap(), entry_data.to_vec().into());
 
-        // Now run the lock script
-        // The first lock script should pass
-        // The second lock script should pass
-        // since we have a valid signature
+        // Now run the first lock script
+        // The first lock script should run, but fail
+        // since we didn't provide a signature for /ephemeral
         let result = ctx.run(&locks[0]);
         assert!(result.is_ok());
 
@@ -590,7 +589,7 @@ mod tests {
         // Check the return stack
         // The length should be 3:
         // - the first lock script failure, since we didn't provide a signature for /ephemeral
-        // - the second lock script success, since we provided a valid signature for /recoverykey
+        // - the second lock script failure, since we provided a valid signature for /recoverykey
         // - the third lock script success, since we provided a valid signature for /pubkey
         // The value should be Success(2)
         // - since we had 2 failed checks
