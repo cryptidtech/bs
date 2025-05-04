@@ -370,7 +370,7 @@ impl<P: Pairs, L: Log> Context<P, L> {
     pub fn push(&mut self, key: &str) -> bool {
         self.logger.log(&format!("PUSHING: push(\"{key}\")"));
         // try to look up the key-value pair by key and push the result onto the stack
-        match self.current.get(key) {
+        match self.proposed.get(key) {
             Some(v) => {
                 self.logger
                     .log(&format!("push: found value associated with {key}"));
@@ -491,14 +491,14 @@ mod tests {
 
         let mut kvp_unlock = ContextPairs::default();
         // only used for check_signature msg (2ns parameter)
-        let proposed = ContextPairs::default();
+        let kvp_lock = ContextPairs::default();
 
         let entry_data_vec = entry_data.to_vec();
 
         kvp_unlock.put(entry_key, &entry_data_vec.clone().into());
         kvp_unlock.put(proof_key, &proof_data.clone().into());
 
-        let mut ctx = Context::new(kvp_unlock, proposed, TestLogger);
+        let mut ctx = Context::new(kvp_lock, kvp_unlock, TestLogger);
 
         // When the unlock script runs,
         // there should be 2 values on the pstack
@@ -530,12 +530,13 @@ mod tests {
         let mut kvp_lock = ContextPairs::default();
         let mut kvp_unlock = ContextPairs::default();
         // "/entry/" needs to be present on both lock and unlock stacks,
-        // since they are used in both the unlock and lock scripts
+        // since they are used in both the unlock and lock scripts:
+        // ie. push("/entry/") and check_signature("/pubkey", "/entry/")
         kvp_unlock.put(entry_key, &entry_data.to_vec().into());
         kvp_lock.put(entry_key, &entry_data.to_vec().into());
-        // "/entry/proof" only needs to be present on the lock stack,
+        // "/entry/proof" only needs to be present on the unlock stack,
         // since that's where the proof is used
-        kvp_lock.put(proof_key, &proof_data.clone().into());
+        kvp_unlock.put(proof_key, &proof_data.clone().into());
 
         let unlock = unlock_script(entry_key, proof_key);
 
