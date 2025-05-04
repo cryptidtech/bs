@@ -22,12 +22,12 @@ use multiutil::prelude::*;
 
 /// The [Context] within which the script is
 /// evaluated.
-pub(crate) struct Context<P: Pairs, L: Log> {
+pub struct Context<'a> {
     /// The Return stack
-    pub(crate) current: P,
+    pub(crate) current: &'a dyn Pairs,
 
     /// The Parameters stack
-    pub(crate) proposed: P,
+    pub(crate) proposed: &'a dyn Pairs,
 
     /// The number of checks that have been performed
     pub(crate) check_count: usize,
@@ -42,20 +42,18 @@ pub(crate) struct Context<P: Pairs, L: Log> {
     pub domain: String,
 
     /// The log implementation for the context
-    pub(crate) logger: L,
+    pub(crate) logger: &'a dyn Log,
 }
 
 /// Log a message to the console
 pub trait Log {
-    fn log(&self, msg: &str)
-    where
-        Self: Sized;
+    fn log(&self, msg: &str);
 }
 
-impl<P: Pairs, L: Log> Context<P, L> {
+impl<'a> Context<'a> {
     /// Create a new [Context] struct with the given [Current] and [Proposed] key-value stores,
     /// which are bound by both [Pairable].
-    pub fn new(current: P, proposed: P, logger: L) -> Self {
+    pub fn new(current: &'a impl Pairs, proposed: &'a impl Pairs, logger: &'a impl Log) -> Self {
         Context {
             current,
             proposed,
@@ -396,7 +394,7 @@ impl<P: Pairs, L: Log> Context<P, L> {
         s
     }
 
-    pub(crate) fn rstack(&self) -> Option<Value> {
+    pub fn rstack(&self) -> Option<Value> {
         self.rstack.top()
     }
 }
@@ -498,7 +496,7 @@ mod tests {
         kvp_unlock.put(entry_key, &entry_data_vec.clone().into());
         kvp_unlock.put(proof_key, &proof_data.clone().into());
 
-        let mut ctx = Context::new(kvp_lock, kvp_unlock, TestLogger);
+        let mut ctx = Context::new(&kvp_lock, &kvp_unlock, &TestLogger);
 
         // When the unlock script runs,
         // there should be 2 values on the pstack
@@ -554,7 +552,7 @@ mod tests {
         // If we run the unlock script, then the lock script
         // the results of check_signature should be true
         // since our signature is valid
-        let mut ctx = Context::new(kvp_lock, kvp_unlock, TestLogger);
+        let mut ctx = Context::new(&kvp_lock, &kvp_unlock, &TestLogger);
         let result = ctx.run(&unlock);
         assert!(result.is_ok());
 

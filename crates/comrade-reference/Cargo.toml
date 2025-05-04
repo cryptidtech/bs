@@ -1,5 +1,5 @@
 [package]
-name = "comrade-crypto"
+name = "comrade-reference"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

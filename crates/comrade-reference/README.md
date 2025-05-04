@@ -1,4 +1,4 @@
-# Comrade Verification runtime
+# Comrade Verification Runtime -  Reference Implementation
 
 An opinionated script runtime for lock and unlcok scripts. Since scripts are just plain text, they need to be run "somewhere, somehow" and this can be by various means. For example, in previous versions of Comrade the Rhai scripting engine was used to execute the scripts. This could be done using other scripting languages such as Lua, but in this implementation a domain specific language (DSL) parser is used to run the scripts.
 
