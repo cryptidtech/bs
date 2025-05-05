@@ -1,5 +1,5 @@
 [package]
-name = "bsp2p"
+name = "bs-p2p"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
