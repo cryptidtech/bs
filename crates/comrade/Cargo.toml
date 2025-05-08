@@ -9,6 +9,7 @@ license.workspace = true
 
 [dependencies]
 comrade-reference.workspace = true
+thiserror = "2.0"
 
 [features]
 default = ["core"]
