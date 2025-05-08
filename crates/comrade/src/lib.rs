@@ -48,6 +48,7 @@ pub struct Comrade<C, P, Stage = Initial> {
 }
 
 impl<C: Pairs, P: Pairs> Comrade<C, P> {
+    /// Creates a new Comrade instance with the given lock and unlock pairs.
     pub fn new(lock: C, unlock: P) -> Self {
         Comrade {
             lock,
@@ -56,6 +57,8 @@ impl<C: Pairs, P: Pairs> Comrade<C, P> {
         }
     }
 
+    /// Tries to unlock the comrade with the given script.
+    /// Will return an error if the script fails to run.
     pub fn try_unlock(self, script: &str) -> Result<Comrade<C, P, Unlocked>, error::Error> {
         vm::run(script)?;
         Ok(self.into())
