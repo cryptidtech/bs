@@ -27,7 +27,7 @@ pub use crate::error::Error;
 mod vm;
 
 // Using the same trait out of convenience, the Pairs trait is very basic
-use comrade_reference::Pairs;
+use comrade_reference::{Pairs, Stack, Value};
 
 /// Comrade goes starts at [Initial] Stage, then goes to [Unlocked] Stage.
 #[derive(Debug)]
@@ -59,9 +59,21 @@ impl<C: Pairs, P: Pairs> Comrade<C, P> {
 
     /// Tries to unlock the comrade with the given script.
     /// Will return an error if the script fails to run.
-    pub fn try_unlock(self, script: &str) -> Result<Comrade<C, P, Unlocked>, error::Error> {
+    pub fn try_unlock(self, script: &str) -> Result<Comrade<C, P, Unlocked>, Error> {
         vm::run(script)?;
         Ok(self.into())
+    }
+}
+
+// try_lock can only be called on an Unlocked Comrade
+impl<C: Pairs, P: Pairs> Comrade<C, P, Unlocked> {
+    /// Tries to lock the comrade with the given script.
+    /// Will return an error if the script fails to run.
+    pub fn try_lock(&self, script: &str) -> Result<Option<Value>, Error> {
+        vm::run(script)?;
+        // check the context retrun stack top, return the result
+        let res = vm::top();
+        Ok(res)
     }
 }
 

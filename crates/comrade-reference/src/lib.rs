@@ -5,4 +5,4 @@ pub use error::ApiError;
 /// Context is the main entry of this crate
 mod context;
 /// Public re-exports
-pub use context::{Context, Log, Pairs, Value};
+pub use context::{Context, Log, Pairs, Stack, Value};
