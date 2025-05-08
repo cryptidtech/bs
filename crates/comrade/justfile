@@ -1,0 +1,4 @@
+test:
+  # Run Cargo Component Build first 
+  cargo component build 
+  cargo test
