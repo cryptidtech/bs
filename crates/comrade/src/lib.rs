@@ -24,7 +24,8 @@
 mod error;
 pub use crate::error::Error;
 
-mod vm;
+/// The runtime environment for the scripts
+mod runtime;
 
 // Using the same trait out of convenience, the Pairs trait is very basic
 use comrade_reference::{Pairs, Stack, Value};
@@ -60,7 +61,7 @@ impl<C: Pairs, P: Pairs> Comrade<C, P> {
     /// Tries to unlock the comrade with the given script.
     /// Will return an error if the script fails to run.
     pub fn try_unlock(self, script: &str) -> Result<Comrade<C, P, Unlocked>, Error> {
-        vm::run(script)?;
+        runtime::run(script)?;
         Ok(self.into())
     }
 }
@@ -70,9 +71,9 @@ impl<C: Pairs, P: Pairs> Comrade<C, P, Unlocked> {
     /// Tries to lock the comrade with the given script.
     /// Will return an error if the script fails to run.
     pub fn try_lock(&self, script: &str) -> Result<Option<Value>, Error> {
-        vm::run(script)?;
+        runtime::run(script)?;
         // check the context retrun stack top, return the result
-        let res = vm::top();
+        let res = runtime::top();
         Ok(res)
     }
 }
