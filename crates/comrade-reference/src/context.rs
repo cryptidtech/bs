@@ -619,11 +619,27 @@ mod tests {
 
         let signature = signmk.sign(entry_data.as_slice(), false, None).unwrap();
 
+        let sig_bytes_raw: Vec<u8> = signature.clone().into();
+        eprintln!("Signature bytes: {:?}", &sig_bytes_raw);
+        let raw_hex = hex::encode(sig_bytes_raw.clone());
+        eprintln!("Signature bytes RAW HEX: {raw_hex}");
+        let ms_from_raw = Multisig::try_from(sig_bytes_raw.as_slice()).unwrap();
+
+        // assert hex matches b92483a6c006000100404819397f51b18bc6cffd1fff07afa33f7096c7a0c659590b077cc0ea5d6081d739512129becacb8e6997e6b7d18756299f515a822344ac2b6737979d5e5e6b03
+        assert_eq!(
+            raw_hex,
+            "b92483a6c006000100404819397f51b18bc6cffd1fff07afa33f7096c7a0c659590b077cc0ea5d6081d739512129becacb8e6997e6b7d18756299f515a822344ac2b6737979d5e5e6b03"
+        );
+
+        // verify with ms_from_raw
+        let verify_mk = mk.verify_view().unwrap();
+        assert!(verify_mk
+            .verify(&ms_from_raw, Some(entry_data.as_ref()))
+            .is_ok());
+
         // print out hex signature
         let sig_data = signature.data_view().unwrap();
         let sig_bytes = sig_data.sig_bytes().unwrap();
-
-        eprintln!("Signature bytes: {:?}", &sig_bytes);
 
         let ms = multisig::Builder::new(Codec::EddsaMsig)
             .with_signature_bytes(&sig_bytes)
@@ -631,7 +647,7 @@ mod tests {
             .unwrap();
 
         let hex_sig = hex::encode(ms.data_view().unwrap().sig_bytes().unwrap());
-        eprintln!("Signature: {hex_sig}");
+        // eprintln!("Signature: {hex_sig}");
 
         assert_eq!(
             hex_sig,

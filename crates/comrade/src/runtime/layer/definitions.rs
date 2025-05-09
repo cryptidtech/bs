@@ -165,9 +165,70 @@ pub fn into_comp_value(value: crate::Value) -> Result<wasm_component_layer::Valu
     }
 }
 
-/// Convert from wasm_component_layer::Value to crate::Value
+/// Convert from [wasm_component_layer::Value] to [crate::Value]
 pub fn into_core_value(value: wasm_component_layer::Value) -> Result<crate::Value, String> {
     match value {
+        wasm_component_layer::Value::Option(option_value) => match *option_value {
+            Some(ref value) => into_core_value(value.clone()),
+            None => Ok(crate::Value::Failure("Option value is None".to_string())),
+        },
+        wasm_component_layer::Value::Variant(variant) => {
+            match variant.discriminant() {
+                0 => {
+                    // bin
+                    if let Some(Value::Record(record)) = variant.value() {
+                        if let Some(Value::String(hint)) = record.field("hint") {
+                            if let Some(Value::List(list)) = record.field("data") {
+                                let data: Vec<u8> = list
+                                    .iter()
+                                    .map(|v| match v {
+                                        Value::U8(b) => Ok(b),
+                                        _ => Err(format!("Expected U8, found {:?}", v)),
+                                    })
+                                    .collect::<Result<Vec<u8>, String>>()?;
+                                return Ok(crate::Value::Bin {
+                                    hint: hint.to_string(),
+                                    data,
+                                });
+                            }
+                        }
+                    }
+                    Err(format!("Invalid bin variant: {:?}", variant))
+                }
+                1 => {
+                    // str
+                    if let Some(Value::Record(record)) = variant.value() {
+                        if let Some(Value::String(hint)) = record.field("hint") {
+                            if let Some(Value::String(data)) = record.field("data") {
+                                return Ok(crate::Value::Str {
+                                    hint: hint.to_string(),
+                                    data: data.to_string(),
+                                });
+                            }
+                        }
+                    }
+                    Err(format!("Invalid str variant: {:?}", variant))
+                }
+                2 => {
+                    // success
+                    if let Some(Value::U32(code)) = variant.value() {
+                        return Ok(crate::Value::Success(code as usize));
+                    }
+                    Err(format!("Invalid success variant: {:?}", variant))
+                }
+                3 => {
+                    // failure
+                    if let Some(Value::String(msg)) = variant.value() {
+                        return Ok(crate::Value::Failure(msg.to_string()));
+                    }
+                    Err(format!("Invalid failure variant: {:?}", variant))
+                }
+                _ => Err(format!(
+                    "Unknown variant discriminant: {}",
+                    variant.discriminant()
+                )),
+            }
+        }
         wasm_component_layer::Value::Record(record) => {
             if let Some(Value::String(hint)) = record.field("hint") {
                 if let Some(Value::List(list)) = record.field("data") {
@@ -181,6 +242,11 @@ pub fn into_core_value(value: wasm_component_layer::Value) -> Result<crate::Valu
                     return Ok(crate::Value::Bin {
                         hint: hint.to_string(),
                         data,
+                    });
+                } else if let Some(Value::String(data)) = record.field("data") {
+                    return Ok(crate::Value::Str {
+                        hint: hint.to_string(),
+                        data: data.to_string(),
                     });
                 }
             }

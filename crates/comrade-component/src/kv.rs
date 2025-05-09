@@ -15,7 +15,7 @@ impl Pairs for Current {
         get(pairs::Either::Current, key)
             .map(|v| v.into())
             .or_else(|| {
-                log(&format!("Key not found: {key}"));
+                log(&format!("Current Key not found: {key}"));
                 None
             })
     }
@@ -32,7 +32,7 @@ impl Pairs for Proposed {
         get(pairs::Either::Proposed, key)
             .map(|v| v.into())
             .or_else(|| {
-                log(&format!("Key not found: {key}"));
+                log(&format!("Proposed Key not found: {key}"));
                 None
             })
     }

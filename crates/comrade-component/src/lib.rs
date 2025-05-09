@@ -36,7 +36,7 @@ impl GuestApi for Api {
     }
 
     fn try_unlock(&self, unlock: String) -> Result<(), String> {
-        log("try_unlock");
+        log("[component] try_unlock(..)");
         self.unlock.borrow_mut().replace(unlock.clone());
         // self.vm.run(&unlock).map_err(|e| e.to_string())?;
         self.context.borrow_mut().run(&unlock).map_err(|e| {

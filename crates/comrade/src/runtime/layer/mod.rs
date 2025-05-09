@@ -92,7 +92,7 @@ impl<C: Pairable, P: Pairable> Runner<C, P> {
 
         tracing::debug!("Created store, loading bytes.",);
         // Parse the component bytes and load its imports and exports.
-        let component = Component::new(&engine, &bytes).unwrap();
+        let component = Component::new(&engine, bytes).unwrap();
 
         tracing::debug!("Loaded bytes");
 
@@ -320,10 +320,18 @@ impl<C: Pairable, P: Pairable> Runtime for Runner<C, P> {
         let mut results = vec![wasm_component_layer::Value::Bool(false)];
         try_lock.call(&mut self.store, &lock_args, &mut results)?;
 
+        // allow unused assignment
+        #[allow(unused_assignments)]
+        let mut res = None;
+
         if let wasm_component_layer::Value::Result(result) = &results[0] {
             match **result {
-                Ok(_) => {
-                    eprintln!("[TestLog] Unlock successful");
+                Ok(ref v) => {
+                    let Some(v) = v else {
+                        return Err(Error::ScriptFailure("Unlock failed".to_string()));
+                    };
+                    let comrade_value = into_core_value(v.clone()).unwrap();
+                    res = Some(comrade_value.clone());
                 }
                 Err(ref e) => {
                     // Unlock failed with error: {:?}", e.as_ref().unwrap());
@@ -334,10 +342,13 @@ impl<C: Pairable, P: Pairable> Runtime for Runner<C, P> {
                 }
             }
         } else {
-            panic!("Unexpected result type");
-        }
+            return Err(Error::ScriptFailure(format!(
+                "Expected Result, found {:?}",
+                results[0]
+            )));
+        };
 
-        Ok(None)
+        Ok(res)
     }
 }
 
@@ -375,6 +386,7 @@ mod tests {
 
     impl Logger for TestLogger {
         fn log(&self, message: &str) {
+            eprintln!("[TestLogger]: {}", message);
             let mut messages = self.messages.lock().unwrap();
             messages.push(message.to_string());
         }
@@ -393,9 +405,6 @@ mod tests {
         fn new_for_test(kvp_current: C, kvp_proposed: P) -> (Self, TestLogger) {
             let test_logger = TestLogger::new();
             let logger_box: Box<dyn Logger> = Box::new(test_logger.clone());
-
-            // Force a test message to verify logging works
-            logger_box.log("Test log system");
 
             let runner = Self::new_with_logger(kvp_current, kvp_proposed, logger_box);
             (runner, test_logger)
@@ -496,10 +505,17 @@ mod tests {
         // unlock details
         let entry_data = b"for great justice, move every zig!";
         let proof_key = "/entry/proof";
-        let proof_data = hex::decode("4819397f51b18bc6cffd1fff07afa33f7096c7a0c659590b077cc0ea5d6081d739512129becacb8e6997e6b7d18756299f515a822344ac2b6737979d5e5e6b03").unwrap();
+        let proof_data = hex::decode("b92483a6c006000100404819397f51b18bc6cffd1fff07afa33f7096c7a0c659590b077cc0ea5d6081d739512129becacb8e6997e6b7d18756299f515a822344ac2b6737979d5e5e6b03").unwrap();
+
+        let pubkey = "/pubkey";
+        let pub_key = hex::decode("ba24ed010874657374206b657901012054d94d7b8a11d6581af4a14bc6451c7a23049018610f108c996968fe8fce9464").unwrap();
 
         let unlock = format!(
             r#"
+        // push pubkey 
+        push("{pubkey}");
+
+        // push pubkey value 
         // push the serialized Entry as the message
         push("{entry_key}");
 
@@ -517,8 +533,11 @@ mod tests {
         // "/entry/proof" only needs to be present on the unlock stack,
         // since that's where the proof is used
         kvp_unlock.put(proof_key, &proof_data.clone().into());
+        kvp_lock.put(proof_key, &proof_data.clone().into());
 
-        let (mut runner, test_logger) = Runner::new_for_test(kvp_lock.clone(), kvp_unlock.clone());
+        kvp_lock.put(pubkey, &pub_key.into());
+
+        let (mut runner, test_logger) = Runner::new_for_test(kvp_lock, kvp_unlock);
 
         let result = runner.try_unlock(&unlock);
 
@@ -553,22 +572,29 @@ mod tests {
             "#
         );
 
-        let pubkey = "/pubkey";
-        let pub_key = hex::decode("ba24ed010874657374206b657901012054d94d7b8a11d6581af4a14bc6451c7a23049018610f108c996968fe8fce9464").unwrap();
-
-        kvp_lock.put(pubkey, &pub_key.into());
-
         // First lock script should Result in a fail Value
-        let result = runner.try_lock(&first_lock);
-        assert!(result.is_ok());
-        let result = result.unwrap();
-        assert!(result.is_some());
-        let result = result.unwrap();
-        // if let wasm_component_layer::Value::Variant(v) = result {
-        //     assert_eq!(v.discriminant(), 1);
-        //     assert_eq!(v.value(), "failure");
-        // } else {
-        //     panic!("Expected a failure variant");
-        // }
+        let maybe_result = runner.try_lock(&first_lock).unwrap();
+        assert!(maybe_result.is_some());
+        let value = maybe_result.unwrap();
+
+        // value should be a failure variant
+        let Value::Failure(reason) = value else {
+            panic!("Expected a failure variant");
+        };
+
+        eprintln!("First lock script failed with reason: {}", reason);
+
+        // Second lock script should Result in a success Value
+        let value = runner.try_lock(&other_lock).unwrap().unwrap();
+
+        // value should be a success variant with a count
+        let Value::Success(count) = value else {
+            panic!("Expected a success variant {value:?}");
+        };
+
+        eprintln!("Second lock script succeeded with count: {}", count);
+
+        // Count should be 2, since 1) /ephemeral failed, 2) /recoverykey failed
+        assert_eq!(count, 2);
     }
 }
