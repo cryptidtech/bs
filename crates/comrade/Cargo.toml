@@ -13,7 +13,7 @@ thiserror = "2.0"
 # wasm_component_layer gives us an isomorphic way to load components
 # in native or the browser directly from Rust
 # patch until thos lands: https://github.com/DouglasDwyer/wasm_component_layer/pull/26
-wasm_component_layer = { git = "https://github.com/DougAnderson444/wasm_component_layer.git", branch = "dep-fix" }
+wasm_component_layer = { git = "https://github.com/DougAnderson444/wasm_component_layer.git", branch = "dep-fix", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 wasmi_runtime_layer = "*"
@@ -22,9 +22,7 @@ wasmi_runtime_layer = "*"
 js_wasm_runtime_layer = "0.4.0"
 
 [features]
-default = ["core"]
-# enable core features when you want to build a wasm component
-core = []
+default = ["wasm_component_layer"]
 
 [lints]
 workspace = true

@@ -28,7 +28,7 @@ pub use crate::error::Error;
 mod runtime;
 
 // Using the same trait out of convenience, the Pairs trait is very basic
-use comrade_reference::{Pairs, Stack, Value};
+use comrade_reference::{Pairs, Value};
 
 /// Comrade goes starts at [Initial] Stage, then goes to [Unlocked] Stage.
 #[derive(Debug)]
