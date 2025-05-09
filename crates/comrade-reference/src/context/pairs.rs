@@ -1,6 +1,10 @@
 use super::value::Value;
 use std::fmt::Debug;
 
+/// Trait Pairable is: [Pairs], [Send], [Sync], [Clone], [Debug]
+pub trait Pairable: Pairs + Send + Sync + 'static {}
+impl<P: Pairs + Send + Sync + 'static> Pairable for P {}
+
 /// Trait to a key-value storage mechanism
 pub trait Pairs: Debug {
     /// get a value associated with the key

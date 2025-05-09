@@ -15,7 +15,7 @@ pub(crate) use layer::Runner;
 // mod wasmer;
 
 /// Each runtime feature must implement the `Runtime` trait, run and top
-pub trait Runtime: Default {
+pub trait Runtime {
     /// Run the script.
     fn run(&self, script: &str) -> Result<(), Error>;
     /// Get the top value from the context return stack.

@@ -2,7 +2,7 @@
 //! is evaluated
 
 mod pairs;
-pub use pairs::Pairs;
+pub use pairs::{Pairable, Pairs};
 
 mod value;
 pub use value::Value;
