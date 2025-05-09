@@ -19,5 +19,5 @@ pub trait Runtime {
     /// Run the script.
     fn try_unlock(&mut self, script: &str) -> Result<(), Error>;
     /// Get the top value from the context return stack.
-    fn try_lock(&self) -> Result<Option<Value>, Error>;
+    fn try_lock(&mut self, script: &str) -> Result<Option<Value>, Error>;
 }

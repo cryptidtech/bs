@@ -214,7 +214,7 @@ impl<C: Pairable, P: Pairable> Runner<C, P> {
                                 let data = store.data_mut();
                                 let value = into_core_value(params[2].clone()).unwrap();
                                 // TODO: Store return value
-                                let v = match choice.discriminant() {
+                                let _v = match choice.discriminant() {
                                     0 => {
                                         &mut data.kvp_current.put(key.to_string().as_str(), &value)
                                     }
@@ -297,8 +297,46 @@ impl<C: Pairable, P: Pairable> Runtime for Runner<C, P> {
         Ok(())
     }
 
-    fn try_lock(&self) -> Result<Option<Value>, Error> {
-        // call try_lock on the instance
+    fn try_lock(&mut self, lock: &str) -> Result<Option<Value>, Error> {
+        let api_export_instance = self
+            .instance
+            .exports()
+            .instance(&"comrade:api/api".try_into().unwrap())
+            .unwrap();
+
+        let borrowed_api = self
+            .api_resource
+            .borrow(self.store.as_context_mut())
+            .unwrap();
+
+        let lock_args = vec![
+            wasm_component_layer::Value::Borrow(borrowed_api.clone()),
+            wasm_component_layer::Value::String(lock.into()),
+        ];
+
+        let try_lock = api_export_instance.func("[method]api.try-lock").unwrap();
+
+        // Call the try_lock method
+        let mut results = vec![wasm_component_layer::Value::Bool(false)];
+        try_lock.call(&mut self.store, &lock_args, &mut results)?;
+
+        if let wasm_component_layer::Value::Result(result) = &results[0] {
+            match **result {
+                Ok(_) => {
+                    eprintln!("[TestLog] Unlock successful");
+                }
+                Err(ref e) => {
+                    // Unlock failed with error: {:?}", e.as_ref().unwrap());
+                    return Err(Error::ScriptFailure(format!(
+                        "Unlock failed with error: {:?}",
+                        e.as_ref().unwrap()
+                    )));
+                }
+            }
+        } else {
+            panic!("Unexpected result type");
+        }
+
         Ok(None)
     }
 }
@@ -377,11 +415,63 @@ mod tests {
         }
     }
 
+    fn unlock_script(entry_key: &str, proof_key: &str) -> String {
+        let unlock_script = format!(
+            r#"
+                // push the serialized Entry as the message
+                push("{entry_key}"); 
+
+                // push the proof data
+                push("{proof_key}");
+            "#
+        );
+
+        unlock_script
+    }
+
+    /// First lock is /ephemeral and {entry_key}
+    fn first_lock_script(entry_key: &str) -> String {
+        let first_lock = format!(
+            r#"
+                // check the first key, which is ephemeral
+                check_signature("/ephemeral", "{entry_key}") 
+            "#
+        );
+
+        first_lock
+    }
+
+    /// Other lock script
+    fn other_lock_script(entry_key: &str) -> String {
+        format!(
+            r#"
+                // then check a possible threshold sig...
+                check_signature("/recoverykey", "{entry_key}") ||
+
+                // then check a possible pubkey sig...
+                check_signature("/pubkey", "{entry_key}") ||
+                
+                // then the pre-image proof...
+                check_preimage("/hash")
+            "#
+        )
+    }
+
     #[test]
     fn test_layer_runner() {
         let mut runner = Runner::new(TestData::default(), TestData::default());
-        assert_eq!(runner.try_lock(), Ok(None));
-        assert!(runner.try_unlock("test").is_ok());
+        let entry_key = "/entry/";
+        assert!(runner.try_lock(&first_lock_script(entry_key)).is_ok());
+        let proof_key = "/entry/proof";
+        assert!(runner
+            .try_unlock(&unlock_script(entry_key, proof_key))
+            .is_ok());
+    }
+
+    #[test]
+    fn test_fails_for_invalid_script() {
+        let mut runner = Runner::new(TestData::default(), TestData::default());
+        assert!(runner.try_lock("garbage").is_err());
     }
 
     #[test]
@@ -389,12 +479,96 @@ mod tests {
         // When we call the consturctor for the reference impl wasm bytes,
         // we should get log("Creating new Component");
 
-        let (runner, test_logger) = Runner::new_for_test(TestData::default(), TestData::default());
+        let (_runner, test_logger) = Runner::new_for_test(TestData::default(), TestData::default());
 
         let logs = test_logger.get_messages();
 
         assert!(logs
             .iter()
             .any(|msg| msg.contains("Creating new Component")));
+    }
+
+    // try_unlock
+    #[test]
+    fn test_try_unlock_and_lock_scripts() {
+        let entry_key = "/entry/";
+
+        // unlock details
+        let entry_data = b"for great justice, move every zig!";
+        let proof_key = "/entry/proof";
+        let proof_data = hex::decode("4819397f51b18bc6cffd1fff07afa33f7096c7a0c659590b077cc0ea5d6081d739512129becacb8e6997e6b7d18756299f515a822344ac2b6737979d5e5e6b03").unwrap();
+
+        let unlock = format!(
+            r#"
+        // push the serialized Entry as the message
+        push("{entry_key}");
+
+        // push the proof data
+        push("{entry_key}proof");"#
+        );
+
+        let mut kvp_unlock = TestData::default();
+        let mut kvp_lock = TestData::default();
+        // "/entry/" needs to be present on both lock and unlock stacks,
+        // since they are used in both the unlock and lock scripts:
+        // ie. push("/entry/") and check_signature("/pubkey", "/entry/")
+        kvp_unlock.put(entry_key, &entry_data.to_vec().into());
+        kvp_lock.put(entry_key, &entry_data.to_vec().into());
+        // "/entry/proof" only needs to be present on the unlock stack,
+        // since that's where the proof is used
+        kvp_unlock.put(proof_key, &proof_data.clone().into());
+
+        let (mut runner, test_logger) = Runner::new_for_test(kvp_lock.clone(), kvp_unlock.clone());
+
+        let result = runner.try_unlock(&unlock);
+
+        // Check the result
+        assert!(result.is_ok());
+
+        // Parameter stack now has /entry/ and /entry/proof on it,
+        // but that's transparent to us at this level
+        // The only way we confirm our code works is if the valid lock script
+        // succeeds, and invalid lock script fails
+
+        // 2 lock scripts.
+        // First one shodl fail, since we don't have the ephemeral key
+        // Second one should succeed, since we have the pubkey signature
+        let first_lock = format!(
+            r#"
+                // check the first key, which is ephemeral
+                check_signature("/ephemeral", "{entry_key}") 
+            "#
+        );
+
+        let other_lock = format!(
+            r#"
+                // then check a possible threshold sig...
+                check_signature("/recoverykey", "{entry_key}") ||
+
+                // then check a possible pubkey sig...
+                check_signature("/pubkey", "{entry_key}") ||
+                
+                // then the pre-image proof...
+                check_preimage("/hash")
+            "#
+        );
+
+        let pubkey = "/pubkey";
+        let pub_key = hex::decode("ba24ed010874657374206b657901012054d94d7b8a11d6581af4a14bc6451c7a23049018610f108c996968fe8fce9464").unwrap();
+
+        kvp_lock.put(pubkey, &pub_key.into());
+
+        // First lock script should Result in a fail Value
+        let result = runner.try_lock(&first_lock);
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert!(result.is_some());
+        let result = result.unwrap();
+        // if let wasm_component_layer::Value::Variant(v) = result {
+        //     assert_eq!(v.discriminant(), 1);
+        //     assert_eq!(v.value(), "failure");
+        // } else {
+        //     panic!("Expected a failure variant");
+        // }
     }
 }

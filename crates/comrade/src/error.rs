@@ -1,8 +1,13 @@
 //! Crate errors
 
 /// Comrade error types
-#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("Invalid argument: {0}")]
+    WasmFnCall(#[from] anyhow::Error),
+    /// Error in the  Script
+    #[error("Script has failed to run, yuo likely have an error in your script: {0}")]
+    ScriptFailure(String),
     // /// Error in the VM
     // #[error("VM error: {0}")]
     // Vm(#[from] wasmi::Error),
