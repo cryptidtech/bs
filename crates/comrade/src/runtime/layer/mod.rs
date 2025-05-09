@@ -10,10 +10,10 @@ use definitions::{
 
 use super::Runtime;
 use crate::Error;
-use comrade_reference::{Pairable, Pairs, Value};
+use comrade_reference::{Pairable, Value};
 use wasm_component_layer::{
-    Component, Engine, Func, FuncType, Instance, Linker, OptionType, OptionValue, ResourceOwn,
-    Store, ValueType,
+    AsContextMut as _, Component, Engine, Func, FuncType, Instance, Linker, OptionType,
+    OptionValue, ResourceOwn, Store, ValueType,
 };
 
 // wasmi layer for native targets
@@ -213,6 +213,7 @@ impl<C: Pairable, P: Pairable> Runner<C, P> {
                             if let wasm_component_layer::Value::String(key) = &params[1] {
                                 let data = store.data_mut();
                                 let value = into_core_value(params[2].clone()).unwrap();
+                                // TODO: Store return value
                                 let v = match choice.discriminant() {
                                     0 => {
                                         &mut data.kvp_current.put(key.to_string().as_str(), &value)
@@ -241,12 +242,12 @@ impl<C: Pairable, P: Pairable> Runner<C, P> {
 
         // Construct
         let exports = instance.exports();
-        let interface = exports
+        let api_export_instance = exports
             .instance(&"comrade:api/api".try_into().unwrap())
             .unwrap();
 
         // Call the resource constructor
-        let resource_constructor = interface.func("[constructor]api").unwrap();
+        let resource_constructor = api_export_instance.func("[constructor]api").unwrap();
 
         let arguments = &[];
         let mut results = vec![wasm_component_layer::Value::Bool(false)];
@@ -269,12 +270,36 @@ impl<C: Pairable, P: Pairable> Runner<C, P> {
 }
 
 impl<C: Pairable, P: Pairable> Runtime for Runner<C, P> {
-    fn run(&self, script: &str) -> Result<(), Error> {
+    fn try_unlock(&mut self, unlock: &str) -> Result<(), Error> {
+        let api_export_instance = self
+            .instance
+            .exports()
+            .instance(&"comrade:api/api".try_into().unwrap())
+            .unwrap();
+
+        let borrowed_api = self
+            .api_resource
+            .borrow(self.store.as_context_mut())
+            .unwrap();
+
+        let unlock_args = vec![
+            wasm_component_layer::Value::Borrow(borrowed_api.clone()),
+            wasm_component_layer::Value::String(unlock.into()),
+        ];
+
+        let try_unlock = api_export_instance.func("[method]api.try-unlock").unwrap();
+
+        // Call the try_unlock method
+        let mut results = vec![wasm_component_layer::Value::Bool(false)];
+        try_unlock
+            .call(&mut self.store, &unlock_args, &mut results)
+            .unwrap();
         Ok(())
     }
 
-    fn top(&self) -> Option<Value> {
-        None
+    fn try_lock(&self) -> Result<Option<Value>, Error> {
+        // call try_lock on the instance
+        Ok(None)
     }
 }
 
@@ -354,9 +379,9 @@ mod tests {
 
     #[test]
     fn test_layer_runner() {
-        let runner = Runner::new(TestData::default(), TestData::default());
-        assert_eq!(runner.top(), None);
-        assert!(runner.run("test").is_ok());
+        let mut runner = Runner::new(TestData::default(), TestData::default());
+        assert_eq!(runner.try_lock(), Ok(None));
+        assert!(runner.try_unlock("test").is_ok());
     }
 
     #[test]

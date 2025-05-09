@@ -17,7 +17,7 @@ pub(crate) use layer::Runner;
 /// Each runtime feature must implement the `Runtime` trait, run and top
 pub trait Runtime {
     /// Run the script.
-    fn run(&self, script: &str) -> Result<(), Error>;
+    fn try_unlock(&mut self, script: &str) -> Result<(), Error>;
     /// Get the top value from the context return stack.
-    fn top(&self) -> Option<Value>;
+    fn try_lock(&self) -> Result<Option<Value>, Error>;
 }

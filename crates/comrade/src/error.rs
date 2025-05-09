@@ -1,7 +1,7 @@
 //! Crate errors
 
 /// Comrade error types
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum Error {
     // /// Error in the VM
     // #[error("VM error: {0}")]

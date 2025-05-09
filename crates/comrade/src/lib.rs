@@ -69,8 +69,8 @@ impl<C: Pairable, P: Pairable> Comrade<C, P> {
 
     /// Tries to unlock the comrade with the given script.
     /// Will return an error if the script fails to run.
-    pub fn try_unlock(self, script: &str) -> Result<Comrade<C, P, Unlocked>, Error> {
-        self.runner.run(script)?;
+    pub fn try_unlock(mut self, script: &str) -> Result<Comrade<C, P, Unlocked>, Error> {
+        self.runner.try_unlock(script)?;
         Ok(self.into())
     }
 }
@@ -79,10 +79,10 @@ impl<C: Pairable, P: Pairable> Comrade<C, P> {
 impl<C: Pairable, P: Pairable> Comrade<C, P, Unlocked> {
     /// Tries to lock the comrade with the given script.
     /// Will return an error if the script fails to run.
-    pub fn try_lock(&self, script: &str) -> Result<Option<Value>, Error> {
-        self.runner.run(script)?;
+    pub fn try_lock(&mut self, script: &str) -> Result<Option<Value>, Error> {
+        self.runner.try_unlock(script)?;
         // check the context retrun stack top, return the result
-        let res = self.runner.top();
+        let res = self.runner.try_lock()?;
         Ok(res)
     }
 }
