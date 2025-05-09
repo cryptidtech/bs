@@ -512,10 +512,6 @@ mod tests {
 
         let unlock = format!(
             r#"
-        // push pubkey 
-        push("{pubkey}");
-
-        // push pubkey value 
         // push the serialized Entry as the message
         push("{entry_key}");
 
@@ -533,7 +529,6 @@ mod tests {
         // "/entry/proof" only needs to be present on the unlock stack,
         // since that's where the proof is used
         kvp_unlock.put(proof_key, &proof_data.clone().into());
-        kvp_lock.put(proof_key, &proof_data.clone().into());
 
         kvp_lock.put(pubkey, &pub_key.into());
 
