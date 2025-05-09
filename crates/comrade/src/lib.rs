@@ -29,6 +29,7 @@ mod runtime;
 
 // Using the same trait out of convenience, the Pairs trait is very basic
 use comrade_reference::{Pairs, Value};
+use runtime::Runtime as _;
 
 /// Comrade goes starts at [Initial] Stage, then goes to [Unlocked] Stage.
 #[derive(Debug)]
@@ -45,6 +46,7 @@ pub struct Unlocked;
 pub struct Comrade<C, P, Stage = Initial> {
     lock: C,
     unlock: P,
+    runner: runtime::Runner,
     _stage: std::marker::PhantomData<Stage>,
 }
 
@@ -54,6 +56,7 @@ impl<C: Pairs, P: Pairs> Comrade<C, P> {
         Comrade {
             lock,
             unlock,
+            runner: runtime::Runner::default(),
             _stage: std::marker::PhantomData,
         }
     }
@@ -61,7 +64,7 @@ impl<C: Pairs, P: Pairs> Comrade<C, P> {
     /// Tries to unlock the comrade with the given script.
     /// Will return an error if the script fails to run.
     pub fn try_unlock(self, script: &str) -> Result<Comrade<C, P, Unlocked>, Error> {
-        runtime::run(script)?;
+        runtime::Runner.run(script)?;
         Ok(self.into())
     }
 }
@@ -71,9 +74,9 @@ impl<C: Pairs, P: Pairs> Comrade<C, P, Unlocked> {
     /// Tries to lock the comrade with the given script.
     /// Will return an error if the script fails to run.
     pub fn try_lock(&self, script: &str) -> Result<Option<Value>, Error> {
-        runtime::run(script)?;
+        runtime::Runner.run(script)?;
         // check the context retrun stack top, return the result
-        let res = runtime::top();
+        let res = runtime::Runner.top();
         Ok(res)
     }
 }
@@ -84,6 +87,7 @@ impl<C: Pairs, P: Pairs> From<Comrade<C, P, Initial>> for Comrade<C, P, Unlocked
         Comrade {
             lock: comrade.lock,
             unlock: comrade.unlock,
+            runner: comrade.runner,
             _stage: std::marker::PhantomData,
         }
     }
