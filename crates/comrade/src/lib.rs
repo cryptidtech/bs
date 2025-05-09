@@ -28,6 +28,7 @@ pub use crate::error::Error;
 mod runtime;
 
 /// Polyfills required to ensure getrandom works in wasm32 target for v0.3
+#[cfg(target_arch = "wasm32")]
 mod random;
 
 // Using the same trait out of convenience, the Pairs trait is very basic
