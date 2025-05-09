@@ -14,6 +14,8 @@ thiserror = "2.0"
 # in native or the browser directly from Rust
 # patch until thos lands: https://github.com/DouglasDwyer/wasm_component_layer/pull/26
 wasm_component_layer = { git = "https://github.com/DougAnderson444/wasm_component_layer.git", branch = "dep-fix", optional = true }
+tracing = { version = "0.1", features = ["log"] }
+tracing-subscriber = { version = "0.3", features = ["std"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 wasmi_runtime_layer = "*"

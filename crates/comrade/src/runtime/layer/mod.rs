@@ -5,6 +5,7 @@
 use super::Runtime;
 use crate::Error;
 use comrade_reference::Value;
+use wasm_component_layer::{Component, Engine, Linker, Store};
 
 // wasmi layer for native targets
 #[cfg(not(target_arch = "wasm32"))]
@@ -14,26 +15,61 @@ use wasmi_runtime_layer as runtime_layer;
 #[cfg(target_arch = "wasm32")]
 use js_wasm_runtime_layer as runtime_layer;
 
-// /// Run the script.
-// pub(crate) fn run(script: &str) -> Result<(), Error> {
-//     todo!();
-//     Ok(())
-// }
-//
-// /// Get the top value from the context return stack.
-// pub(crate) fn top() -> Option<Value> {
-//     todo!()
-// }
+#[derive(Clone, Default, Debug)]
+struct Data;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(crate) struct Runner;
+
+impl Default for Runner {
+    /// Create a new runner.
+    fn default() -> Self {
+        // target/wasm32-unknown-unknown/release/comrade_component.wasm
+        let bytes: &[u8] = include_bytes!(
+            "../../../../../target/wasm32-unknown-unknown/release/comrade_component.wasm"
+        );
+
+        let data = Data::default();
+
+        // Create a new engine for instantiating a component.
+        let engine = Engine::new(runtime_layer::Engine::default());
+
+        // Create a store for managing WASM data and any custom user-defined state.
+        let mut store = Store::new(&engine, data);
+
+        tracing::debug!("Created store, loading bytes.",);
+        // Parse the component bytes and load its imports and exports.
+        let component = Component::new(&engine, &bytes).unwrap();
+
+        tracing::debug!("Loaded bytes");
+
+        // Create a linker that will be used to resolve the component's imports, if any.
+        let mut linker = Linker::default();
+
+        Self
+    }
+}
 
 impl Runtime for Runner {
     fn run(&self, script: &str) -> Result<(), Error> {
-        todo!()
+        Ok(())
     }
 
     fn top(&self) -> Option<Value> {
-        todo!()
+        None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::runtime::Runtime;
+    use comrade_reference::Value;
+
+    #[test]
+    fn test_runner() {
+        let runner = Runner::default();
+        assert_eq!(runner.top(), None);
+        assert!(runner.run("test").is_ok());
     }
 }

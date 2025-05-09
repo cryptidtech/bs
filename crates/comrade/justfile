@@ -1,4 +1,4 @@
 test:
   # Run Cargo Component Build first 
-  cargo component build 
+  just -f ../../justfile build
   cargo test

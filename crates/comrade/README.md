@@ -23,6 +23,17 @@ for lock in locks {
 }
 ```
 
+## Tests 
+
+To run the test:
+
+```sh 
+# see http://just.systems/ fr more details
+just test
+```
+
+This will ensure the default component is built and available for the default wasm runtime.
+
 ## Wasm Component Layer
 
 This reference implementation makes opinions about what dependencies to use, and which wasm runtime to use to run the components, but it should be noted that you can swap in your own runtime for both the component and the wasm runtime. 
