@@ -84,6 +84,10 @@ tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 unsigned-varint = { version = "0.8.0", features = ["std"] }
 
+[workspace.dependencies.getrandom]
+version = "0.2.15"
+features = ["js"]
+
 [profile.bench]
 opt-level = 3
 debug = false

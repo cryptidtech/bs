@@ -27,6 +27,9 @@ pub use crate::error::Error;
 /// The runtime environment for the scripts
 mod runtime;
 
+/// Polyfills required to ensure getrandom works in wasm32 target for v0.3
+mod random;
+
 // Using the same trait out of convenience, the Pairs trait is very basic
 use comrade_reference::{Pairs, Value};
 use runtime::Runtime as _;
@@ -64,7 +67,7 @@ impl<C: Pairs, P: Pairs> Comrade<C, P> {
     /// Tries to unlock the comrade with the given script.
     /// Will return an error if the script fails to run.
     pub fn try_unlock(self, script: &str) -> Result<Comrade<C, P, Unlocked>, Error> {
-        runtime::Runner.run(script)?;
+        self.runner.run(script)?;
         Ok(self.into())
     }
 }
@@ -74,9 +77,9 @@ impl<C: Pairs, P: Pairs> Comrade<C, P, Unlocked> {
     /// Tries to lock the comrade with the given script.
     /// Will return an error if the script fails to run.
     pub fn try_lock(&self, script: &str) -> Result<Option<Value>, Error> {
-        runtime::Runner.run(script)?;
+        self.runner.run(script)?;
         // check the context retrun stack top, return the result
-        let res = runtime::Runner.top();
+        let res = self.runner.top();
         Ok(res)
     }
 }
