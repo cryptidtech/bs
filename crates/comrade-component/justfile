@@ -1,7 +1,7 @@
 # See https://just.systems for more information.
 
 build:
-  # Build the component with cargo-compoenent
+  # Build the component with cargo-component
   RUSTFLAGS='--cfg getrandom_backend="custom"' cargo component build --target wasm32-unknown-unknown --release
 
 test: build 
