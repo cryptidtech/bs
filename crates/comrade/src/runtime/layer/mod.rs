@@ -12,7 +12,8 @@ use super::Runtime;
 use crate::Error;
 use comrade_reference::{Pairable, Pairs, Value};
 use wasm_component_layer::{
-    Component, Engine, Func, FuncType, Instance, Linker, OptionType, OptionValue, Store, ValueType,
+    Component, Engine, Func, FuncType, Instance, Linker, OptionType, OptionValue, ResourceOwn,
+    Store, ValueType,
 };
 
 // wasmi layer for native targets
@@ -33,6 +34,20 @@ where
     store: Store<Data<C, P>, runtime_layer::Engine>,
     /// The instantiated component.
     instance: Instance,
+    /// The constructed API resource for the instance
+    api_resource: ResourceOwn,
+}
+
+trait Logger: Send + Sync + 'static {
+    fn log(&self, message: &str);
+}
+
+struct TracingLogger;
+
+impl Logger for TracingLogger {
+    fn log(&self, message: &str) {
+        tracing::debug!("{}", message);
+    }
 }
 
 /// Internal struct for the store Data
@@ -43,11 +58,20 @@ where
 {
     kvp_current: C,
     kvp_proposed: P,
+    /// Functions that are only used interally
+    logger: Box<dyn Logger>,
 }
 
 impl<C: Pairable, P: Pairable> Runner<C, P> {
-    /// Create a new runner.
+    /// Create a new runner with a tracing logger.
     pub(crate) fn new(kvp_current: C, kvp_proposed: P) -> Self {
+        // Use default logger
+        Self::new_with_logger(kvp_current, kvp_proposed, Box::new(TracingLogger))
+    }
+
+    /// Create a new runner.
+    // #[cfg(test)]
+    fn new_with_logger(kvp_current: C, kvp_proposed: P, logger: Box<dyn Logger>) -> Self {
         // target/wasm32-unknown-unknown/release/comrade_component.wasm
         let bytes: &[u8] = include_bytes!(
             "../../../../../target/wasm32-unknown-unknown/release/comrade_component.wasm"
@@ -62,6 +86,7 @@ impl<C: Pairable, P: Pairable> Runner<C, P> {
             Data {
                 kvp_current,
                 kvp_proposed,
+                logger,
             },
         );
 
@@ -84,9 +109,9 @@ impl<C: Pairable, P: Pairable> Runner<C, P> {
                 Func::new(
                     &mut store,
                     FuncType::new([ValueType::String], []),
-                    move |_store, params, _results| {
+                    move |store, params, _results| {
                         if let wasm_component_layer::Value::String(s) = &params[0] {
-                            tracing::debug!("[Log]: {}", s);
+                            store.data().logger.log(s.to_string().as_str());
                         }
                         Ok(())
                     },
@@ -213,7 +238,33 @@ impl<C: Pairable, P: Pairable> Runner<C, P> {
 
         // Instantiate the component with the linker and store.
         let instance = linker.instantiate(&mut store, &component).unwrap();
-        Self { store, instance }
+
+        // Construct
+        let exports = instance.exports();
+        let interface = exports
+            .instance(&"comrade:api/api".try_into().unwrap())
+            .unwrap();
+
+        // Call the resource constructor
+        let resource_constructor = interface.func("[constructor]api").unwrap();
+
+        let arguments = &[];
+        let mut results = vec![wasm_component_layer::Value::Bool(false)];
+
+        resource_constructor
+            .call(&mut store, arguments, &mut results)
+            .unwrap();
+
+        let api_resource = match results[0] {
+            wasm_component_layer::Value::Own(ref resource) => resource.clone(),
+            _ => panic!("Unexpected result type"),
+        };
+
+        Self {
+            store,
+            instance,
+            api_resource,
+        }
     }
 }
 
@@ -230,16 +281,68 @@ impl<C: Pairable, P: Pairable> Runtime for Runner<C, P> {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::sync::Arc;
 
     use comrade_reference::Pairs;
 
     use super::*;
     use crate::runtime::Runtime;
 
-    #[derive(Clone, Default, Debug)]
-    struct Data(HashMap<String, Value>);
+    struct TestLogger {
+        messages: Arc<std::sync::Mutex<Vec<String>>>,
+    }
 
-    impl Pairs for Data {
+    impl TestLogger {
+        fn new() -> Self {
+            Self {
+                messages: Arc::new(std::sync::Mutex::new(Vec::new())),
+            }
+        }
+
+        fn get_messages(&self) -> Vec<String> {
+            let lock = self.messages.lock().unwrap();
+            lock.clone()
+        }
+
+        fn clear_messages(&self) {
+            let mut lock = self.messages.lock().unwrap();
+            lock.clear();
+        }
+    }
+
+    impl Logger for TestLogger {
+        fn log(&self, message: &str) {
+            let mut messages = self.messages.lock().unwrap();
+            messages.push(message.to_string());
+        }
+    }
+
+    impl Clone for TestLogger {
+        fn clone(&self) -> Self {
+            Self {
+                messages: Arc::clone(&self.messages),
+            }
+        }
+    }
+
+    impl<C: Pairable, P: Pairable> Runner<C, P> {
+        // Helper for tests that returns both the runner and the logger
+        fn new_for_test(kvp_current: C, kvp_proposed: P) -> (Self, TestLogger) {
+            let test_logger = TestLogger::new();
+            let logger_box: Box<dyn Logger> = Box::new(test_logger.clone());
+
+            // Force a test message to verify logging works
+            logger_box.log("Test log system");
+
+            let runner = Self::new_with_logger(kvp_current, kvp_proposed, logger_box);
+            (runner, test_logger)
+        }
+    }
+
+    #[derive(Clone, Default, Debug)]
+    struct TestData(HashMap<String, Value>);
+
+    impl Pairs for TestData {
         fn get(&self, key: &str) -> Option<Value> {
             self.0.get(key).cloned()
         }
@@ -251,8 +354,22 @@ mod tests {
 
     #[test]
     fn test_layer_runner() {
-        let runner = Runner::new(Data::default(), Data::default());
+        let runner = Runner::new(TestData::default(), TestData::default());
         assert_eq!(runner.top(), None);
         assert!(runner.run("test").is_ok());
+    }
+
+    #[test]
+    fn test_log() {
+        // When we call the consturctor for the reference impl wasm bytes,
+        // we should get log("Creating new Component");
+
+        let (runner, test_logger) = Runner::new_for_test(TestData::default(), TestData::default());
+
+        let logs = test_logger.get_messages();
+
+        assert!(logs
+            .iter()
+            .any(|msg| msg.contains("Creating new Component")));
     }
 }
