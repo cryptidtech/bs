@@ -86,7 +86,7 @@ let other_lock_script = format!(
     "#
 );
 
-let mut comrade = Comrade::new(kvp_lock, kvp_unlock)
+let mut comrade = Comrade::new(&kvp_lock, &kvp_unlock)
     .try_unlock(&unlock_script)
     .expect("Failed to unlock comrade");
 
