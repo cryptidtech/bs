@@ -14,7 +14,7 @@ mod parser;
 pub(crate) use parser::Rule;
 use parser::{parse, Expression, Function, Key};
 
-use crate::ApiError;
+use crate::{cond_send::CondSync, ApiError};
 use multihash::{mh, Multihash};
 use multikey::{Multikey, Views as _};
 use multisig::Multisig;
@@ -46,7 +46,7 @@ pub struct Context<'a> {
 }
 
 /// Log a message to the console
-pub trait Log {
+pub trait Log: CondSync {
     fn log(&self, msg: &str);
 }
 
@@ -394,6 +394,7 @@ impl<'a> Context<'a> {
         s
     }
 
+    /// Returns the top of the return stack
     pub fn rstack(&self) -> Option<Value> {
         self.rstack.top()
     }
