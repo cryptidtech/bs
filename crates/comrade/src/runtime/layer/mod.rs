@@ -1,7 +1,10 @@
-//! Uses crate wasm_component_layer to runt he wasm components.
+//! Uses crate wasm_component_layer to run the runtime as a wasm component.
 //!
 //! This crate is great because it gives us the ability to isomorphically run in the browser with
 //! wasm_bindgen but without javascript, and also natively.
+//!
+//! That said, the entire workspace could be packaged as a component, so this can be left to the
+//! users.
 mod definitions;
 
 use definitions::{
@@ -63,7 +66,7 @@ where
 }
 
 impl<C: Pairable, P: Pairable> Runner<C, P> {
-    /// Create a new runner with a tracing logger.
+    /// Create a new wasm_compoennt_layer [Runner] with a tracing logger.
     pub(crate) fn new(kvp_current: C, kvp_proposed: P) -> Self {
         // Use default logger
         Self::new_with_logger(kvp_current, kvp_proposed, Box::new(TracingLogger))

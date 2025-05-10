@@ -102,15 +102,22 @@ impl<C: Pairable, P: Pairable> From<Comrade<C, P, Initial>> for Comrade<C, P, Un
     }
 }
 
-#[cfg(test)]
-mod tests {
+#[cfg(target_arch = "wasm32")]
+pub mod wasm_tests {
+    pub fn run() {
+        super::tests::test_comrade_api();
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+pub mod tests {
 
     use super::*;
     use comrade_reference::Pairs;
     use std::collections::HashMap;
 
     #[derive(Clone, Default, Debug)]
-    struct TestData(HashMap<String, Value>);
+    pub struct TestData(HashMap<String, Value>);
 
     impl Pairs for TestData {
         fn get(&self, key: &str) -> Option<Value> {
@@ -164,19 +171,34 @@ mod tests {
         )
     }
 
+    // cfg test or wasm32
+    #[cfg(any(target_arch = "wasm32", test))]
+    fn proof_data() -> Vec<u8> {
+        hex::decode("b92483a6c006000100404819397f51b18bc6cffd1fff07afa33f7096c7a0c659590b077cc0ea5d6081d739512129becacb8e6997e6b7d18756299f515a822344ac2b6737979d5e5e6b03").unwrap()
+    }
+
+    #[cfg(any(target_arch = "wasm32", test))]
+    fn pub_key() -> Vec<u8> {
+        hex::decode("ba24ed010874657374206b657901012054d94d7b8a11d6581af4a14bc6451c7a23049018610f108c996968fe8fce9464").unwrap()
+    }
+
     #[test]
-    fn test_comrade() {
+    pub fn test_comrade() {
+        test_comrade_api();
+    }
+
+    pub fn test_comrade_api() {
         // The message to sign, in both the lock and unlock scripts
         let entry_key = "/entry/";
         let entry_data = b"for great justice, move every zig!";
 
         // The proof data that is provided by the unlock script
         let proof_key = "/entry/proof";
-        let proof_data = hex::decode("b92483a6c006000100404819397f51b18bc6cffd1fff07afa33f7096c7a0c659590b077cc0ea5d6081d739512129becacb8e6997e6b7d18756299f515a822344ac2b6737979d5e5e6b03").unwrap();
+        let proof_data = proof_data();
 
         // The public key to that must be proven by unlock scripts
         let pubkey = "/pubkey";
-        let pub_key = hex::decode("ba24ed010874657374206b657901012054d94d7b8a11d6581af4a14bc6451c7a23049018610f108c996968fe8fce9464").unwrap();
+        let pub_key = pub_key();
 
         // Our Key-Value Pairs
         let mut kvp_unlock = TestData::default();
