@@ -18,7 +18,6 @@ use std::cell::RefCell;
 
 struct Api {
     context: RefCell<Context<'static>>,
-    unlock: RefCell<Option<String>>,
 }
 
 impl Guest for Api {
@@ -31,14 +30,11 @@ impl GuestApi for Api {
 
         Self {
             context: RefCell::new(Context::new(&Current, &Proposed, &Logger)),
-            unlock: RefCell::new(None),
         }
     }
 
     fn try_unlock(&self, unlock: String) -> Result<(), String> {
         log("[component] try_unlock(..)");
-        self.unlock.borrow_mut().replace(unlock.clone());
-        // self.vm.run(&unlock).map_err(|e| e.to_string())?;
         self.context.borrow_mut().run(&unlock).map_err(|e| {
             log(&format!("Error running unlock script: {e}"));
             format!("Error running unlock script: {e}")
