@@ -2,7 +2,7 @@
 //! is evaluated
 
 mod pairs;
-pub use pairs::{Pairable, Pairs};
+pub use pairs::Pairs;
 
 mod value;
 pub use value::Value;
@@ -14,7 +14,7 @@ mod parser;
 pub(crate) use parser::Rule;
 use parser::{parse, Expression, Function, Key};
 
-use crate::{cond_send::CondSync, ApiError};
+use crate::ApiError;
 use multihash::{mh, Multihash};
 use multikey::{Multikey, Views as _};
 use multisig::Multisig;
@@ -22,12 +22,12 @@ use multiutil::prelude::*;
 
 /// The [Context] within which the script is
 /// evaluated.
-pub struct Context<'a> {
+pub struct Context<'un, 'lo> {
     /// The Return stack
-    pub(crate) current: &'a dyn Pairs,
+    pub(crate) current: &'un dyn Pairs,
 
     /// The Parameters stack
-    pub(crate) proposed: &'a dyn Pairs,
+    pub(crate) proposed: &'lo dyn Pairs,
 
     /// The number of checks that have been performed
     pub(crate) check_count: usize,
@@ -42,18 +42,18 @@ pub struct Context<'a> {
     pub domain: String,
 
     /// The log implementation for the context
-    pub(crate) logger: &'a dyn Log,
+    pub(crate) logger: &'un dyn Log,
 }
 
 /// Log a message to the console
-pub trait Log: CondSync {
+pub trait Log {
     fn log(&self, msg: &str);
 }
 
-impl<'a> Context<'a> {
+impl<'un, 'lo> Context<'un, 'lo> {
     /// Create a new [Context] struct with the given [Current] and [Proposed] key-value stores,
-    /// which are bound by both [Pairable].
-    pub fn new(current: &'a impl Pairs, proposed: &'a impl Pairs, logger: &'a impl Log) -> Self {
+    /// which are bound by both [Pairs].
+    pub fn new(current: &'un impl Pairs, proposed: &'lo impl Pairs, logger: &'un impl Log) -> Self {
         Context {
             current,
             proposed,

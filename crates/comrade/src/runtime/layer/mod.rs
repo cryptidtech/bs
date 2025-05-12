@@ -13,7 +13,7 @@ use definitions::{
 
 use super::Runtime;
 use crate::Error;
-use comrade_reference::{Pairable, Value};
+use comrade_reference::{Pairs, Value};
 use wasm_component_layer::{
     AsContextMut as _, Component, Engine, Func, FuncType, Instance, Linker, OptionType,
     OptionValue, ResourceOwn, Store, ValueType,
@@ -30,8 +30,8 @@ use js_wasm_runtime_layer as runtime_layer;
 // C and P need to be bound by Send + Sync
 pub(crate) struct Runner<C, P>
 where
-    C: Pairable,
-    P: Pairable,
+    C: Pairs,
+    P: Pairs,
 {
     /// The store for the component.
     store: Store<Data<C, P>, runtime_layer::Engine>,
@@ -56,8 +56,8 @@ impl Logger for TracingLogger {
 /// Internal struct for the store Data
 struct Data<C, P>
 where
-    C: Pairable,
-    P: Pairable,
+    C: Pairs,
+    P: Pairs,
 {
     kvp_current: C,
     kvp_proposed: P,
@@ -65,7 +65,7 @@ where
     logger: Box<dyn Logger>,
 }
 
-impl<C: Pairable, P: Pairable> Runner<C, P> {
+impl<C: Pairs, P: Pairs> Runner<C, P> {
     /// Create a new wasm_compoennt_layer [Runner] with a tracing logger.
     pub(crate) fn new(kvp_current: C, kvp_proposed: P) -> Self {
         // Use default logger
@@ -272,7 +272,7 @@ impl<C: Pairable, P: Pairable> Runner<C, P> {
     }
 }
 
-impl<C: Pairable, P: Pairable> Runtime for Runner<C, P> {
+impl<C: Pairs, P: Pairs> Runtime for Runner<C, P> {
     fn try_unlock(&mut self, unlock: &str) -> Result<(), Error> {
         let api_export_instance = self
             .instance
@@ -403,7 +403,7 @@ mod tests {
         }
     }
 
-    impl<C: Pairable, P: Pairable> Runner<C, P> {
+    impl<C: Pairs, P: Pairs> Runner<C, P> {
         // Helper for tests that returns both the runner and the logger
         fn new_for_test(kvp_current: C, kvp_proposed: P) -> (Self, TestLogger) {
             let test_logger = TestLogger::new();

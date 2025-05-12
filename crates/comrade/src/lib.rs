@@ -37,7 +37,7 @@ mod runtime;
 mod random;
 
 // Using the same trait out of convenience, the Pairs trait is very basic
-use comrade_reference::{Pairable, Value};
+pub use comrade_reference::{Pairs, Value};
 use runtime::Runtime as _;
 
 /// Comrade goes starts at [Initial] Stage, then goes to [Unlocked] Stage.
@@ -52,18 +52,18 @@ pub struct Unlocked;
 /// Uses the comrade-component reference implementation by default,
 /// and wasm_component_layer for runtime. Either can be substituted
 /// with prefered alternatives as desired.
-pub struct Comrade<'a, Stage = Initial> {
+pub struct Comrade<'un, 'lo, Stage = Initial> {
     // /// The key-value pairs asociated with the lock
     // kvp_lock: C,
     // /// The key-value pairs asociated with the unlock
     // kvp_unlock: P,
-    runner: runtime::Runner<'a>,
+    runner: runtime::Runner<'un, 'lo>,
     _stage: std::marker::PhantomData<Stage>,
 }
 
-impl<'a> Comrade<'a> {
+impl<'un, 'lo> Comrade<'un, 'lo> {
     /// Creates a new Comrade instance with the given lock and unlock pairs.
-    pub fn new(kvp_lock: &'a impl Pairable, kvp_unlock: &'a impl Pairable) -> Self {
+    pub fn new(kvp_lock: &'un impl Pairs, kvp_unlock: &'lo impl Pairs) -> Self {
         Comrade {
             runner: runtime::Runner::new(kvp_lock, kvp_unlock),
             _stage: std::marker::PhantomData,
@@ -72,14 +72,14 @@ impl<'a> Comrade<'a> {
 
     /// Tries to unlock the comrade with the given script.
     /// Will return an error if the script fails to run.
-    pub fn try_unlock(mut self, script: &'a str) -> Result<Comrade<'a, Unlocked>, Error> {
+    pub fn try_unlock(mut self, script: &'un str) -> Result<Comrade<'un, 'lo, Unlocked>, Error> {
         self.runner.try_unlock(script)?;
         Ok(self.into())
     }
 }
 
 // try_lock can only be called on an Unlocked Comrade
-impl Comrade<'_, Unlocked> {
+impl Comrade<'_, '_, Unlocked> {
     /// Tries to lock the comrade with the given script.
     /// Will return an error if the script fails to run.
     pub fn try_lock(&mut self, script: &str) -> Result<Option<Value>, Error> {
@@ -89,8 +89,8 @@ impl Comrade<'_, Unlocked> {
 }
 
 // from Initial to Unlocked
-impl<'a> From<Comrade<'a, Initial>> for Comrade<'a, Unlocked> {
-    fn from(comrade: Comrade<'a>) -> Self {
+impl<'un, 'lo> From<Comrade<'un, 'lo, Initial>> for Comrade<'un, 'lo, Unlocked> {
+    fn from(comrade: Comrade<'un, 'lo>) -> Self {
         Comrade {
             // kvp_lock: comrade.kvp_lock,
             // kvp_unlock: comrade.kvp_unlock,
@@ -124,7 +124,9 @@ pub mod tests {
         use super::*;
 
         // Autotrait test
-        pub(crate) fn is_normal<T: Sized + Send + Sync + Unpin>() {}
+        // Comrade is not Send or Sync, but it is Unpin
+        // pub(crate) fn is_normal<T: Sized + Send + Sync + Unpin>() {}
+        pub(crate) fn is_sized_unnpin<T: Sized + Unpin>() {}
 
         pub fn unlock_script(entry_key: &str, proof_key: &str) -> String {
             format!(
@@ -240,7 +242,7 @@ pub mod tests {
     fn test_autotraits() {
         // This is a dummy test to ensure that the crate runs in wasm32 target
         // and that the autotrait implementation is what is expected.
-        helpers::is_normal::<Comrade<'_>>();
+        helpers::is_sized_unnpin::<Comrade<'_, '_>>();
     }
 
     // This is the actual test that cargo test will run

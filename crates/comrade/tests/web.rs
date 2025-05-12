@@ -6,7 +6,7 @@ use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
 
-use comrade_reference::{Pairable, Pairs, Value};
+use comrade_reference::{Pairs, Value};
 use std::collections::HashMap;
 use tracing::info;
 
