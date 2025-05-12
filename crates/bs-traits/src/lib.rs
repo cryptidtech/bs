@@ -5,6 +5,7 @@
 /// It also provides a `WaitQueue` type that can be used to implement synchronous and asynchronous operations
 /// without having to use tokio::block_in_place or similar.
 mod r#async;
+mod cond_send;
 mod error;
 mod sync;
 mod wait_queue;
