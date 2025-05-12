@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: FSL-1.1
 
-use crate::cond_send::CondSend;
+use crate::cond_send::{CondSend, CondSync};
 use crate::*;
 use std::error::Error as StdError;
 use std::future::Future;
@@ -23,7 +23,11 @@ pub trait AsyncSigner: Signer {
         &'a self,
         key: &'a Self::Key,
         data: &'a [u8],
-    ) -> impl Future<Output = Self::Signature> + CondSend + 'a {
+    ) -> impl Future<Output = Self::Signature> + CondSend + 'a
+    where
+        Self: CondSync,
+        Self::Key: CondSync,
+    {
         async move {
             self.try_sign_async(key, data)
                 .await
@@ -63,7 +67,12 @@ pub trait AsyncEncryptor: Encryptor {
         &'a self,
         key: &'a Self::Key,
         plaintext: &'a Self::Plaintext,
-    ) -> impl Future<Output = Self::Ciphertext> + CondSend + 'a {
+    ) -> impl Future<Output = Self::Ciphertext> + CondSend + 'a
+    where
+        Self: CondSync,
+        Self::Key: CondSync,
+        Self::Plaintext: CondSync,
+    {
         async move {
             self.try_encrypt_async(key, plaintext)
                 .await
