@@ -10,5 +10,9 @@ license = "Functional Source License 1.1"
 [dependencies]
 thiserror.workspace = true
 
+[dev-dependencies]
+futures = "0.3"
+tokio = { version = "1", features = ["full"] }
+
 [lints]
 workspace = true

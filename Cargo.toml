@@ -9,6 +9,7 @@ members = [
   "crates/comrade",
   "crates/comrade-component",
   "crates/comrade-reference",
+  "crates/bs-p2p",
   "crates/content-addressable",
   "crates/multibase",
   "crates/multicid",
