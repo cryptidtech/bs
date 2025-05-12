@@ -17,7 +17,7 @@ use comrade_reference::Context;
 use std::cell::RefCell;
 
 struct Api {
-    context: RefCell<Context<'static>>,
+    context: RefCell<Context<'static, 'static>>,
 }
 
 impl Guest for Api {
