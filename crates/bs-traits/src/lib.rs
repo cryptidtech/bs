@@ -11,12 +11,18 @@ pub trait Signer {
     type Key;
     /// The type of signature
     type Signature;
+    /// Any Signing Error
+    type SignError: std::fmt::Debug;
 
     /// Attempt to sign the data
-    fn try_sign(&self, key: &Self::Key, data: &[u8]) -> Result<Self::Signature, Error>;
+    fn try_sign(&self, key: &Self::Key, data: &[u8]) -> Result<Self::Signature, Self::SignError>;
 
     /// Sign the data and return the signature
-    fn sign(&self, key: &Self::Key, data: &[u8]) -> Self::Signature {
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the signing operation fails.
+    fn sign_unchecked(&self, key: &Self::Key, data: &[u8]) -> Self::Signature {
         self.try_sign(key, data).expect("signing operation failed")
     }
 }
@@ -139,6 +145,8 @@ pub trait GetKey {
     type KeyPath;
     /// The type of codec
     type Codec;
+    /// The Error returned
+    type KeyError;
 
     /// Get the key
     fn get_key(
@@ -147,5 +155,5 @@ pub trait GetKey {
         codec: &Self::Codec,
         threshold: usize,
         limit: usize,
-    ) -> Result<Self::Key, Error>;
+    ) -> Result<Self::Key, Self::KeyError>;
 }
