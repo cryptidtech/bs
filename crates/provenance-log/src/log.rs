@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: FSL-1.1
-use crate::{entry, error::LogError, Entry, Error, Kvp, Script, Stk};
+use crate::{
+    entry,
+    error::{LogError, ScriptError},
+    Entry, Error, Kvp, Script,
+};
+use comrade::{Comrade, Value};
 use core::fmt;
 use multibase::Base;
 use multicid::{Cid, Vlad};
@@ -7,7 +12,6 @@ use multicodec::Codec;
 use multitrait::{Null, TryDecodeFrom};
 use multiutil::{BaseEncoded, CodecInfo, EncodingInfo, Varuint};
 use std::collections::BTreeMap;
-use wacc::{prelude::StoreLimitsBuilder, vm, Stack};
 
 /// the multicodec provenance log codec
 pub const SIGIL: Codec = Codec::ProvenanceLog;
@@ -194,6 +198,21 @@ struct VerifyIter<'a> {
     error: Option<Error>,
 }
 
+impl<'a> VerifyIter<'a> {
+    /// Helper method to set error state and return early
+    fn set_error<E>(&mut self, error: E) -> Option<Result<(usize, Entry, Kvp<'a>), Error>>
+    where
+        E: Into<Error>,
+    {
+        // Set index out of range
+        self.seqno = self.entries.len();
+        // Set the error state
+        self.error = Some(error.into());
+        // Return the error
+        Some(Err(self.error.clone().unwrap()))
+    }
+}
+
 impl<'a> Iterator for VerifyIter<'a> {
     type Item = Result<(usize, Entry, Kvp<'a>), Error>;
 
@@ -207,101 +226,84 @@ impl<'a> Iterator for VerifyIter<'a> {
         // this is the check count if successful
         let mut count = 0;
 
-        // set up the stacks
-        let mut pstack = Stk::default();
-        let mut rstack = Stk::default();
-
         // check the seqno meet the criteria
         if self.seqno > 0 && self.seqno != self.prev_seqno + 1 {
-            // set our index out of range
-            self.seqno = self.entries.len();
-            // set the error state
-            self.error = Some(LogError::InvalidSeqno.into());
-            return Some(Err(self.error.clone().unwrap()));
+            return self.set_error(LogError::InvalidSeqno);
         }
 
         // 'unlock:
-        let mut result = {
-            // run the unlock script using the entry as the kvp to get the
-            // stack in the vm::Context set up.
-            let unlock_ctx = vm::Context {
-                current: entry,  // limit the available data to just the entry
-                proposed: entry, // limit the available data to just the entry
-                pstack: &mut pstack,
-                rstack: &mut rstack,
-                check_count: 0,
-                write_idx: 0,
-                context: entry.context().to_string(),
-                log: Vec::default(),
-                limiter: StoreLimitsBuilder::new()
-                    .memory_size(1 << 16)
-                    .instances(2)
-                    .memories(1)
-                    .build(),
-            };
-
-            let mut instance = match vm::Builder::new()
-                .with_context(unlock_ctx)
-                .with_bytes(entry.unlock.clone())
-                .try_build()
-            {
-                Ok(i) => i,
-                Err(e) => {
-                    // set our index out of range
-                    self.seqno = self.entries.len();
-                    self.error = Some(LogError::Wacc(e).into());
-                    return Some(Err(self.error.clone().unwrap()));
-                }
-            };
-            //print!("running unlock script from seqno: {}...", self.seqno);
-
-            // run the unlock script
-            if let Some(e) = instance.run("for_great_justice").err() {
-                // set our index out of range
-                self.seqno = self.entries.len();
-                self.error = Some(LogError::Wacc(e).into());
-                return Some(Err(self.error.clone().unwrap()));
-            }
-
-            //println!("SUCCEEDED!");
-
-            true
+        let Script::Code(_, ref unlock) = entry.unlock else {
+            return self.set_error(ScriptError::WrongScriptFormat {
+                expected: "unlock".to_string(),
+                found: format!("{:?}", entry.unlock),
+            });
         };
-
-        /*
-        println!("values:");
-        println!("{:?}", pstack.clone());
-        println!("return:");
-        println!("{:?}", rstack.clone());
-        */
-
-        if !result {
-            // set our index out of range
-            self.seqno = self.entries.len();
-            self.error = Some(
-                LogError::VerifyFailed(format!(
-                    "unlock script failed\nvalues:\n{:?}\nreturn:\n{:?}",
-                    rstack, pstack
-                ))
-                .into(),
-            );
-            return Some(Err(self.error.clone().unwrap()));
-        }
-
-        /*
-        // set the entry to look into for proof and message values
-        if let Some(e) = self.kvp.set_entry(entry).err() {
-            // set our index out of range
-            self.seqno = self.entries.len();
-            self.error = Some(LogError::KvpSetEntryFailed(e.to_string()).into());
-            return Some(Err(self.error.clone().unwrap()));
-        }
-        */
 
         // if this is the first entry, then we need to apply the
         // mutation ops
         if self.seqno == 0 {
             //println!("applying kvp ops for seqno 0");
+            if let Some(e) = self.kvp.apply_entry_ops(entry).err() {
+                return self.set_error(LogError::UnlockFailed(e.to_string()));
+            }
+        }
+
+        let kvp_lock = self.kvp.clone();
+
+        let mut unlocked = Comrade::new(&kvp_lock, &entry)
+            .try_unlock(unlock)
+            .or_else(|e| {
+                Err(self.set_error(LogError::UnlockFailed(format!("unlock failed: {}", e))))
+            })
+            .ok()?;
+
+        // build the set of lock scripts to run in order from root to longest branch to leaf
+        let locks = match entry.sort_locks(&self.lock_scripts) {
+            Ok(l) => l,
+            Err(e) => {
+                return self.set_error(e);
+            }
+        };
+
+        let mut results = false;
+
+        // run each of the lock scripts
+        for lock in locks {
+            let Script::Code(_, lock) = lock else {
+                // set our index out of range
+                self.seqno = self.entries.len();
+                // set the error state
+                self.error = Some(
+                    ScriptError::WrongScriptFormat {
+                        found: format!("{:?}", lock),
+                        expected: "Script::Code".to_string(),
+                    }
+                    .into(),
+                );
+                return Some(Err(self.error.clone().unwrap()));
+            };
+
+            match unlocked.try_lock(&lock) {
+                Ok(Some(Value::Success(ct))) => {
+                    count = ct;
+                    results = true;
+                    break;
+                }
+                Err(e) => {
+                    self.set_error(LogError::LockFailed(e.to_string()));
+                }
+                _ => continue,
+            }
+        }
+
+        if !results {
+            self.set_error(LogError::VerifyFailed("entry failed to verify".to_string()));
+        }
+
+        // if the entry verifies, apply it's mutataions to the kvp
+        // the 0th entry has already been applied at this point so no
+        // need to do it here
+        if self.seqno > 0 {
             if let Some(e) = self.kvp.apply_entry_ops(entry).err() {
                 // set our index out of range
                 self.seqno = self.entries.len();
@@ -309,114 +311,11 @@ impl<'a> Iterator for VerifyIter<'a> {
                 return Some(Err(self.error.clone().unwrap()));
             }
         }
-
-        // 'lock:
-        result = false;
-
-        // build the set of lock scripts to run in order from root to longest branch to leaf
-        let locks = match entry.sort_locks(&self.lock_scripts) {
-            Ok(l) => l,
-            Err(e) => {
-                // set our index out of range
-                self.seqno = self.entries.len();
-                self.error = Some(e);
-                return Some(Err(self.error.clone().unwrap()));
-            }
-        };
-
-        // run each of the lock scripts
-        for lock in locks {
-            // NOTE: clone the kvp and stacks each time
-            let lock_kvp = self.kvp.clone();
-            let mut lock_pstack = pstack.clone();
-            let mut lock_rstack = rstack.clone();
-
-            {
-                let lock_ctx = vm::Context {
-                    current: &lock_kvp,
-                    proposed: entry,
-                    pstack: &mut lock_pstack,
-                    rstack: &mut lock_rstack,
-                    check_count: 0,
-                    write_idx: 0,
-                    context: entry.context().to_string(), // set the branch path for branch()
-                    log: Vec::default(),
-                    limiter: StoreLimitsBuilder::new()
-                        .memory_size(1 << 16)
-                        .instances(2)
-                        .memories(1)
-                        .build(),
-                };
-
-                let mut instance = match vm::Builder::new()
-                    .with_context(lock_ctx)
-                    .with_bytes(lock.clone())
-                    .try_build()
-                {
-                    Ok(i) => i,
-                    Err(e) => {
-                        // set our index out of range
-                        self.seqno = self.entries.len();
-                        self.error = Some(LogError::Wacc(e).into());
-                        return Some(Err(self.error.clone().unwrap()));
-                    }
-                };
-                //print!("running lock script from seqno: {}...", self.seqno);
-
-                // run the unlock script
-                if let Some(e) = instance.run("move_every_zig").err() {
-                    // set our index out of range
-                    self.seqno = self.entries.len();
-                    self.error = Some(LogError::Wacc(e).into());
-                    return Some(Err(self.error.clone().unwrap()));
-                }
-
-                //println!("SUCCEEDED!");
-            }
-
-            // break out of this loop as soon as a lock script succeeds
-            if let Some(v) = lock_rstack.top() {
-                match v {
-                    vm::Value::Success(c) => {
-                        count = c;
-                        result = true;
-                        break;
-                    }
-                    _ => result = false,
-                }
-            }
-        }
-
-        if result {
-            // if the entry verifies, apply it's mutataions to the kvp
-            // the 0th entry has already been applied at this point so no
-            // need to do it here
-            if self.seqno > 0 {
-                if let Some(e) = self.kvp.apply_entry_ops(entry).err() {
-                    // set our index out of range
-                    self.seqno = self.entries.len();
-                    self.error = Some(LogError::UpdateKvpFailed(e.to_string()).into());
-                    return Some(Err(self.error.clone().unwrap()));
-                }
-            }
-            // update the lock script to validate the next entry
-            self.lock_scripts.clone_from(&entry.locks);
-            // update the seqno
-            self.prev_seqno = self.seqno;
-            self.seqno += 1;
-        } else {
-            // set our index out of range
-            self.seqno = self.entries.len();
-            self.error = Some(
-                LogError::VerifyFailed(format!(
-                    "unlock script failed\nvalues:\n{:?}\nreturn:\n{:?}",
-                    rstack, pstack
-                ))
-                .into(),
-            );
-            return Some(Err(self.error.clone().unwrap()));
-        }
-
+        // update the lock script to validate the next entry
+        self.lock_scripts.clone_from(&entry.locks);
+        // update the seqno
+        self.prev_seqno = self.seqno;
+        self.seqno += 1;
         // return the check count, validated entry, and kvp state
         Some(Ok((count, entry.clone(), self.kvp.clone())))
     }
