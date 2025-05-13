@@ -20,6 +20,10 @@ impl<'un, 'lo> Runner<'un, 'lo> {
 }
 
 impl Runtime for Runner<'_, '_> {
+    fn with_domain(&mut self, domain: &str) {
+        self.context.domain = domain.to_string();
+    }
+
     fn try_unlock(&mut self, script: &str) -> Result<(), crate::Error> {
         self.context.run(script)?;
         Ok(())

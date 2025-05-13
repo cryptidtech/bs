@@ -25,6 +25,8 @@ pub(crate) use direct::Runner;
 
 /// Each runtime feature must implement the `Runtime` trait, run and top
 pub trait Runtime {
+    /// Sets the domain
+    fn with_domain(&mut self, domain: &str);
     /// Run the script.
     fn try_unlock(&mut self, script: &str) -> Result<(), Error>;
     /// Get the top value from the context return stack.

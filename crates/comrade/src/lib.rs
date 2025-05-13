@@ -1,9 +1,11 @@
 //! Comrade is an execution engine for provenance log scripts.
 //!
-//! It requires a wasm-component plugin to run. A reference implementation is
-//! provided in the `comrade-component` crate which uses [comrade_reference]
+//! It requires a Script Runtime to run. A reference implementation is
+//! provided in the [crate::runtime::Runner] module which uses [comrade_reference]
+//! directly in Rust. In the future, this crate *can* support other runtimes,
+//! such as [wasm_component_layer] based wasm components.
 //!
-//! API should be something like:
+//! The Comrade API should look something like:
 //!
 //! ```ignore
 //! let unlocked = Comrade::new(kvp_lock, kvp_unlock)
@@ -68,6 +70,38 @@ impl<'un, 'lo> Comrade<'un, 'lo> {
             runner: runtime::Runner::new(kvp_lock, kvp_unlock),
             _stage: std::marker::PhantomData,
         }
+    }
+
+    /// Optionally set the key-path domain for use in branch() functions.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use std::error::Error;
+    /// # use comrade::{Comrade, Value};
+    /// #
+    /// # // Mock implementation for doctests
+    /// # struct MockPairs;
+    /// # impl comrade::Pairs for MockPairs {
+    /// #     fn get(&self, _: &str) -> Option<Value> { None }
+    /// #     fn put(&mut self, _: &str, _: &Value) -> Option<Value> { None }
+    /// # }
+    /// #
+    /// # fn main() -> Result<(), Box<dyn Error>> {
+    /// let kvp_lock = MockPairs;
+    /// let kvp_unlock = MockPairs;
+    /// let unlock = r#"push("/entry_key/"); push("/entry_key/proof");"#;
+    /// let unlocked = Comrade::new(&kvp_lock, &kvp_unlock)
+    ///     .with_domain("/forks/child")
+    ///     .try_unlock(unlock)?;
+    ///
+    /// // full path is now "/forks/child/entry_key/" and "/forks/child/entry_key/proof"
+    /// #
+    /// # Ok(())
+    /// # }
+    pub fn with_domain(mut self, domain: &str) -> Self {
+        self.runner.with_domain(domain);
+        self
     }
 
     /// Tries to unlock the comrade with the given script.

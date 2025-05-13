@@ -65,6 +65,12 @@ impl<'un, 'lo> Context<'un, 'lo> {
         }
     }
 
+    /// Set the domain for the context
+    pub fn with_domain(&mut self, domain: &str) -> &mut Self {
+        self.domain = domain.to_string();
+        self
+    }
+
     /// Parse a script from a string and evaluate it, returning the result
     pub fn run(&mut self, script: &str) -> Result<bool, ApiError> {
         self.logger.log(&format!("Running script: {script}"));
