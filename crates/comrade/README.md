@@ -2,12 +2,31 @@
 
 A flexible, extensible, and composable way to run provenance log scripts natively or in the browser.
 
-This crate is the main entry point for the library. 
+## Overview
 
+This crate is the main entry point for the Comrade library, which provides a framework for executing provenance log scripts in both native and browser environments. Comrade enables flexible script execution with support for lock and unlock operations through an intuitive key-value pair interface.
+
+This crate is run during the "Verification" step of using a provenance log.
+
+## Installation
+
+This crate is typically used in the [../provenance-log/Cargo.toml](../provenance-log/) crate by adding this to the `Cargo.toml`:
+
+```toml
+[dependencies]
+comrade.workspace = true
+```
+
+## Features
+
+- Execute text-based provenance log scripts in native Rust or browser environments
+- Flexible key-value pair interface for script data management
+- Support for lock and unlock script operations
+- Wasm component model compatibility
 
 ## Use 
 
-The main API aims to be super simple:
+The main API aims to be as simple as possible, and the following example shows how to use the Comrade library to run a script:
 
 ```rust
 use comrade::Comrade;
@@ -24,7 +43,7 @@ impl Pairs for TestData {
 
     fn put(&mut self, key: &str, value: &Value) -> Option<Value> {
         self.0.insert(key.to_string(), value.clone())
- }
+    }
 }
 
 // The message to sign, in both the lock and unlock scripts
@@ -110,19 +129,41 @@ assert_eq!(count, 2);
 
 ## Tests 
 
-To run the test:
+To run the tests:
 
 ```sh 
-# see http://just.systems/ fr more details
+# see http://just.systems/ for more details
 just test
 ```
 
 This will ensure the default component is built and available for the default wasm runtime.
 
-## Wasm Component Layer
+## Architecture
 
-This reference implementation makes opinions about what dependencies to use, and which wasm runtime to use to run the components, but it should be noted that you can swap in your own runtime for both the component and the wasm runtime. 
+Comrade is designed with a modular architecture that consists of:
 
-`wasm_component_layer` crate gives us an isomorphic way to load components in native or the browser directly from Rust. We use a patch until [this dependency fix lands](https://github.com/DouglasDwyer/wasm_component_layer/pull/26). 
+1. **Core API**: The main `Comrade` struct provides a simple interface for script execution
+2. **Reference Implementation**: The crate includes a reference implementation with default behaviors
+3. **WASM Integration**: Support for WebAssembly components enables cross-platform compatibility
 
-We chose the `wasmi_runtime` for native, and `js_wasm_runtime_layer` for the browser.
+By default, Comrade uses a direct implementation in Rust. But, it is possible to break up the build into modular wasm components and compose them together. This is being left as an area for future work when demand arises.
+
+### Wasm Component Layer
+
+This reference implementation makes opinions about what dependencies to use and which wasm runtime to use to run the components, but it should be noted that it is possible to swap in your own runtime for both the component and the wasm runtime. 
+
+ But, for example, `wasm_component_layer` crate gives us an isomorphic way to load components in native or the browser directly from Rust. We use a patch until [this dependency fix lands](https://github.com/DouglasDwyer/wasm_component_layer/pull/26). 
+
+## Related Crates
+
+- `comrade_reference`: Provides the reference implementation for Comrade, which can be used directly in Comrade, or bundled into a wasm component.
+- `wasmi_runtime`: Native runtime for WebAssembly components
+- `js_wasm_runtime_layer`: Browser runtime for WebAssembly components
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+FSL-1.1
