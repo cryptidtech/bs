@@ -1,3 +1,7 @@
+// Include readme at header, with rustdoc tests
+#![doc = include_str!("../README.md")]
+pub struct ReadmeDocumentation;
+
 /// Crate level errors
 mod error;
 pub use error::ApiError;
