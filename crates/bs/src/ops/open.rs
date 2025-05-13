@@ -9,7 +9,7 @@ use crate::{
     update::{op, script, OpParams},
     Error,
 };
-use bs_traits::{GetKey, Signer};
+use bs_traits::{GetKey, Signer, SyncGetKey, SyncSigner};
 use multicid::{cid, vlad, Cid};
 use multicodec::Codec;
 use multihash::mh;
@@ -22,8 +22,8 @@ use tracing::debug;
 /// open a new provenance log based on the config
 pub fn open_plog<G, S>(config: Config, get_key: &G, sign_entry: &S) -> Result<Log, Error>
 where
-    G: GetKey<Key = Multikey, KeyPath = Key, Codec = Codec, KeyError = Error>,
-    S: Signer<Key = Multikey, Signature = Multisig, SignError = Error>,
+    G: GetKey<Key = Multikey, KeyPath = Key, Codec = Codec, Error = Error> + SyncGetKey,
+    S: Signer<Key = Multikey, Signature = Multisig, Error = Error> + SyncSigner,
 {
     // 0. Set up the list of ops we're going to add
     let mut op_params = Vec::default();
@@ -183,7 +183,7 @@ where
 
 fn load_key<G>(ops: &mut Vec<OpParams>, params: &OpParams, get_key: &G) -> Result<Multikey, Error>
 where
-    G: GetKey<Key = Multikey, KeyPath = Key, Codec = Codec, KeyError = Error>,
+    G: GetKey<Key = Multikey, KeyPath = Key, Codec = Codec, Error = Error> + SyncGetKey,
 {
     debug!("load_key: {:?}", params);
     match params {

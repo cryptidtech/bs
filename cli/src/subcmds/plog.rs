@@ -2,7 +2,7 @@
 
 /// Plog command
 pub mod command;
-use bs_traits::{GetKey, Signer};
+use bs_traits::{GetKey, Signer, SyncGetKey, SyncSigner};
 pub use command::Command;
 
 use crate::{error::PlogError, Config, Error};
@@ -35,15 +35,16 @@ impl GetKey for KeyManager {
 
     type Codec = Codec;
 
-    type KeyError = bs::Error;
-
+    type Error = bs::Error;
+}
+impl SyncGetKey for KeyManager {
     fn get_key(
         &self,
         key_path: &Self::KeyPath,
         codec: &Self::Codec,
         threshold: usize,
         limit: usize,
-    ) -> Result<Self::Key, Self::KeyError> {
+    ) -> Result<Self::Key, Self::Error> {
         debug!("Generating {} key ({} of {})...", codec, threshold, limit);
         let mut rng = StdRng::from_os_rng();
         let mk = mk::Builder::new_from_random_bytes(*codec, &mut rng)?.try_build()?;
@@ -62,9 +63,11 @@ impl Signer for KeyManager {
 
     type Signature = Multisig;
 
-    type SignError = bs::Error;
+    type Error = bs::Error;
+}
 
-    fn try_sign(&self, key: &Self::Key, data: &[u8]) -> Result<Self::Signature, Self::SignError> {
+impl SyncSigner for KeyManager {
+    fn try_sign(&self, key: &Self::Key, data: &[u8]) -> Result<Self::Signature, Self::Error> {
         Ok(key.sign_view()?.sign(data, false, None)?)
     }
 }
