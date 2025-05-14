@@ -268,17 +268,10 @@ impl<'a> Iterator for VerifyIter<'a> {
         // run each of the lock scripts
         for lock in locks {
             let Script::Code(_, lock) = lock else {
-                // set our index out of range
-                self.seqno = self.entries.len();
-                // set the error state
-                self.error = Some(
-                    ScriptError::WrongScriptFormat {
-                        found: format!("{:?}", lock),
-                        expected: "Script::Code".to_string(),
-                    }
-                    .into(),
-                );
-                return Some(Err(self.error.clone().unwrap()));
+                return self.set_error(ScriptError::WrongScriptFormat {
+                    found: format!("{:?}", lock),
+                    expected: "Script::Code".to_string(),
+                });
             };
 
             match unlocked.try_lock(&lock) {
@@ -303,10 +296,7 @@ impl<'a> Iterator for VerifyIter<'a> {
         // need to do it here
         if self.seqno > 0 {
             if let Some(e) = self.kvp.apply_entry_ops(entry).err() {
-                // set our index out of range
-                self.seqno = self.entries.len();
-                self.error = Some(LogError::UpdateKvpFailed(e.to_string()).into());
-                return Some(Err(self.error.clone().unwrap()));
+                return self.set_error(LogError::UpdateKvpFailed(e.to_string()));
             }
         }
         // update the lock script to validate the next entry
