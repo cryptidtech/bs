@@ -252,9 +252,7 @@ impl<'a> Iterator for VerifyIter<'a> {
 
         let mut unlocked = Comrade::new(&kvp_lock, &entry)
             .try_unlock(unlock)
-            .or_else(|e| {
-                Err(self.set_error(LogError::UnlockFailed(format!("unlock failed: {}", e))))
-            })
+            .map_err(|e| self.set_error(LogError::UnlockFailed(format!("unlock failed: {}", e))))
             .ok()?;
 
         // build the set of lock scripts to run in order from root to longest branch to leaf
