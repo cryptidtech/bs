@@ -35,8 +35,9 @@ impl GetKey for KeyManager {
 
     type Codec = Codec;
 
-    type Error = bs::Error;
+    type Error = Error;
 }
+
 impl SyncGetKey for KeyManager {
     fn get_key(
         &self,
@@ -63,7 +64,7 @@ impl Signer for KeyManager {
 
     type Signature = Multisig;
 
-    type Error = bs::Error;
+    type Error = Error;
 }
 
 impl SyncSigner for KeyManager {
@@ -151,30 +152,10 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
                 .with_entry_signing_key(&entry_signing_key)
                 .with_entry_unlock_script(&unlock_script_path);
 
+            let key_manager = KeyManager;
+
             // update the p.log
-            update::update_plog(
-                &mut plog,
-                cfg,
-                |key: &Key,
-                 codec: Codec,
-                 threshold: usize,
-                 limit: usize|
-                 -> Result<Multikey, bs::Error> {
-                    debug!("Generating {} key ({} of {})...", codec, threshold, limit);
-                    let mut rng = StdRng::from_os_rng();
-                    let mk = mk::Builder::new_from_random_bytes(codec, &mut rng)?.try_build()?;
-                    let fingerprint = mk.fingerprint_view()?.fingerprint(Codec::Blake3)?;
-                    let ef = EncodedMultihash::new(Base::Base32Z, fingerprint);
-                    debug!("Writing {} key fingerprint: {}", key, ef);
-                    let w = writer(&Some(format!("{}.multikey", ef).into()))?;
-                    serde_cbor::to_writer(w, &mk)?;
-                    Ok(mk)
-                },
-                |mk: &Multikey, data: &[u8]| -> Result<Multisig, bs::Error> {
-                    debug!("Signing the first entry");
-                    Ok(mk.sign_view()?.sign(data, false, None)?)
-                },
-            )?;
+            update::update_plog(&mut plog, cfg, &key_manager, &key_manager)?;
 
             println!("Writing p.log {}", writer_name(&output)?.to_string_lossy());
             print_plog(&plog)?;
