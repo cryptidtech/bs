@@ -29,6 +29,15 @@ pub enum Error {
     /// Bs errors
     #[error(transparent)]
     Bs(#[from] bs::Error),
+
+    /// Error opening a provenance log
+    #[error(transparent)]
+    Open(#[from] bs::error::OpenError),
+
+    /// Error updating a provenance log
+    #[error(transparent)]
+    Update(#[from] bs::error::UpdateError),
+
     /// Multicid error
     #[error(transparent)]
     Multicid(#[from] multicid::Error),

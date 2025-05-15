@@ -39,9 +39,6 @@ pub enum Error {
     /// I/O error
     #[error(transparent)]
     Io(#[from] std::io::Error),
-    /// Serde CBOR error
-    #[error(transparent)]
-    SerdeCbor(#[from] serde_cbor::Error),
 }
 
 /// Open op errors

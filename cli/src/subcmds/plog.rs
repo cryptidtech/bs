@@ -2,6 +2,7 @@
 
 /// Plog command
 pub mod command;
+use bs_traits::{GetKey, Signer, SyncGetKey, SyncSigner};
 pub use command::Command;
 
 use crate::{error::PlogError, Config, Error};
@@ -11,6 +12,7 @@ use bs::{
     ops::{open, update},
     update::OpParams,
 };
+use comrade::Pairs;
 use multibase::Base;
 use multicid::{Cid, EncodedCid, EncodedVlad, Vlad};
 use multicodec::Codec;
@@ -22,7 +24,54 @@ use provenance_log::{Key, Log, Script};
 use rng::StdRng;
 use std::{collections::VecDeque, convert::TryFrom, path::PathBuf};
 use tracing::debug;
-use wacc::Pairs;
+
+/// Cli KeyManager
+struct KeyManager;
+
+impl GetKey for KeyManager {
+    type Key = Multikey;
+
+    type KeyPath = Key;
+
+    type Codec = Codec;
+
+    type Error = Error;
+}
+
+impl SyncGetKey for KeyManager {
+    fn get_key(
+        &self,
+        key_path: &Self::KeyPath,
+        codec: &Self::Codec,
+        threshold: usize,
+        limit: usize,
+    ) -> Result<Self::Key, Self::Error> {
+        debug!("Generating {} key ({} of {})...", codec, threshold, limit);
+        let mut rng = StdRng::from_os_rng();
+        let mk = mk::Builder::new_from_random_bytes(*codec, &mut rng)?.try_build()?;
+        let fingerprint = mk.fingerprint_view()?.fingerprint(Codec::Blake3)?;
+
+        let ef = EncodedMultihash::new(Base::Base32Z, fingerprint);
+        debug!("Writing {} key fingerprint: {}", key_path, ef);
+        let w = writer(&Some(format!("{}.multikey", ef).into()))?;
+        serde_cbor::to_writer(w, &mk)?;
+        Ok(mk)
+    }
+}
+
+impl Signer for KeyManager {
+    type Key = Multikey;
+
+    type Signature = Multisig;
+
+    type Error = Error;
+}
+
+impl SyncSigner for KeyManager {
+    fn try_sign(&self, key: &Self::Key, data: &[u8]) -> Result<Self::Signature, Self::Error> {
+        Ok(key.sign_view()?.sign(data, false, None)?)
+    }
+}
 
 /// processes plog subcommands
 pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
@@ -49,29 +98,10 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
                 .with_entry_lock_script(&lock_script_path)
                 .with_entry_unlock_script(&unlock_script_path);
 
+            let key_manager = KeyManager;
+
             // open the p.log
-            let plog = open::open_plog(
-                cfg,
-                |key: &Key,
-                 codec: Codec,
-                 threshold: usize,
-                 limit: usize|
-                 -> Result<Multikey, bs::Error> {
-                    debug!("Generating {} key ({} of {})...", codec, threshold, limit);
-                    let mut rng = StdRng::from_os_rng();
-                    let mk = mk::Builder::new_from_random_bytes(codec, &mut rng)?.try_build()?;
-                    let fingerprint = mk.fingerprint_view()?.fingerprint(Codec::Blake3)?;
-                    let ef = EncodedMultihash::new(Base::Base32Z, fingerprint);
-                    debug!("Writing {} key fingerprint: {}", key, ef);
-                    let w = writer(&Some(format!("{}.multikey", ef).into()))?;
-                    serde_cbor::to_writer(w, &mk)?;
-                    Ok(mk)
-                },
-                |mk: &Multikey, data: &[u8]| -> Result<Multisig, bs::Error> {
-                    debug!("Signing the first entry");
-                    Ok(mk.sign_view()?.sign(data, false, None)?)
-                },
-            )?;
+            let plog = open::open_plog(cfg, &key_manager, &key_manager)?;
 
             println!("Created p.log {}", writer_name(&output)?.to_string_lossy());
             print_plog(&plog)?;
@@ -122,30 +152,10 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
                 .with_entry_signing_key(&entry_signing_key)
                 .with_entry_unlock_script(&unlock_script_path);
 
+            let key_manager = KeyManager;
+
             // update the p.log
-            update::update_plog(
-                &mut plog,
-                cfg,
-                |key: &Key,
-                 codec: Codec,
-                 threshold: usize,
-                 limit: usize|
-                 -> Result<Multikey, bs::Error> {
-                    debug!("Generating {} key ({} of {})...", codec, threshold, limit);
-                    let mut rng = StdRng::from_os_rng();
-                    let mk = mk::Builder::new_from_random_bytes(codec, &mut rng)?.try_build()?;
-                    let fingerprint = mk.fingerprint_view()?.fingerprint(Codec::Blake3)?;
-                    let ef = EncodedMultihash::new(Base::Base32Z, fingerprint);
-                    debug!("Writing {} key fingerprint: {}", key, ef);
-                    let w = writer(&Some(format!("{}.multikey", ef).into()))?;
-                    serde_cbor::to_writer(w, &mk)?;
-                    Ok(mk)
-                },
-                |mk: &Multikey, data: &[u8]| -> Result<Multisig, bs::Error> {
-                    debug!("Signing the first entry");
-                    Ok(mk.sign_view()?.sign(data, false, None)?)
-                },
-            )?;
+            update::update_plog(&mut plog, cfg, &key_manager, &key_manager)?;
 
             println!("Writing p.log {}", writer_name(&output)?.to_string_lossy());
             print_plog(&plog)?;
@@ -298,17 +308,17 @@ where
 }
 */
 
-fn get_from_wacc_value<'a, T>(value: &'a wacc::Value) -> Option<T>
+fn get_from_wacc_value<'a, T>(value: &'a comrade::Value) -> Option<T>
 where
     T: TryFrom<&'a [u8]> + EncodingInfo,
     BaseEncoded<T, DetectedEncoder>: TryFrom<&'a str>,
 {
     match value {
-        wacc::Value::Bin {
+        comrade::Value::Bin {
             hint: _,
             data: ref v,
         } => T::try_from(v.as_slice()).ok(),
-        wacc::Value::Str {
+        comrade::Value::Str {
             hint: _,
             data: ref s,
         } => match BaseEncoded::<T, DetectedEncoder>::try_from(s.as_str()) {

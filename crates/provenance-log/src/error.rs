@@ -164,6 +164,12 @@ pub enum LogError {
     /// Updating kvp failed
     #[error("Kvp set entry failed {0}")]
     KvpSetEntryFailed(String),
+    /// Running the unlock script failed
+    #[error("Running the unlock script failed, reason: {0}")]
+    UnlockFailed(String),
+    /// Running the lock script failed
+    #[error("Running the lock script failed, reason: {0}")]
+    LockFailed(String),
 }
 
 /// Errors created by this library
@@ -206,6 +212,14 @@ pub enum ScriptError {
     /// invalid wasm script magic value
     #[error("invalid wasm script")]
     InvalidScriptMagic,
+    /// Wrong script format
+    #[error("wrong script format: expected {expected}, found {found}")]
+    WrongScriptFormat {
+        /// The String that was found
+        found: String,
+        /// The String that was expected
+        expected: String,
+    },
 }
 
 /// Errors created by this library
