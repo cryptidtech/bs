@@ -23,10 +23,10 @@ use multiutil::prelude::*;
 /// The [Context] within which the script is
 /// evaluated.
 pub struct Context<'un, 'lo> {
-    /// The Return stack
+    /// The current key value Pairs already in the context
     pub(crate) current: &'un dyn Pairs,
 
-    /// The Parameters stack
+    /// The proposed key value Pairs to be evaluated
     pub(crate) proposed: &'lo dyn Pairs,
 
     /// The number of checks that have been performed
