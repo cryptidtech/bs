@@ -193,6 +193,7 @@ struct VerifyIter<'a> {
     entries: Vec<&'a Entry>,
     seqno: usize,
     prev_seqno: usize,
+    prev_cid: Cid,
     kvp: Kvp<'a>,
     lock_scripts: Vec<Script>,
     error: Option<Error>,
@@ -229,6 +230,11 @@ impl<'a> Iterator for VerifyIter<'a> {
         // check the seqno meet the criteria
         if self.seqno > 0 && self.seqno != self.prev_seqno + 1 {
             return self.set_error(LogError::InvalidSeqno);
+        }
+
+        // check if the cid meets the criteria
+        if self.seqno > 0 && entry.prev() != self.prev_cid {
+            return self.set_error(LogError::EntryCidMismatch);
         }
 
         // 'unlock:
@@ -330,6 +336,7 @@ impl Log {
             entries,
             seqno: 0,
             prev_seqno: 0,
+            prev_cid: Cid::null(),
             kvp: Kvp::default(),
             lock_scripts: vec![self.first_lock.clone()],
             error: None,
