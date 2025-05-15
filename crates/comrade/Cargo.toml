@@ -1,0 +1,41 @@
+[package]
+name = "comrade"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+readme.workspace = true
+license.workspace = true
+
+[dependencies]
+comrade-reference.workspace = true
+thiserror = "2.0"
+# wasm_component_layer gives us an isomorphic way to load components
+# in native or the browser directly from Rust
+# patch until this lands: https://github.com/DouglasDwyer/wasm_component_layer/pull/26
+wasm_component_layer = { git = "https://github.com/DougAnderson444/wasm_component_layer.git", branch = "dep-fix", optional = true }
+tracing = { version = "0.1", features = ["log"] }
+tracing-subscriber = { version = "0.3", features = ["std"] }
+getrandom = "0.3"
+anyhow = "1.0"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+wasmi_runtime_layer = "=0.40.0" # pin to 0.40 to match wasm_runtime_layer 0.4.2
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js_wasm_runtime_layer = { version = "0.4.0", features = ["tracing"] }
+wasm-bindgen = "0.2"
+getrandom = { version = "0.3", features = ["wasm_js"] }
+# We have netsed deps that use v0.2, so we need to ensure the feature is flagged here
+getrandom_v02 = { package = "getrandom", version = "0.2.15", features = ["js"] }
+web-sys = { version = "0.3", features = ["Window", "Crypto"] }
+hex = "0.4"
+console_error_panic_hook = "0.1"
+tracing-wasm = "0.2"                                                             # For sending tracing events to browser console
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"
+hex = "0.4"
+
+[lints]
+workspace = true

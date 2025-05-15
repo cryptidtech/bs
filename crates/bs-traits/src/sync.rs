@@ -1,54 +1,42 @@
+//! This module contains traits for synchronous operations.
 use core::num::NonZeroUsize;
 
-use crate::Error;
+use crate::*;
 
 /// Trait for types that can sign data
-pub trait Signer {
-    /// The type of key used to sign
-    type Key: Send + Sync;
-    /// The type of signature
-    type Signature: Send + Sync;
-
+pub trait SyncSigner: Signer {
     /// Attempt to sign the data
-    fn try_sign(&self, key: &Self::Key, data: &[u8]) -> Result<Self::Signature, Error>;
+    fn try_sign(&self, key: &Self::Key, data: &[u8]) -> Result<Self::Signature, Self::Error>;
 
     /// Sign the data and return the signature
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the signing operation fails.
     fn sign(&self, key: &Self::Key, data: &[u8]) -> Self::Signature {
         self.try_sign(key, data).expect("signing operation failed")
     }
 }
 
 /// Trait for types that can verify signatures
-pub trait Verifier {
-    /// The type of key used to verify
-    type Key: Send + Sync;
-    /// The type of signature
-    type Signature: Send + Sync;
-
+pub trait SyncVerifier: Verifier {
     /// Verify that the provided signature for the given data is authentic
     fn verify(
         &self,
         key: &Self::Key,
         data: &[u8],
         signature: &Self::Signature,
-    ) -> Result<(), Error>;
+    ) -> Result<(), Self::Error>;
 }
 
 /// Trait for types that can encrypt data
-pub trait Encryptor {
-    /// The type of key used to encrypt
-    type Key: Send + Sync;
-    /// The type of ciphertext
-    type Ciphertext: Send + Sync;
-    /// The type of plaintext, might include the nonce, and additional authenticated data
-    type Plaintext: Send + Sync;
-
+pub trait SyncEncryptor: Encryptor {
     /// Attempt to encrypt the plaintext
     fn try_encrypt(
         &self,
         key: &Self::Key,
         plaintext: &Self::Plaintext,
-    ) -> Result<Self::Ciphertext, Error>;
+    ) -> Result<Self::Ciphertext, Self::Error>;
 
     /// Encrypt the plaintext
     fn encrypt(&self, key: &Self::Key, plaintext: &Self::Plaintext) -> Self::Ciphertext {
@@ -58,35 +46,17 @@ pub trait Encryptor {
 }
 
 /// Trait for types that can decrypt data
-pub trait Decryptor {
-    /// The type of key used to decrypt
-    type Key: Send + Sync;
-    /// The type of ciphertext
-    type Ciphertext: Send + Sync;
-    /// The type of plaintext
-    type Plaintext: Send + Sync;
-
+pub trait SyncDecryptor: Decryptor {
     /// Attempt to decrypt the ciphertext
     fn decrypt(
         &self,
         key: &Self::Key,
         ciphertext: &Self::Ciphertext,
-    ) -> Result<Self::Plaintext, Error>;
+    ) -> Result<Self::Plaintext, Self::Error>;
 }
 
 /// Trait for types that can split a secret into shares
-pub trait SecretSplitter {
-    /// The type of secret to split
-    type Secret: Send + Sync;
-    /// The type of identifier for the shares
-    type Identifier: Send + Sync;
-    /// The output from splitting the secret.
-    /// Might include the threshold and limit used to split the secret,
-    /// the shares, and the verifiers, identifiers,
-    /// or any other information needed to reconstruct the secret
-    /// and verify the shares.
-    type Output: Send + Sync;
-
+pub trait SyncSecretSplitter: SecretSplitter {
     /// Split the secret into shares.
     ///
     /// Conditions for `split` to succeed:
@@ -97,7 +67,7 @@ pub trait SecretSplitter {
         secret: &Self::Secret,
         threshold: NonZeroUsize,
         limit: NonZeroUsize,
-    ) -> Result<Self::Output, Error>;
+    ) -> Result<Self::Output, Self::Error>;
 
     /// Split the secret into shares with the given identifiers.
     /// The number of shares will be equal to the number of identifiers i.e. the `limit`.
@@ -112,31 +82,20 @@ pub trait SecretSplitter {
         secret: &Self::Secret,
         threshold: NonZeroUsize,
         identifiers: &[Self::Identifier],
-    ) -> Result<Self::Output, Error>;
+    ) -> Result<Self::Output, Self::Error>;
 }
 
 /// Trait for types that can combine shares into a secret
-pub trait SecretCombiner {
-    /// The type of secret to combine
-    type Secret: Send + Sync;
-    /// The type of identifier for the shares
-    type Identifier: Send + Sync;
-    /// The type of shares to combine
-    type Shares: Send + Sync;
-
+pub trait SyncSecretCombiner: SecretCombiner {
     /// Combine the shares into a secret
-    fn combine(&self, shares: &[(Self::Identifier, Self::Shares)]) -> Result<Self::Secret, Error>;
+    fn combine(
+        &self,
+        shares: &[(Self::Identifier, Self::Shares)],
+    ) -> Result<Self::Secret, Self::Error>;
 }
 
 /// Trait for types that can retrieve a key
-pub trait GetKey {
-    /// The type of key
-    type Key: Send + Sync;
-    /// The type of key path
-    type KeyPath: Send + Sync;
-    /// The type of codec
-    type Codec: Send + Sync;
-
+pub trait SyncGetKey: GetKey {
     /// Get the key
     fn get_key(
         &self,
@@ -144,5 +103,5 @@ pub trait GetKey {
         codec: &Self::Codec,
         threshold: usize,
         limit: usize,
-    ) -> Result<Self::Key, Error>;
+    ) -> Result<Self::Key, Self::Error>;
 }

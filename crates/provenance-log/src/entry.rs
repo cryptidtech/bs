@@ -94,19 +94,19 @@ impl EncodingInfo for Entry {
     }
 }
 
-impl wacc::Pairs for Entry {
-    fn get(&self, key: &str) -> Option<wacc::Value> {
+impl comrade::Pairs for &Entry {
+    fn get(&self, key: &str) -> Option<comrade::Value> {
         let key = match Key::try_from(key) {
             Ok(key) => key,
             Err(_) => return None,
         };
         match self.get_value(&key) {
             Some(value) => match value {
-                Value::Data(data) => Some(wacc::Value::Bin {
+                Value::Data(data) => Some(comrade::Value::Bin {
                     hint: key.to_string(),
                     data,
                 }),
-                Value::Str(s) => Some(wacc::Value::Str {
+                Value::Str(s) => Some(comrade::Value::Str {
                     hint: key.to_string(),
                     data: s,
                 }),
@@ -116,7 +116,7 @@ impl wacc::Pairs for Entry {
         }
     }
 
-    fn put(&mut self, _key: &str, _value: &wacc::Value) -> Option<wacc::Value> {
+    fn put(&mut self, _key: &str, _value: &comrade::Value) -> Option<comrade::Value> {
         None
     }
 }

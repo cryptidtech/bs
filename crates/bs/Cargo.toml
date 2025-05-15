@@ -17,10 +17,8 @@ multikey.workspace = true
 multisig.workspace = true
 provenance-log.workspace = true
 rand.workspace = true
-serde_cbor.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
-wacc.workspace = true
 
 [lints]
 workspace = true

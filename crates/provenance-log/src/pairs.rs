@@ -14,23 +14,23 @@ pub struct Kvp<'a> {
     undo: Vec<(Option<&'a Entry>, BTreeMap<Key, Value>)>,
 }
 
-impl wacc::Pairs for Kvp<'_> {
-    fn get(&self, key: &str) -> Option<wacc::Value> {
+impl comrade::Pairs for Kvp<'_> {
+    fn get(&self, key: &str) -> Option<comrade::Value> {
         let k = match Key::try_from(key) {
             Ok(k) => k,
             _ => return None,
         };
         match self.kvp.get(&k) {
             Some(ref v) => match v {
-                Value::Nil => Some(wacc::Value::Bin {
+                Value::Nil => Some(comrade::Value::Bin {
                     hint: key.to_string(),
                     data: Vec::default(),
                 }),
-                Value::Str(ref s) => Some(wacc::Value::Str {
+                Value::Str(ref s) => Some(comrade::Value::Str {
                     hint: key.to_string(),
                     data: s.clone(),
                 }),
-                Value::Data(ref v) => Some(wacc::Value::Bin {
+                Value::Data(ref v) => Some(comrade::Value::Bin {
                     hint: key.to_string(),
                     data: v.clone(),
                 }),
@@ -45,32 +45,32 @@ impl wacc::Pairs for Kvp<'_> {
         }
     }
 
-    fn put(&mut self, key: &str, value: &wacc::Value) -> Option<wacc::Value> {
+    fn put(&mut self, key: &str, value: &comrade::Value) -> Option<comrade::Value> {
         let k = match Key::try_from(key) {
             Ok(k) => k,
             _ => return None,
         };
         let v = match value {
-            wacc::Value::Str {
+            comrade::Value::Str {
                 hint: _,
                 data: ref s,
             } => Value::Str(s.clone()),
-            wacc::Value::Bin {
+            comrade::Value::Bin {
                 hint: _,
                 data: ref v,
             } => Value::Data(v.clone()),
             _ => return None,
         };
         match self.kvp.insert(k, v) {
-            Some(Value::Nil) => Some(wacc::Value::Bin {
+            Some(Value::Nil) => Some(comrade::Value::Bin {
                 hint: key.to_string(),
                 data: Vec::default(),
             }),
-            Some(Value::Str(s)) => Some(wacc::Value::Str {
+            Some(Value::Str(s)) => Some(comrade::Value::Str {
                 hint: key.to_string(),
                 data: s,
             }),
-            Some(Value::Data(v)) => Some(wacc::Value::Bin {
+            Some(Value::Data(v)) => Some(comrade::Value::Bin {
                 hint: key.to_string(),
                 data: v,
             }),

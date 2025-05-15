@@ -1,107 +1,141 @@
 // SPDX-License-Identifier: FSL-1.1
-
+//! This module provides traits for asynchronous operations
+use crate::cond_send::{CondSend, CondSync};
 use crate::*;
-use async_trait::*;
+use std::future::Future;
 use std::num::NonZeroUsize;
 
 /// Trait for types that can sign data asynchronously
-#[async_trait]
 pub trait AsyncSigner: Signer {
     /// Attempt to sign the data asynchronously
-    async fn try_sign_async(&self, key: &Self::Key, data: &[u8]) -> Result<Self::Signature, Error>;
+    fn try_sign(
+        &self,
+        key: &Self::Key,
+        data: &[u8],
+    ) -> impl Future<Output = Result<Self::Signature, Self::Error>> + CondSend + '_;
 
     /// Sign the data asynchronously
-    async fn sign_async(&self, key: &Self::Key, data: &[u8]) -> Self::Signature {
-        self.try_sign_async(key, data)
-            .await
-            .expect("signing operation failed")
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the signing operation fails.
+    fn sign<'a>(
+        &'a self,
+        key: &'a Self::Key,
+        data: &'a [u8],
+    ) -> impl Future<Output = Self::Signature> + CondSend + 'a
+    where
+        Self: CondSync,
+        Self::Key: CondSync,
+    {
+        async move {
+            self.try_sign(key, data)
+                .await
+                .expect("signing operation failed")
+        }
     }
 }
 
 /// Trait for types that can verify data asynchronously
-#[async_trait]
 pub trait AsyncVerifier: Verifier {
     /// Verify the data asynchronously
-    async fn verify_async(
+    fn verify(
         &self,
         key: &Self::Key,
         data: &[u8],
         signature: &Self::Signature,
-    ) -> Result<(), Error>;
+    ) -> impl Future<Output = Result<(), Self::Error>> + CondSend + '_;
 }
 
 /// Trait for types that can encrypt data asynchronously
-#[async_trait]
 pub trait AsyncEncryptor: Encryptor {
     /// Attempt to encrypt the data asynchronously
-    async fn try_encrypt_async(
+    fn try_encrypt(
         &self,
         key: &Self::Key,
         plaintext: &Self::Plaintext,
-    ) -> Result<Self::Ciphertext, Error>;
+    ) -> impl Future<Output = Result<Self::Ciphertext, Self::Error>> + CondSend + '_;
 
     /// Encrypt the data asynchronously
-    async fn encrypt_async(
-        &self,
-        key: &Self::Key,
-        plaintext: &Self::Plaintext,
-    ) -> Self::Ciphertext {
-        self.try_encrypt_async(key, plaintext)
-            .await
-            .expect("encryption operation failed")
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the encryption operation fails.
+    fn encrypt<'a>(
+        &'a self,
+        key: &'a Self::Key,
+        plaintext: &'a Self::Plaintext,
+    ) -> impl Future<Output = Self::Ciphertext> + CondSend + 'a
+    where
+        Self: CondSync,
+        Self::Key: CondSync,
+        Self::Plaintext: CondSync,
+    {
+        async move {
+            self.try_encrypt(key, plaintext)
+                .await
+                .expect("encryption operation failed")
+        }
     }
 }
 
 /// Trait for types that can decrypt data asynchronously
-#[async_trait]
 pub trait AsyncDecryptor: Decryptor {
     /// Decrypt the data asynchronously
-    async fn decrypt_async(
+    fn decrypt(
         &self,
         key: &Self::Key,
         ciphertext: &Self::Ciphertext,
-    ) -> Result<Self::Plaintext, Error>;
+    ) -> impl Future<Output = Result<Self::Plaintext, Self::Error>> + CondSend + '_;
 }
 
 /// Trait for types that can split a secret into shares asynchronously
-#[async_trait]
 pub trait AsyncSecretSplitter: SecretSplitter {
     /// Split the secret into shares asynchronously
-    async fn split_async(
+    ///
+    /// Conditions for `split` to succeed:
+    /// - Threshold must be less than or equal to limit.
+    /// - Threshold must be greater than or equal to 2.
+    fn split(
         &self,
         secret: &Self::Secret,
         threshold: NonZeroUsize,
         limit: NonZeroUsize,
-    ) -> Result<Self::Output, Error>;
+    ) -> impl Future<Output = Result<Self::Output, Self::Error>> + CondSend + '_;
 
     /// Split the secret into shares with the given identifiers asynchronously
-    async fn split_with_identifiers_async(
+    /// The number of shares will be equal to the number of identifiers i.e. the `limit`.
+    ///
+    /// Conditions for `split_with_identifiers` to succeed:
+    /// - Threshold must be less than or equal to the number of identifiers.
+    /// - Threshold must be greater than or equal to 2.
+    /// - Identifiers must be unique.
+    /// - Identifiers must not be empty.
+    fn split_with_identifiers(
         &self,
         secret: &Self::Secret,
         threshold: NonZeroUsize,
         identifiers: &[Self::Identifier],
-    ) -> Result<Self::Output, Error>;
+    ) -> impl Future<Output = Result<Self::Output, Self::Error>> + CondSend + '_;
 }
 
 /// Trait for types that can combine shares into a secret asynchronously
-#[async_trait]
 pub trait AsyncSecretCombiner: SecretCombiner {
     /// Combine the shares into a secret asynchronously
-    async fn combine_async(
+    fn combine(
         &self,
         shares: &[(Self::Identifier, Self::Shares)],
-    ) -> Result<Self::Secret, Error>;
+    ) -> impl Future<Output = Result<Self::Secret, Self::Error>> + CondSend + '_;
 }
 
 /// Trait for types that can get a key asynchronously
-#[async_trait]
 pub trait AsyncGetKey: GetKey {
     /// Get the key asynchronously
-    async fn get_key_async(
+    fn get_key(
         &self,
         key_path: &Self::KeyPath,
         codec: &Self::Codec,
         threshold: usize,
         limit: usize,
-    ) -> Result<Self::Key, Error>;
+    ) -> impl Future<Output = Result<Self::Key, Self::Error>> + CondSend + '_;
 }
