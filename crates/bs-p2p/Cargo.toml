@@ -8,7 +8,30 @@ readme = "README.md"
 license = "Apache 2.0"
 
 [dependencies]
-libp2p = { version = "0.55.0", features = [ "autonat", "dcutr", "dns", "ed25519", "gossipsub", "identify", "kad", "macros", "memory-connection-limits", "noise", "ping", "quic", "relay", "request-response", "rsa", "tcp", "tls", "tokio", "yamux" ] }
+tokio = { version = "1.0", features = ["full"] }
+libp2p = { version = "0.55.0", features = [
+  "autonat",
+  "dcutr",
+  "dns",
+  "ed25519",
+  "gossipsub",
+  "identify",
+  "kad",
+  "macros",
+  "memory-connection-limits",
+  "noise",
+  "ping",
+  "quic",
+  "relay",
+  "request-response",
+  "rsa",
+  "tcp",
+  "tls",
+  "tokio",
+  "yamux",
+] }
+tracing = { version = "0.1", features = ["log"] }
+tracing-subscriber = { version = "0.3", features = ["fmt"] }
 
 [lints]
 workspace = true

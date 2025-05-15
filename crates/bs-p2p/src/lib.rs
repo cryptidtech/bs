@@ -1,14 +1,17 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! BetterSign SuperPeer crate
+#[derive(Default)]
+pub struct SuperPeer;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+impl SuperPeer {
+    /// Runs the [SuperPeer]
+    pub async fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
+        // Initialize the logger
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter("bs_p2p=debug")
+            .try_init();
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+        tracing::info!("Starting bestsign_superpeer");
+
+        Ok(())
     }
 }
