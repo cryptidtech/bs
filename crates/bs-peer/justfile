@@ -1,0 +1,9 @@
+check32:
+  RUSTFLAGS='--cfg getrandom_backend="wasm_js"' cargo check --target wasm32-unknown-unknown
+
+test: test-web 
+  cargo test
+
+test-web:
+  wasm-pack build --target web
+  wasm-pack test --headless --chrome --all-features

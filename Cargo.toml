@@ -21,7 +21,7 @@ members = [
   "crates/multiutil",
   "crates/provenance-log",
   "crates/rng",
-  "crates/wacc",
+  "crates/wacc", "crates/bs-peer", "crates/interop-tests",
 ]
 
 [workspace.package]
@@ -62,6 +62,7 @@ best-practices = { version = "0.1.0", git = "https://github.com/cryptidtech/best
 criterion = "0.5.1"
 elliptic-curve = "0.13.8"
 hex = "0.4.3"
+libp2p = { version = "0.54.1" }
 rand = { version = "0.9.0", features = ["os_rng"] }
 rand_core = "0.9.3"
 rand_6 = { version = "0.6.4", package = "rand" }

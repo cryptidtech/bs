@@ -119,9 +119,6 @@ pub enum KvpError {
 #[derive(Clone, Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum LogError {
-    /// Wacc Error
-    #[error(transparent)]
-    Wacc(#[from] wacc::Error),
     /// Missing sigil
     #[error("missing provenance log sigil")]
     MissingSigil,

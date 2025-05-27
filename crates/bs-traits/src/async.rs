@@ -4,81 +4,104 @@ use crate::cond_send::{CondSend, CondSync};
 use crate::*;
 use std::future::Future;
 use std::num::NonZeroUsize;
+use std::pin::Pin;
+
+// Helper trait that combines Future with CondSend
+pub trait CondSendFuture<T>: Future<Output = T> + crate::cond_send::CondSend {}
+
+// Blanket implementation for all types that implement both traits
+impl<F, T> CondSendFuture<T> for F where F: Future<Output = T> + crate::cond_send::CondSend {}
+
+// Type aliases for common return types
+pub type BoxFuture<'a, T> = Pin<Box<dyn CondSendFuture<T> + 'a>>;
+
+// Specific aliases for different trait return types
+pub type SignerFuture<'a, S, E> = BoxFuture<'a, Result<S, E>>;
+pub type GetKeyFuture<'a, K, E> = BoxFuture<'a, Result<K, E>>;
+pub type VerifierFuture<'a, E> = BoxFuture<'a, Result<(), E>>;
+pub type EncryptorFuture<'a, C, E> = BoxFuture<'a, Result<C, E>>;
+pub type DecryptorFuture<'a, P, E> = BoxFuture<'a, Result<P, E>>;
+pub type SecretSplitterFuture<'a, O, E> = BoxFuture<'a, Result<O, E>>;
+pub type SecretCombinerFuture<'a, S, E> = BoxFuture<'a, Result<S, E>>;
 
 /// Trait for types that can sign data asynchronously
 pub trait AsyncSigner: Signer {
     /// Attempt to sign the data asynchronously
-    fn try_sign(
-        &self,
-        key: &Self::Key,
-        data: &[u8],
-    ) -> impl Future<Output = Result<Self::Signature, Self::Error>> + CondSend + '_;
+    fn try_sign<'a>(
+        &'a self,
+        key: &'a Self::Key,
+        data: &'a [u8],
+    ) -> SignerFuture<'a, Self::Signature, Self::Error>;
 
-    /// Sign the data asynchronously
+    /// Sign the data asynchronously, unchedked.
+    ///
+    /// # Dyn Compatibility
+    ///
+    /// This function is not compatible with `dyn` trait objects
     ///
     /// # Panics
     ///
     /// This function will panic if the signing operation fails.
+    #[cfg(not(feature = "dyn-compatible"))]
     fn sign<'a>(
         &'a self,
         key: &'a Self::Key,
         data: &'a [u8],
-    ) -> impl Future<Output = Self::Signature> + CondSend + 'a
+    ) -> Pin<Box<dyn CondSendFuture<Self::Signature> + 'a>>
     where
         Self: CondSync,
         Self::Key: CondSync,
     {
-        async move {
+        Box::pin(async move {
             self.try_sign(key, data)
                 .await
                 .expect("signing operation failed")
-        }
+        })
     }
 }
 
 /// Trait for types that can verify data asynchronously
 pub trait AsyncVerifier: Verifier {
-    /// Verify the data asynchronously
-    fn verify(
-        &self,
-        key: &Self::Key,
-        data: &[u8],
-        signature: &Self::Signature,
-    ) -> impl Future<Output = Result<(), Self::Error>> + CondSend + '_;
+    fn verify<'a>(
+        &'a self,
+        key: &'a Self::Key,
+        data: &'a [u8],
+        signature: &'a Self::Signature,
+    ) -> Pin<Box<dyn CondSendFuture<Result<bool, Self::Error>> + 'a>>;
 }
 
-/// Trait for types that can encrypt data asynchronously
 pub trait AsyncEncryptor: Encryptor {
-    /// Attempt to encrypt the data asynchronously
-    fn try_encrypt(
-        &self,
-        key: &Self::Key,
-        plaintext: &Self::Plaintext,
-    ) -> impl Future<Output = Result<Self::Ciphertext, Self::Error>> + CondSend + '_;
+    fn try_encrypt<'a>(
+        &'a self,
+        key: &'a Self::Key,
+        plaintext: &'a Self::Plaintext,
+    ) -> EncryptorFuture<'a, Self::Ciphertext, Self::Error>;
 
-    /// Encrypt the data asynchronously
+    /// Encrypt the data asynchronously, unchecked.
+    ///
+    /// # Dyn Compatibility
+    /// This function is not compatible with `dyn` trait objects
     ///
     /// # Panics
-    ///
     /// This function will panic if the encryption operation fails.
+    #[cfg(not(feature = "dyn-compatible"))]
     fn encrypt<'a>(
         &'a self,
         key: &'a Self::Key,
         plaintext: &'a Self::Plaintext,
-    ) -> impl Future<Output = Self::Ciphertext> + CondSend + 'a
+    ) -> Pin<Box<dyn CondSendFuture<Self::Ciphertext> + 'a>>
     where
         Self: CondSync,
         Self::Key: CondSync,
         Self::Plaintext: CondSync,
     {
-        async move {
+        Box::pin(async move {
             self.try_encrypt(key, plaintext)
                 .await
                 .expect("encryption operation failed")
-        }
+        })
     }
 }
-
 /// Trait for types that can decrypt data asynchronously
 pub trait AsyncDecryptor: Decryptor {
     /// Decrypt the data asynchronously
@@ -131,11 +154,11 @@ pub trait AsyncSecretCombiner: SecretCombiner {
 /// Trait for types that can get a key asynchronously
 pub trait AsyncGetKey: GetKey {
     /// Get the key asynchronously
-    fn get_key(
-        &self,
-        key_path: &Self::KeyPath,
-        codec: &Self::Codec,
+    fn get_key<'a>(
+        &'a self,
+        key_path: &'a Self::KeyPath,
+        codec: &'a Self::Codec,
         threshold: usize,
         limit: usize,
-    ) -> impl Future<Output = Result<Self::Key, Self::Error>> + CondSend + '_;
+    ) -> GetKeyFuture<'a, Self::Key, Self::Error>;
 }

@@ -1,17 +1,7 @@
-//! BetterSign SuperPeer crate
-#[derive(Default)]
-pub struct SuperPeer;
+//! BetterSign peer to peer communication
 
-impl SuperPeer {
-    /// Runs the [SuperPeer]
-    pub async fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
-        // Initialize the logger
-        let _ = tracing_subscriber::fmt()
-            .with_env_filter("bs_p2p=debug")
-            .try_init();
+/// Entry point for the crate. Create a libp2p swarm either natively or in wasm32.
+pub mod swarm;
 
-        tracing::info!("Starting bestsign_superpeer");
-
-        Ok(())
-    }
-}
+mod error;
+pub use error::Error;

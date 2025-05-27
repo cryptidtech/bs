@@ -27,7 +27,6 @@ serde_cbor = { workspace = true, optional = true }
 test-log.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
-wacc.workspace = true
 comrade.workspace = true
 
 [dev-dependencies]
