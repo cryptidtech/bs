@@ -3,10 +3,8 @@
 use crate::Error;
 use bs::config::{Key, Multikey, Multisig};
 use bs::ops::params::pubkey::PubkeyParams;
-use bs::VladParams;
-use bs_traits::{
-    AsyncGetKey, AsyncSigner, GetKey, GetKeyFuture, Signer, SignerFuture, SyncGetKey, SyncSigner,
-};
+use bs::ops::params::vlad::VladParams;
+use bs_traits::{GetKey, Signer, SyncGetKey, SyncSigner};
 use multibase::Base;
 use multicodec::Codec;
 use multihash::EncodedMultihash;
@@ -93,7 +91,10 @@ impl Signer for InMemoryKeyManager {
 
 impl SyncSigner for InMemoryKeyManager {
     fn try_sign(&self, key: &Self::Key, data: &[u8]) -> Result<Self::Signature, Self::Error> {
-        todo!()
+        let msg = data;
+        let combined = false;
+        let scheme = None;
+        Ok(key.sign_view()?.sign(msg, combined, scheme)?)
     }
 }
 

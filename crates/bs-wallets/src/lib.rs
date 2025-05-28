@@ -1,4 +1,5 @@
 mod error;
 pub use error::Error;
 
-mod memory;
+/// In memory Key manager and signer
+pub mod memory;

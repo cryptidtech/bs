@@ -15,7 +15,3 @@ pub mod prelude {
 
 /// Parameters for building operations
 pub mod params;
-
-/// Vlad operations
-mod vlad;
-pub use vlad::{VladCid, VladKey, VladParams};
