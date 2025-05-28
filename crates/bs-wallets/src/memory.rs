@@ -22,6 +22,43 @@ impl InMemoryKeyManager {
     /// [Base] encoding for the fingerprint
     pub(crate) const FINGERPRINT_BASE: Base = Base::Base36Lower;
 
+    /// Generate a new key for the given codec
+    pub fn generate_key(&self, codec: &Codec) -> Result<Multikey, bs::Error> {
+        let mut rng = rand_core_6::OsRng;
+        let mk = mk::Builder::new_from_random_bytes(*codec, &mut rng)?.try_build()?;
+        Ok(mk)
+    }
+
+    /// Store a key for a specific path
+    pub fn store_key(&mut self, key_path: &str, mk: &Multikey) -> Result<(), bs::Error> {
+        match key_path {
+            path if path == VladParams::KEY_PATH => {
+                // save the public multikey for the vlad
+                tracing::trace!(
+                    "[STORE] {}",
+                    Self::encode(mk).expect("Failed to encode generated MK")
+                );
+
+                self.vlad = Some(mk.conv_view()?.to_public_key()?);
+                tracing::trace!("Vlad key: {:#?}", self.vlad());
+            }
+            path if path == PubkeyParams::KEY_PATH => {
+                self.entry_key = Some(mk.clone());
+            }
+            _ => {} // No storage for other keys
+        }
+
+        Ok(())
+    }
+
+    /// Try to get an existing key, or None if not found
+    pub fn get_existing_key(&self, key_path: &str) -> Option<Multikey> {
+        match key_path {
+            path if path == VladParams::KEY_PATH => self.vlad.clone(),
+            path if path == PubkeyParams::KEY_PATH => self.entry_key.clone(),
+            _ => None,
+        }
+    }
     /// Returns the vlad key if it exists
     pub fn vlad(&self) -> Option<&Multikey> {
         self.vlad.as_ref()
@@ -51,35 +88,26 @@ impl GetKey for InMemoryKeyManager {
 
 impl SyncGetKey for InMemoryKeyManager {
     fn get_key<'a>(
-        &'a mut self,
+        &'a self,
         key_path: &'a Self::KeyPath,
         codec: &'a Self::Codec,
         _threshold: usize,
         _limit: usize,
     ) -> Result<Self::Key, Self::Error> {
-        tracing::trace!("Key request for {:?}", key_path.to_string());
+        let path_str = key_path.to_string();
+        tracing::trace!("Key request for {}", path_str);
 
-        let mut rng = rand_core_6::OsRng;
-        let mk = mk::Builder::new_from_random_bytes(*codec, &mut rng)?.try_build()?;
-
-        match key_path.to_string().as_str() {
-            VladParams::KEY_PATH => {
-                // save the public mulitkey for the vlad
-                tracing::trace!(
-                    "[GENERATE] {}",
-                    Self::encode(&mk).expect("Failed to encode generated MK")
-                );
-
-                self.vlad = Some(mk.conv_view()?.to_public_key()?);
-                tracing::trace!("Vlad key: {:#?}", self.vlad());
-            }
-            PubkeyParams::KEY_PATH => {
-                self.entry_key = Some(mk.clone());
-            }
-            _ => {}
+        // First try to get an existing key
+        if let Some(key) = self.get_existing_key(&path_str) {
+            return Ok(key);
         }
 
-        Ok(mk)
+        // If we don't have a key, generate a new one
+        // This key won't be stored internally, but the caller can store it if needed
+        let new_key = self.generate_key(codec)?;
+
+        // Return the generated key
+        Ok(new_key)
     }
 }
 

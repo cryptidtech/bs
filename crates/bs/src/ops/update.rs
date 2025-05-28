@@ -32,7 +32,7 @@ use tracing::debug;
 pub fn update_plog<G, S, E>(
     plog: &mut Log,
     config: Config,
-    key_manager: &mut G,
+    key_manager: &G,
     signer: &S,
 ) -> Result<Entry, E>
 where
@@ -148,11 +148,7 @@ where
     Ok(entry)
 }
 
-fn load_key<G, E>(
-    ops: &mut Vec<OpParams>,
-    params: &OpParams,
-    key_manager: &mut G,
-) -> Result<G::Key, E>
+fn load_key<G, E>(ops: &mut Vec<OpParams>, params: &OpParams, key_manager: &G) -> Result<G::Key, E>
 where
     G: GetKey<Error = E, KeyPath = Key, Codec = Codec> + SyncGetKey,
     G::Key: Into<Vec<u8>> + Clone + Views,

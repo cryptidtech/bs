@@ -18,7 +18,7 @@ use provenance_log::{entry, error::EntryError, Error as PlogError, Key, Log, OpI
 use tracing::debug;
 
 /// open a new provenance log based on the config
-pub fn open_plog<G, S, E>(config: Config, key_manager: &mut G, signer: &S) -> Result<Log, E>
+pub fn open_plog<G, S, E>(config: Config, key_manager: &G, signer: &S) -> Result<Log, E>
 where
     G: GetKey<KeyPath = Key, Codec = Codec, Key = Multikey, Error = E> + SyncGetKey,
     S: Signer<Key = Multikey, Signature = Multisig, Error = E> + SyncSigner,
@@ -174,11 +174,7 @@ where
     Ok(log)
 }
 
-fn load_key<G, E>(
-    ops: &mut Vec<OpParams>,
-    params: &OpParams,
-    key_manager: &mut G,
-) -> Result<G::Key, E>
+fn load_key<G, E>(ops: &mut Vec<OpParams>, params: &OpParams, key_manager: &G) -> Result<G::Key, E>
 where
     G: GetKey<Error = E, KeyPath = Key, Codec = Codec> + SyncGetKey,
     G::Key: Into<Vec<u8>> + Clone + Views,
