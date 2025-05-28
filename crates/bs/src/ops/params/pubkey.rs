@@ -62,7 +62,7 @@ mod tests {
 
     #[test]
     fn test_pubkey_params_conversion() {
-        let params = PubkeyParams::new(Codec::Sha2256, 2, 10, false);
+        let params = PubkeyParams::new(Codec::Ed25519Priv, 2, 10, false);
         let op_params: OpParams = params.into();
         assert!(matches!(op_params, OpParams::KeyGen { .. }));
     }
@@ -71,7 +71,7 @@ mod tests {
     #[test]
     fn test_pubkey_params_builder() {
         let params = PubkeyParams::builder()
-            .codec(Codec::Sha2256)
+            .codec(Codec::Ed25519Priv)
             .threshold(2)
             .limit(10)
             .revoke(false)
