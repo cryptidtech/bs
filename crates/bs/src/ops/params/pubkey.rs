@@ -77,7 +77,7 @@ mod tests {
             .revoke(false)
             .build();
 
-        assert_eq!(params.codec, Codec::Sha2256);
+        assert_eq!(params.codec, Codec::Ed25519Priv);
         assert_eq!(params.threshold, 2);
         assert_eq!(params.limit, 10);
         assert!(!params.revoke);
