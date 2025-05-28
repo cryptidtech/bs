@@ -21,6 +21,8 @@ provenance-log.workspace = true
 multicodec.workspace = true
 multikey.workspace = true
 multisig.workspace = true
+multicid.workspace = true
+multihash.workspace = true
 serde = { workspace = true, optional = true }
 anyhow = "1.0"
 blockstore = "0.7.1"

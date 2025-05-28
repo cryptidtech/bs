@@ -1,9 +1,8 @@
-use bs::params::pubkey::PubkeyParams;
+use bs_peer::Error;
 use bs_wallets::memory::*;
 use multicodec::Codec;
 use multikey::mk;
-use provenance_log::key;
-use wasm_bindgen::{JsError, JsValue};
+// use wasm_bindgen::{JsError, JsValue};
 use wasm_bindgen_test::wasm_bindgen_test_configure;
 use wasm_bindgen_test::*;
 
@@ -20,11 +19,20 @@ async fn basic_test() {
         .try_build()
         .unwrap();
 
-    let mut key_manager = InMemoryKeyManager::default();
-    let key_path = InMemoryKeyManager::PUBKEY_KEY_PATH;
+    pub fn create_memory_key_manager() -> InMemoryKeyManager<Error> {
+        InMemoryKeyManager::new()
+    }
+
+    let mut key_manager = InMemoryKeyManager::<bs_peer::Error>::new();
+    let key_path = InMemoryKeyManager::<bs_peer::Error>::PUBKEY_KEY_PATH;
     key_manager.store_key(key_path, &mk).unwrap();
 
     let p = bs_peer::peer::BsPeer::new(key_manager.clone(), key_manager)
         .await
         .unwrap();
+
+    // create
+    // update
+    // connect
+    // events
 }

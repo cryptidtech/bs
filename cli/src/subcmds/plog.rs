@@ -46,6 +46,7 @@ impl SyncGetKey for KeyManager {
         threshold: usize,
         limit: usize,
     ) -> Result<Self::Key, Self::Error> {
+        // Your implementation using crate::error::Error
         debug!("Generating {} key ({} of {})...", codec, threshold, limit);
         let mut rng = StdRng::from_os_rng();
         let mk = mk::Builder::new_from_random_bytes(*codec, &mut rng)?.try_build()?;
@@ -54,7 +55,7 @@ impl SyncGetKey for KeyManager {
         let ef = EncodedMultihash::new(Base::Base32Z, fingerprint);
         debug!("Writing {} key fingerprint: {}", key_path, ef);
         let w = writer(&Some(format!("{}.multikey", ef).into()))?;
-        serde_cbor::to_writer(w, &mk)?;
+        serde_cbor::to_writer(w, &mk)?; // This now works with ?
         Ok(mk)
     }
 }
@@ -155,7 +156,7 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
             let key_manager = KeyManager;
 
             // update the p.log
-            update::update_plog(&mut plog, cfg, &key_manager, &key_manager)?;
+            update::update_plog::<Error>(&mut plog, cfg, &key_manager, &key_manager)?;
 
             println!("Writing p.log {}", writer_name(&output)?.to_string_lossy());
             print_plog(&plog)?;

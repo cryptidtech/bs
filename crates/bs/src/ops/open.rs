@@ -5,32 +5,22 @@ pub mod config;
 pub use config::Config;
 
 use crate::{
-    error::OpenError,
+    error::{BsCompatibleError, OpenError},
     update::{op, script, OpParams},
 };
-use bs_traits::{GetKey, Signer, SyncGetKey, SyncSigner};
 use multicid::{cid, vlad, Cid};
-use multicodec::Codec;
 use multihash::mh;
 use multikey::{Multikey, Views};
-use multisig::Multisig;
-use provenance_log::{entry, error::EntryError, Error as PlogError, Key, Log, OpId, Script};
+use provenance_log::{entry, error::EntryError, Error as PlogError, Log, OpId, Script};
+use std::fmt::Debug;
 use tracing::debug;
 
 /// open a new provenance log based on the config
-pub fn open_plog<G, S, E>(config: Config, key_manager: &G, signer: &S) -> Result<Log, E>
-where
-    G: GetKey<KeyPath = Key, Codec = Codec, Key = Multikey, Error = E> + SyncGetKey,
-    S: Signer<Key = Multikey, Signature = Multisig, Error = E> + SyncSigner,
-    E: From<OpenError>
-        + From<PlogError>
-        + From<std::io::Error>
-        + From<multicid::Error>
-        + From<multikey::Error>
-        + From<multihash::Error>
-        + From<crate::Error>
-        + ToString,
-{
+pub fn open_plog<E: BsCompatibleError>(
+    config: Config,
+    key_manager: &dyn crate::config::sync::KeyManager<E>,
+    signer: &dyn crate::config::sync::MultiSigner<E>,
+) -> Result<Log, E> {
     // 0. Set up the list of ops we're going to add
     let mut op_params = Vec::default();
 
@@ -42,7 +32,7 @@ where
         .try_for_each(|params| -> Result<(), E> {
             match params {
                 p @ OpParams::KeyGen { .. } => {
-                    let _ = load_key(&mut op_params, p, key_manager)?;
+                    let _ = load_key::<E>(&mut op_params, p, key_manager)?;
                 }
                 p @ OpParams::CidGen { .. } => {
                     let _ = load_cid::<E>(&mut op_params, p)?;
@@ -59,7 +49,7 @@ where
         .vlad_params
         .ok_or::<E>(OpenError::InvalidVladParams.into())?;
     // get the vlad signing key
-    let vlad_mk = load_key(&mut op_params, &vlad_key_params, key_manager)?;
+    let vlad_mk = load_key::<E>(&mut op_params, &vlad_key_params, key_manager)?;
     // get the cid for the first lock script
     let first_lock_script: Option<Script> = None;
     let cid = load_cid::<E>(&mut op_params, &vlad_cid_params)?;
@@ -78,7 +68,7 @@ where
         .ok_or::<E>(OpenError::InvalidKeyParams.into())?;
 
     // get the entry signing key
-    let entry_mk = load_key(&mut op_params, &entrykey_params, key_manager)?;
+    let entry_mk = load_key::<E>(&mut op_params, &entrykey_params, key_manager)?;
 
     // get the params for the pubkey
     let pubkey_params = config
@@ -86,7 +76,7 @@ where
         .ok_or::<E>(OpenError::InvalidKeyParams.into())?;
 
     // get the pubkey
-    let _ = load_key(&mut op_params, &pubkey_params, key_manager)?;
+    let _ = load_key::<E>(&mut op_params, &pubkey_params, key_manager)?;
 
     // load the entry lock script
     let lock_script = {
@@ -174,11 +164,13 @@ where
     Ok(log)
 }
 
-fn load_key<G, E>(ops: &mut Vec<OpParams>, params: &OpParams, key_manager: &G) -> Result<G::Key, E>
+fn load_key<E>(
+    ops: &mut Vec<OpParams>,
+    params: &OpParams,
+    key_manager: &dyn crate::config::sync::KeyManager<E>,
+) -> Result<Multikey, E>
 where
-    G: GetKey<Error = E, KeyPath = Key, Codec = Codec> + SyncGetKey,
-    G::Key: Into<Vec<u8>> + Clone + Views,
-    E: From<OpenError> + From<multikey::Error>,
+    E: From<OpenError> + From<multikey::Error> + From<crate::Error>,
 {
     debug!("load_key: {:?}", params);
     match params {

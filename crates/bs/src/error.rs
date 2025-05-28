@@ -1,4 +1,12 @@
 // SPDX-License-Identifier: FSL-1.1
+
+use crate::error::Error as BsError;
+use multicid::Error as MulticidError;
+use multihash::Error as MultihashError;
+use multikey::Error as MultikeyError;
+use provenance_log::Error as PlogError;
+use std::fmt::Debug;
+
 /// Errors generated from this crate
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -99,4 +107,34 @@ pub enum UpdateError {
     /// No signing key
     #[error("No entry signing key")]
     NoSigningKey,
+}
+
+/// Trait alias for errors that can be used with BS operations
+pub trait BsCompatibleError:
+    From<OpenError>
+    + From<UpdateError>
+    + From<PlogError>
+    + From<std::io::Error>
+    + From<MulticidError>
+    + From<MultikeyError>
+    + From<MultihashError>
+    + From<BsError>
+    + ToString
+    + Debug
+{
+}
+
+// Blanket implementation for any type that satisfies the bounds
+impl<T> BsCompatibleError for T where
+    T: From<OpenError>
+        + From<UpdateError>
+        + From<PlogError>
+        + From<std::io::Error>
+        + From<MulticidError>
+        + From<MultikeyError>
+        + From<MultihashError>
+        + From<BsError>
+        + ToString
+        + Debug
+{
 }

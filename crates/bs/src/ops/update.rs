@@ -14,30 +14,25 @@ pub mod op_params;
 pub use op_params::OpParams;
 
 use crate::error::UpdateError;
-use bs_traits::{GetKey, Signer, SyncGetKey, SyncSigner};
 use multicid::{cid, Cid};
-use multicodec::Codec;
 use multihash::mh;
 use multikey::{Multikey, Views};
-use multisig::Multisig;
 use provenance_log::{
     entry::{self, Entry},
     error::EntryError,
-    Error as PlogError, Key, Log, OpId,
+    Error as PlogError, Log, OpId,
 };
 use std::{fs::read, path::Path};
 use tracing::debug;
 
 /// update a provenance log given the update config
-pub fn update_plog<G, S, E>(
+pub fn update_plog<E>(
     plog: &mut Log,
     config: Config,
-    key_manager: &G,
-    signer: &S,
+    key_manager: &dyn crate::config::sync::KeyManager<E>,
+    signer: &dyn crate::config::sync::MultiSigner<E>,
 ) -> Result<Entry, E>
 where
-    G: GetKey<KeyPath = Key, Codec = Codec, Key = Multikey, Error = E> + SyncGetKey,
-    S: Signer<Key = Multikey, Signature = Multisig, Error = E> + SyncSigner,
     E: From<UpdateError>
         + From<PlogError>
         + From<std::io::Error>
@@ -45,7 +40,8 @@ where
         + From<multikey::Error>
         + From<multihash::Error>
         + From<crate::Error>
-        + ToString,
+        + ToString
+        + std::fmt::Debug,
 {
     // 0. Set up the list of ops we're going to add
     let mut op_params = Vec::default();
@@ -58,7 +54,7 @@ where
         .try_for_each(|params| -> Result<(), E> {
             match params {
                 p @ OpParams::KeyGen { .. } => {
-                    let _ = load_key(&mut op_params, p, key_manager)?;
+                    let _ = load_key::<E>(&mut op_params, p, key_manager)?;
                 }
                 p @ OpParams::CidGen { .. } => {
                     let _ = load_cid(&mut op_params, p, |path| -> Result<Vec<u8>, E> {
@@ -148,11 +144,13 @@ where
     Ok(entry)
 }
 
-fn load_key<G, E>(ops: &mut Vec<OpParams>, params: &OpParams, key_manager: &G) -> Result<G::Key, E>
+fn load_key<E>(
+    ops: &mut Vec<OpParams>,
+    params: &OpParams,
+    key_manager: &dyn crate::config::sync::KeyManager<E>,
+) -> Result<Multikey, E>
 where
-    G: GetKey<Error = E, KeyPath = Key, Codec = Codec> + SyncGetKey,
-    G::Key: Into<Vec<u8>> + Clone + Views,
-    E: From<UpdateError> + From<multikey::Error>,
+    E: From<UpdateError> + From<multikey::Error> + From<crate::Error>,
 {
     debug!("load_key: {:?}", params);
     match params {

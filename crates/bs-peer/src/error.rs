@@ -27,4 +27,36 @@ pub enum Error {
     /// Platform-specific errors
     #[error("Platform error: {0}")]
     Platform(#[from] crate::platform::Error),
+
+    /// Plog already exists
+    #[error("Plog already exists")]
+    PlogAlreadyExists,
+
+    /// From<bs::error::OpenError>
+    #[error("Open error: {0}")]
+    Open(#[from] bs::error::OpenError),
+
+    /// From<bs::error::UpdateError>
+    #[error("Update error: {0}")]
+    Update(#[from] bs::error::UpdateError),
+
+    /// From<bs::error::Error>
+    #[error("Bs error: {0}")]
+    Bs(#[from] bs::Error),
+
+    /// From<provenance_log::Error>
+    #[error("Provenance log error: {0}")]
+    Plog(#[from] provenance_log::Error),
+
+    /// From<multikey::Error>
+    #[error("Multikey error: {0}")]
+    Multikey(#[from] multikey::Error),
+
+    /// From<multicid::Error>
+    #[error("Multicid error: {0}")]
+    Multicid(#[from] multicid::Error),
+
+    /// From<multihash::Error>
+    #[error("Multihash error: {0}")]
+    Multihash(#[from] multihash::Error),
 }
