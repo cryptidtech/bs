@@ -4,8 +4,6 @@ use thiserror::Error;
 mod opfs;
 pub use opfs::OPFSWrapped;
 
-mod crypto;
-
 #[derive(Error, Debug)]
 pub enum Error {
     /// From<Infallible>

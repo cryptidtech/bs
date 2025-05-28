@@ -61,6 +61,7 @@ web-sys = { version = "0.3.70", features = [
 wasm-bindgen-test = "0.3"
 wasm-bindgen = "0.2.93"
 tempfile = "3.20.0"
+bs-wallets.workspace = true
 
 [lints]
 workspace = true

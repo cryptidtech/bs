@@ -5,5 +5,5 @@ test: test-web
   cargo test
 
 test-web:
-  wasm-pack build --target web
-  wasm-pack test --headless --chrome --all-features
+  RUSTFLAGS='--cfg getrandom_backend="wasm_js"' wasm-pack build --target web
+  RUSTFLAGS='--cfg getrandom_backend="wasm_js"' wasm-pack test --headless --chrome --all-features

@@ -11,7 +11,7 @@ use multihash::EncodedMultihash;
 use multikey::{mk, Views as _};
 
 #[derive(Debug, Clone, Default)]
-pub(crate) struct InMemoryKeyManager {
+pub struct InMemoryKeyManager {
     vlad: Option<Multikey>,
     entry_key: Option<Multikey>,
 }
@@ -21,18 +21,27 @@ impl InMemoryKeyManager {
     pub(crate) const FINGERPRINT_CODEC: Codec = Codec::Sha3256;
     /// [Base] encoding for the fingerprint
     pub(crate) const FINGERPRINT_BASE: Base = Base::Base36Lower;
+    /// Key path for the vlad key
+    pub const VLAD_KEY_PATH: &'static str = VladParams::KEY_PATH;
+    /// Key path for the public key
+    pub const PUBKEY_KEY_PATH: &'static str = PubkeyParams::KEY_PATH;
 
     /// Generate a new key for the given codec
-    pub fn generate_key(&self, codec: &Codec) -> Result<Multikey, bs::Error> {
+    pub fn generate_key(codec: &Codec) -> Result<Multikey, bs::Error> {
         let mut rng = rand_core_6::OsRng;
-        let mk = mk::Builder::new_from_random_bytes(*codec, &mut rng)?.try_build()?;
+        Ok(mk::Builder::new_from_random_bytes(*codec, &mut rng)?.try_build()?)
+    }
+
+    /// Generates from seed
+    pub fn generate_from_seed(codec: &Codec, seed: &[u8]) -> Result<Multikey, bs::Error> {
+        let mk = mk::Builder::new_from_seed(*codec, seed)?.try_build()?;
         Ok(mk)
     }
 
     /// Store a key for a specific path
     pub fn store_key(&mut self, key_path: &str, mk: &Multikey) -> Result<(), bs::Error> {
         match key_path {
-            path if path == VladParams::KEY_PATH => {
+            path if path == Self::VLAD_KEY_PATH => {
                 // save the public multikey for the vlad
                 tracing::trace!(
                     "[STORE] {}",
@@ -42,7 +51,7 @@ impl InMemoryKeyManager {
                 self.vlad = Some(mk.conv_view()?.to_public_key()?);
                 tracing::trace!("Vlad key: {:#?}", self.vlad());
             }
-            path if path == PubkeyParams::KEY_PATH => {
+            path if path == Self::PUBKEY_KEY_PATH => {
                 self.entry_key = Some(mk.clone());
             }
             _ => {} // No storage for other keys
@@ -54,8 +63,8 @@ impl InMemoryKeyManager {
     /// Try to get an existing key, or None if not found
     pub fn get_existing_key(&self, key_path: &str) -> Option<Multikey> {
         match key_path {
-            path if path == VladParams::KEY_PATH => self.vlad.clone(),
-            path if path == PubkeyParams::KEY_PATH => self.entry_key.clone(),
+            path if path == Self::VLAD_KEY_PATH => self.vlad.clone(),
+            path if path == Self::PUBKEY_KEY_PATH => self.entry_key.clone(),
             _ => None,
         }
     }
@@ -104,7 +113,7 @@ impl SyncGetKey for InMemoryKeyManager {
 
         // If we don't have a key, generate a new one
         // This key won't be stored internally, but the caller can store it if needed
-        let new_key = self.generate_key(codec)?;
+        let new_key = Self::generate_key(codec)?;
 
         // Return the generated key
         Ok(new_key)

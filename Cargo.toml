@@ -47,6 +47,7 @@ bs = { path = "crates/bs" }
 bs-p2p = { path = "crates/bs-p2p" }
 bs-peer = { path = "crates/bs-peer" }
 bs-traits = { path = "crates/bs-traits" }
+bs-wallets = { path = "crates/bs-wallets" }
 comrade = { path = "crates/comrade" }
 comrade-reference = { path = "crates/comrade-reference" }
 multibase = { path = "crates/multibase" }
