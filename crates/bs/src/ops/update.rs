@@ -32,7 +32,7 @@ use tracing::debug;
 pub fn update_plog<G, S, E>(
     plog: &mut Log,
     config: Config,
-    key_manager: &G,
+    key_manager: &mut G,
     signer: &S,
 ) -> Result<Entry, E>
 where
@@ -148,7 +148,11 @@ where
     Ok(entry)
 }
 
-fn load_key<G, E>(ops: &mut Vec<OpParams>, params: &OpParams, key_manager: &G) -> Result<G::Key, E>
+fn load_key<G, E>(
+    ops: &mut Vec<OpParams>,
+    params: &OpParams,
+    key_manager: &mut G,
+) -> Result<G::Key, E>
 where
     G: GetKey<Error = E, KeyPath = Key, Codec = Codec> + SyncGetKey,
     G::Key: Into<Vec<u8>> + Clone + Views,
@@ -186,7 +190,7 @@ where
     }
 }
 
-fn load_cid<F, E>(ops: &mut Vec<OpParams>, params: &OpParams, load_file: F) -> Result<Cid, E>
+fn load_cid<F, E>(ops: &mut Vec<OpParams>, params: &OpParams, _load_file: F) -> Result<Cid, E>
 where
     F: FnOnce(&Path) -> Result<Vec<u8>, E>,
     E: From<UpdateError> + From<multihash::Error> + From<multicid::Error> + From<PlogError>,
@@ -199,14 +203,11 @@ where
             target,
             hash,
             inline,
-            path,
+            data,
         } => {
-            // load the file data for the cid
-            let file_data = load_file(path)?;
-
             let cid = cid::Builder::new(*version)
                 .with_target_codec(*target)
-                .with_hash(&mh::Builder::new_from_bytes(*hash, &file_data)?.try_build()?)
+                .with_hash(&mh::Builder::new_from_bytes(*hash, data)?.try_build()?)
                 .try_build()?;
 
             // create the cid key-path
@@ -228,7 +229,7 @@ where
                 // add the op param to add the file data
                 ops.push(OpParams::UseBin {
                     key: data_key,
-                    data: file_data,
+                    data: data.clone(),
                 });
             }
 

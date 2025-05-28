@@ -98,7 +98,7 @@ pub trait SyncSecretCombiner: SecretCombiner {
 pub trait SyncGetKey: GetKey {
     /// Get the key
     fn get_key(
-        &self,
+        &mut self,
         key_path: &Self::KeyPath,
         codec: &Self::Codec,
         threshold: usize,

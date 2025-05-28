@@ -12,6 +12,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 thiserror.workspace = true
+bs.workspace = true
 bs-p2p.workspace = true
 bs-traits.workspace = true
 libp2p.workspace = true
@@ -20,6 +21,7 @@ provenance-log.workspace = true
 multicodec.workspace = true
 multikey.workspace = true
 multisig.workspace = true
+serde = { workspace = true, optional = true }
 anyhow = "1.0"
 blockstore = "0.7.1"
 cid = "0.11.0"
@@ -62,3 +64,6 @@ tempfile = "3.20.0"
 
 [lints]
 workspace = true
+
+[features]
+serde = ["dep:serde"]

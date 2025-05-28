@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: FSL-1.1
 //! This module provides traits for asynchronous operations
-use crate::cond_send::{CondSend, CondSync};
+use crate::cond_send::CondSend;
 use crate::*;
 use std::future::Future;
 use std::num::NonZeroUsize;
@@ -160,5 +160,5 @@ pub trait AsyncGetKey: GetKey {
         codec: &'a Self::Codec,
         threshold: usize,
         limit: usize,
-    ) -> GetKeyFuture<'a, Self::Key, Self::Error>;
+    ) -> Result<GetKeyFuture<'a, Self::Key, Self::Error>, Self::Error>;
 }

@@ -21,7 +21,10 @@ members = [
   "crates/multiutil",
   "crates/provenance-log",
   "crates/rng",
-  "crates/wacc", "crates/bs-peer", "crates/interop-tests",
+  "crates/wacc",
+  "crates/bs-peer",
+  "crates/interop-tests",
+  "crates/bs-wallets",
 ]
 
 [workspace.package]
@@ -42,6 +45,7 @@ unexpected_cfgs = { level = "warn", check-cfg = [
 # Crate ependencies
 bs = { path = "crates/bs" }
 bs-p2p = { path = "crates/bs-p2p" }
+bs-peer = { path = "crates/bs-peer" }
 bs-traits = { path = "crates/bs-traits" }
 comrade = { path = "crates/comrade" }
 comrade-reference = { path = "crates/comrade-reference" }

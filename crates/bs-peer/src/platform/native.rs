@@ -1,7 +1,5 @@
 //! Native specific code
 //! The native platform impl of [blockstore::Blockstore]
-mod crypto;
-
 use std::path::PathBuf;
 
 //use bytes::Bytes;

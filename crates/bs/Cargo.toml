@@ -19,6 +19,11 @@ provenance-log.workspace = true
 rand.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+serde = { workspace = true, optional = true }
+bon = "3.6.3"
 
 [lints]
 workspace = true
+
+[features]
+serde = ["dep:serde"]

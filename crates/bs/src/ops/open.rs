@@ -15,11 +15,10 @@ use multihash::mh;
 use multikey::{Multikey, Views};
 use multisig::Multisig;
 use provenance_log::{entry, error::EntryError, Error as PlogError, Key, Log, OpId, Script};
-use std::{fs::read, path::Path};
 use tracing::debug;
 
 /// open a new provenance log based on the config
-pub fn open_plog<G, S, E>(config: Config, key_manager: &G, signer: &S) -> Result<Log, E>
+pub fn open_plog<G, S, E>(config: Config, key_manager: &mut G, signer: &S) -> Result<Log, E>
 where
     G: GetKey<KeyPath = Key, Codec = Codec, Key = Multikey, Error = E> + SyncGetKey,
     S: Signer<Key = Multikey, Signature = Multisig, Error = E> + SyncSigner,
@@ -46,9 +45,7 @@ where
                     let _ = load_key(&mut op_params, p, key_manager)?;
                 }
                 p @ OpParams::CidGen { .. } => {
-                    let _ = load_cid(&mut op_params, p, |path| -> Result<Vec<u8>, E> {
-                        read(path).map_err(E::from)
-                    })?;
+                    let _ = load_cid::<E>(&mut op_params, p)?;
                 }
                 p => op_params.push(p.clone()),
             }
@@ -64,17 +61,8 @@ where
     // get the vlad signing key
     let vlad_mk = load_key(&mut op_params, &vlad_key_params, key_manager)?;
     // get the cid for the first lock script
-    let mut first_lock_script: Option<Script> = None;
-    let cid = load_cid(
-        &mut op_params,
-        &vlad_cid_params,
-        |path| -> Result<Vec<u8>, E> {
-            // this is a script so load the file that way
-            let script = script::Loader::new(path).try_build()?;
-            first_lock_script = Some(script.clone());
-            Ok(script.into())
-        },
-    )?;
+    let first_lock_script: Option<Script> = None;
+    let cid = load_cid::<E>(&mut op_params, &vlad_cid_params)?;
 
     // construct the signed vlad using the vlad pubkey and the first lock script cid
     let vlad = vlad::Builder::default()
@@ -186,7 +174,11 @@ where
     Ok(log)
 }
 
-fn load_key<G, E>(ops: &mut Vec<OpParams>, params: &OpParams, key_manager: &G) -> Result<G::Key, E>
+fn load_key<G, E>(
+    ops: &mut Vec<OpParams>,
+    params: &OpParams,
+    key_manager: &mut G,
+) -> Result<G::Key, E>
 where
     G: GetKey<Error = E, KeyPath = Key, Codec = Codec> + SyncGetKey,
     G::Key: Into<Vec<u8>> + Clone + Views,
@@ -224,9 +216,8 @@ where
     }
 }
 
-fn load_cid<F, E>(ops: &mut Vec<OpParams>, params: &OpParams, load_file: F) -> Result<Cid, E>
+fn load_cid<E>(ops: &mut Vec<OpParams>, params: &OpParams) -> Result<Cid, E>
 where
-    F: FnOnce(&Path) -> Result<Vec<u8>, E>,
     E: From<OpenError> + From<multihash::Error> + From<multicid::Error> + From<PlogError>,
 {
     debug!("load_cid: {:?}", params);
@@ -237,14 +228,11 @@ where
             target,
             hash,
             inline,
-            path,
+            data,
         } => {
-            // load the file data for the cid
-            let file_data = load_file(path)?;
-
             let cid = cid::Builder::new(*version)
                 .with_target_codec(*target)
-                .with_hash(&mh::Builder::new_from_bytes(*hash, &file_data)?.try_build()?)
+                .with_hash(&mh::Builder::new_from_bytes(*hash, data)?.try_build()?)
                 .try_build()?;
 
             // create the cid key-path
@@ -266,7 +254,7 @@ where
                 // add the op param to add the file data
                 ops.push(OpParams::UseBin {
                     key: data_key,
-                    data: file_data,
+                    data: data.to_vec(),
                 });
             }
 

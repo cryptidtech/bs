@@ -447,7 +447,7 @@ fn parse_file_params(s: &str) -> Result<OpParams, Error> {
         target,
         hash,
         inline,
-        path,
+        data: vec![], // TODO: Placeholder for actual data
     })
 }
 
@@ -483,7 +483,7 @@ fn parse_vlad_params(s: &str) -> Result<(OpParams, OpParams), Error> {
             target: Codec::Identity,
             hash,
             inline: true,
-            path,
+            data: vec![], // TODO: Placeholder for actual data
         },
     ))
 }

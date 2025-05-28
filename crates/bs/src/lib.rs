@@ -22,3 +22,6 @@ pub use ops::prelude::*;
 pub mod prelude {
     pub use super::*;
 }
+
+/// Opinionated configuation for the BetterSign library
+pub mod config;
