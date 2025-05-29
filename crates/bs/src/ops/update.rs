@@ -28,7 +28,7 @@ use tracing::debug;
 /// update a provenance log given the update config
 pub fn update_plog<E>(
     plog: &mut Log,
-    config: Config,
+    config: &Config,
     key_manager: &dyn crate::config::sync::KeyManager<E>,
     signer: &dyn crate::config::sync::MultiSigner<E>,
 ) -> Result<Entry, E>
@@ -70,22 +70,15 @@ where
     let (_, last_entry, _kvp) = plog.verify().last().ok_or(UpdateError::NoLastEntry)??;
 
     // 2. load the entry unlock script
-    let unlock_script = {
-        let unlock_path = config
-            .entry_unlock_script
-            .ok_or::<E>(UpdateError::NoEntryUnlockScript.into())?;
-        script::Loader::new(unlock_path).try_build()?
-    };
+    let unlock_script = &config.entry_unlock_script;
 
     // get the entry signing key
-    let entry_mk = config
-        .entry_signing_key
-        .ok_or::<E>(UpdateError::NoSigningKey.into())?;
+    let entry_mk = &config.entry_signing_key;
 
     // 3. Construct the next entry, starting from the last, calling back to get the entry signed
 
     // construct the first entry from all of the parts
-    let mut builder = entry::Builder::from(&last_entry).with_unlock(&unlock_script);
+    let mut builder = entry::Builder::from(&last_entry).with_unlock(unlock_script);
 
     // add in all of the entry Ops
     op_params.iter().try_for_each(|params| -> Result<(), E> {
@@ -132,7 +125,7 @@ where
         let ev: Vec<u8> = e.clone().into();
         // call the call back to have the caller sign the data
         let ms = signer
-            .try_sign(&entry_mk, &ev)
+            .try_sign(entry_mk, &ev)
             .map_err(|e| PlogError::from(EntryError::SignFailed(e.to_string())))?;
         // store the signature as proof
         Ok(ms.into())
@@ -230,5 +223,132 @@ where
             Ok(cid)
         }
         _ => Err(UpdateError::InvalidCidParams.into()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::params::{entry_key::EntryKeyParams, pubkey::PubkeyParams, vlad::VladParams};
+    use crate::{open, open_plog};
+
+    use bs_wallets::memory::InMemoryKeyManager;
+    use provenance_log::entry::Field;
+    use provenance_log::format_with_fields;
+    use provenance_log::Script;
+    use provenance_log::{Key, Pairs};
+    use tracing_subscriber::fmt;
+
+    #[allow(unused)]
+    fn init_logger() {
+        let subscriber = fmt().with_env_filter("trace,provenance_log=off").finish();
+        if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
+            tracing::warn!("failed to set subscriber: {}", e);
+        }
+    }
+
+    #[test]
+    fn test_create_using_defaults() {
+        // init_logger();
+
+        let entry_key = Field::ENTRY;
+        assert_eq!(entry_key, "/entry/");
+
+        let proof_key = Field::PROOF;
+        assert_eq!(proof_key, "/entry/proof");
+
+        let unlock_old_school = format!(
+            r#"
+             // push the serialized Entry as the message
+             push("{entry_key}");
+
+             // push the proof data
+             push("{proof_key}");
+        "#
+        );
+
+        let unlock = format_with_fields!(
+            r#"
+             // push the serialized Entry as the message
+             push("{Field::ENTRY}");
+
+             // push the proof data
+             push("{Field::PROOF}");
+        "#
+        );
+
+        assert_eq!(unlock_old_school, unlock);
+
+        let unlock_script = Script::Code(Key::default(), unlock.to_string());
+
+        let lock = format_with_fields!(
+            r#"
+                // then check a possible threshold sig...
+                check_signature("/recoverykey", "{Field::ENTRY}") ||
+
+                // then check a possible pubkey sig...
+                check_signature("/pubkey", "{Field::ENTRY}") ||
+
+                // then the pre-image proof...
+                check_preimage("/hash")
+            "#
+        );
+
+        let lock_script = Script::Code(Key::default(), lock);
+
+        let config = open::Config {
+            vlad_params: VladParams::default().into(),
+            pubkey_params: PubkeyParams::default().into(),
+            entrykey_params: EntryKeyParams::default().into(),
+            first_lock_script: Script::Code(Key::default(), VladParams::FIRST_LOCK_SCRIPT.into()),
+            entry_lock_script: lock_script.clone(),
+            entry_unlock_script: Script::Code(Key::default(), unlock),
+            additional_ops: vec![],
+        };
+
+        let key_manager = InMemoryKeyManager::<crate::Error>::default();
+        let mut plog = open_plog(&config, &key_manager, &key_manager).expect("Failed to open plog");
+
+        // 2. Update the p.log with a new entry
+        // - add a lock Script
+        // - remove the entrykey lock Script
+        // - add an op
+        let update_cfg = Config::new(unlock_script.clone(), key_manager.entry_key().clone())
+            .with_ops(&[OpParams::Delete {
+                key: Key::try_from(EntryKeyParams::KEY_PATH).unwrap(),
+            }])
+            // Entry lock scripts define conditions which must be met by the next entry in the plog for it to be valid.
+            .add_lock_script(Key::try_from("/delegated/").unwrap(), lock_script)
+            .build();
+
+        let prev = plog.head.clone();
+
+        // tak config and use update method with TestKeyManager to update the log
+        update_plog(&mut plog, &update_cfg, &key_manager, &key_manager)
+            .expect("Failed to update plog");
+
+        // plog head prev should match prev
+        assert_eq!(prev, plog.entries.get(&plog.head).unwrap().prev());
+
+        // There should be no DEFAULT_ENTRYKEY kvp
+        let verify_iter = &mut plog.verify();
+
+        let mut last = None;
+
+        // the log should also verify
+        for ret in verify_iter {
+            if let Some(e) = ret.clone().err() {
+                tracing::error!("Error: {:#?}", e);
+                // fail test
+                panic!("Error in log verification");
+            } else {
+                last = Some(ret.ok().unwrap());
+            }
+        }
+
+        let (_count, _entry, kvp) = last.ok_or("No last entry").unwrap();
+        let op = kvp.get(EntryKeyParams::KEY_PATH);
+
+        assert!(op.is_none());
     }
 }

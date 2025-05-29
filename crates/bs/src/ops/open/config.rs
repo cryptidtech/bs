@@ -66,3 +66,16 @@ impl Config {
         self
     }
 }
+
+impl From<Config> for Vec<OpParams> {
+    fn from(config: Config) -> Self {
+        let mut ops = vec![
+            config.vlad_params.0,
+            config.vlad_params.1,
+            config.entrykey_params,
+            config.pubkey_params,
+        ];
+        ops.extend(config.additional_ops);
+        ops
+    }
+}

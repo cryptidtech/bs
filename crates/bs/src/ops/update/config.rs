@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1
 use crate::update::op_params::OpParams;
 use multikey::Multikey;
+use provenance_log::Script;
 use std::path::{Path, PathBuf};
 
 /// the configuration for opening a new provenance log
@@ -10,22 +11,33 @@ pub struct Config {
     pub clear_lock_scripts: bool,
 
     /// entry lock script
-    pub add_entry_lock_scripts: Vec<(String, PathBuf)>,
+    pub add_entry_lock_scripts: Vec<(String, Script)>,
 
     /// remove lock scripts
     pub remove_entry_lock_scripts: Vec<String>,
 
     /// entry unlock script
-    pub entry_unlock_script: Option<PathBuf>,
+    pub entry_unlock_script: Script,
 
     /// entry signing key
-    pub entry_signing_key: Option<Multikey>,
+    pub entry_signing_key: Multikey,
 
     /// entry operations
     pub entry_ops: Vec<OpParams>,
 }
 
 impl Config {
+    /// Create a new Config with the given unlock script and entry signing key
+    pub fn new(entry_unlock_script: Script, entry_signing_key: Multikey) -> Self {
+        Self {
+            clear_lock_scripts: false,
+            add_entry_lock_scripts: Vec::new(),
+            remove_entry_lock_scripts: Vec::new(),
+            entry_unlock_script,
+            entry_signing_key,
+            entry_ops: Vec::new(),
+        }
+    }
     /// are we clearing lock scripts?
     pub fn clear_lock_scripts(mut self, clear: bool) -> Self {
         self.clear_lock_scripts = clear;
@@ -33,25 +45,9 @@ impl Config {
     }
 
     /// lock scripts we're adding
-    pub fn add_lock_script<S: AsRef<str>, P: AsRef<Path>>(
-        mut self,
-        key_path: &S,
-        path: &P,
-    ) -> Self {
+    pub fn add_lock_script(&mut self, key_path: impl AsRef<str>, script: Script) -> &mut Self {
         self.add_entry_lock_scripts
-            .push((key_path.as_ref().to_string(), path.as_ref().to_path_buf()));
-        self
-    }
-
-    /// add in the entry unlock script
-    pub fn with_entry_unlock_script<P: AsRef<Path>>(mut self, path: &P) -> Self {
-        self.entry_unlock_script = Some(path.as_ref().to_path_buf());
-        self
-    }
-
-    /// add in the entry signing key
-    pub fn with_entry_signing_key(mut self, mk: &Multikey) -> Self {
-        self.entry_signing_key = Some(mk.clone());
+            .push((key_path.as_ref().to_string(), script));
         self
     }
 
@@ -63,8 +59,19 @@ impl Config {
     }
 
     /// the ops we're recording
-    pub fn with_ops(mut self, ops: &[OpParams]) -> Self {
+    pub fn with_ops(&mut self, ops: &[OpParams]) -> &mut Self {
         self.entry_ops.append(&mut ops.to_vec());
         self
+    }
+
+    /// Build the configuration
+    pub fn build(&self) -> Self {
+        self.clone()
+    }
+}
+
+impl From<Config> for Vec<OpParams> {
+    fn from(config: Config) -> Self {
+        config.entry_ops
     }
 }
