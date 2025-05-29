@@ -50,30 +50,16 @@ pub fn open_plog<E: BsCompatibleError>(
     // get the cid for the first lock script
     let cid = load_cid::<E>(&mut op_params, vlad_cid_params)?;
 
-    // construct the signed vlad using the vlad pubkey and the first lock script cid
-    tracing::debug!(
-        "Constructing vlad with signing key: {:?} and cid: {:?}",
-        vlad_mk,
-        cid
-    );
-
     let vlad = vlad::Builder::default()
         .with_signing_key(&vlad_mk)
         .with_cid(&cid)
         .try_build(|cid| {
-            tracing::debug!("Signing vlad with cid: {:?}", cid);
             // get the serialized version of the vlad with an empty "proof" field
             let vlad_bytes: Vec<u8> = cid.clone().into();
-            // call the signer to sign the vlad bytes
-            let multisig = match signer.try_sign(&vlad_mk, &vlad_bytes) {
-                Ok(sig) => sig,
-                Err(e) => {
-                    tracing::error!("Failed to sign vlad: {:?}", e);
-                    return Err(multicid::Error::Multisig(multisig::Error::SignFailed(
-                        e.to_string(),
-                    )));
-                }
-            };
+            // sign the vlad bytes
+            let multisig = signer.try_sign(&vlad_mk, &vlad_bytes).map_err(|e| {
+                multicid::Error::Multisig(multisig::Error::SignFailed(e.to_string()))
+            })?;
             Ok(multisig.into())
         })?;
 
