@@ -75,6 +75,10 @@ pub enum Error {
     /// Generic string error
     #[error("{0}")]
     StringError(String),
+
+    /// Plog not initialized
+    #[error("Plog not initialized")]
+    PlogNotInitialized,
 }
 
 impl From<String> for Error {

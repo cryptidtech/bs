@@ -157,18 +157,23 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
             };
             debug!("read p.log signing key");
 
-            let cfg = update::Config::default()
+            let unlock_script = {
+                let mut v = Vec::default();
+                reader(&Some(unlock_script_path))?.read_to_end(&mut v)?;
+                Script::Code(Key::default(), String::from_utf8(v)?)
+            };
+
+            let cfg = update::Config::new(unlock_script, entry_signing_key)
                 .with_ops(&build_delete_params(&delete_ops)?)
                 .with_ops(&build_key_params(&key_ops)?)
                 .with_ops(&build_string_params(&string_ops)?)
                 .with_ops(&build_file_params(&file_ops)?)
-                .with_entry_signing_key(&entry_signing_key)
-                .with_entry_unlock_script(&unlock_script_path);
+                .build();
 
             let key_manager = KeyManager;
 
             // update the p.log
-            update::update_plog::<Error>(&mut plog, cfg, &key_manager, &key_manager)?;
+            update::update_plog::<Error>(&mut plog, &cfg, &key_manager, &key_manager)?;
 
             println!("Writing p.log {}", writer_name(&output)?.to_string_lossy());
             print_plog(&plog)?;

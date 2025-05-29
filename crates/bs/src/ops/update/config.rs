@@ -2,7 +2,6 @@
 use crate::update::op_params::OpParams;
 use multikey::Multikey;
 use provenance_log::Script;
-use std::path::{Path, PathBuf};
 
 /// the configuration for opening a new provenance log
 #[derive(Clone, Debug, Default)]

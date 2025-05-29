@@ -107,6 +107,10 @@ pub enum Error {
     /// Invalid backend type
     #[error("Invalid backend type {0}")]
     InvalidBackendType(String),
+
+    /// From<std::string::FromUtf8Error>
+    #[error(transparent)]
+    FromUtf8Error(#[from] std::string::FromUtf8Error),
 }
 
 /// SshAgent error

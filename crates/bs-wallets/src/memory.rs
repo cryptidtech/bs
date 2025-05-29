@@ -350,10 +350,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bs::{
-        config::sync::{KeyManager, KeyPathProvider, MultiSigner},
-        params::{entry_key::EntryKeyParams, pubkey::PubkeyParams, vlad::VladParams},
-    };
+    use bs::config::sync::{KeyManager, KeyPathProvider, MultiSigner};
     use bs_peer::BsPeer;
 
     // test fixture that fixes the Error tpye to bs::Error
