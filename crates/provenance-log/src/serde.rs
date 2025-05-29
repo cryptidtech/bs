@@ -524,7 +524,10 @@ mod tests {
         let vlad = vlad::Builder::default()
             .with_nonce(&nonce)
             .with_cid(&cid)
-            .try_build()
+            .try_build(|cid| {
+                let v: Vec<u8> = cid.clone().into();
+                Ok(v)
+            })
             .unwrap();
 
         let script = Script::Cid(Key::default(), cid);

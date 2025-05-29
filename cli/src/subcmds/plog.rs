@@ -22,7 +22,7 @@ use multisig::Multisig;
 use multiutil::{BaseEncoded, CodecInfo, DetectedEncoder, EncodingInfo};
 use provenance_log::{Key, Log, Script};
 use rng::StdRng;
-use std::{collections::VecDeque, convert::TryFrom, path::PathBuf};
+use std::{collections::VecDeque, convert::TryFrom};
 use tracing::debug;
 
 /// Cli KeyManager
@@ -89,20 +89,32 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
             output,
         } => {
             let (vlad_key, vlad_cid) = parse_vlad_params(&vlad_params)?;
-            let cfg = open::Config::default()
+
+            let lock_script = Script::Code(
+                Key::default(),
+                std::fs::read_to_string(&lock_script_path).map_err(|_| PlogError::NoKeyPath)?,
+            );
+            let unlock_script = Script::Code(
+                Key::default(),
+                std::fs::read_to_string(&unlock_script_path).map_err(|_| PlogError::NoKeyPath)?,
+            );
+
+            let mut cfg = open::Config::default()
                 .with_pubkey_params(parse_key_params(&pub_key_params, Some("/pubkey"))?)
                 .with_additional_ops(&build_key_params(&key_ops)?)
                 .with_additional_ops(&build_string_params(&string_ops)?)
                 .with_additional_ops(&build_file_params(&file_ops)?)
                 .with_vlad_params(vlad_key, vlad_cid)
-                .with_entrykey_params(parse_key_params(&entry_key_codec, Some("/entrykey"))?)
-                .with_entry_lock_script(&lock_script_path)
-                .with_entry_unlock_script(&unlock_script_path);
+                .with_entrykey_params(parse_key_params(&entry_key_codec, Some("/entrykey"))?);
+            cfg.with_entry_lock_script(lock_script)
+                .with_entry_unlock_script(unlock_script);
 
             let key_manager = KeyManager;
 
+            let cfg = cfg.to_owned();
+
             // open the p.log
-            let plog = open::open_plog(cfg, &key_manager, &key_manager)?;
+            let plog = open::open_plog(&cfg, &key_manager, &key_manager)?;
 
             println!("Created p.log {}", writer_name(&output)?.to_string_lossy());
             print_plog(&plog)?;
@@ -422,7 +434,6 @@ fn parse_file_params(s: &str) -> Result<OpParams, Error> {
     if !key.is_branch() {
         return Err(PlogError::InvalidKeyPath.into());
     }
-    let path = PathBuf::from(parts.pop_front().ok_or(PlogError::NoInputFile)?);
     if !parts.is_empty() && parts.len() != 4 {
         return Err(PlogError::InvalidFileParams.into());
     }
@@ -455,7 +466,6 @@ fn parse_file_params(s: &str) -> Result<OpParams, Error> {
 /// <first lock script path>[:<signing key codec>:<cid hashing codec>[:<hash length in bits>]]
 fn parse_vlad_params(s: &str) -> Result<(OpParams, OpParams), Error> {
     let mut parts = s.split(":").collect::<VecDeque<_>>();
-    let path = PathBuf::from(parts.pop_front().ok_or(PlogError::NoInputFile)?);
     if !(parts.is_empty() || parts.len() == 2 || parts.len() == 3) {
         return Err(PlogError::InvalidFileParams.into());
     }

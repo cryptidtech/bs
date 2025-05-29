@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: FSL-1.1
 use crate::{error::KvpError, Entry, Error, Key, Op, Value};
+pub use comrade::Pairs;
 use std::{collections::BTreeMap, fmt};
 
 /// Kvp is the virtual key-value pair storage system that builds up the state
@@ -14,7 +15,7 @@ pub struct Kvp<'a> {
     undo: Vec<(Option<&'a Entry>, BTreeMap<Key, Value>)>,
 }
 
-impl comrade::Pairs for Kvp<'_> {
+impl Pairs for Kvp<'_> {
     fn get(&self, key: &str) -> Option<comrade::Value> {
         let k = match Key::try_from(key) {
             Ok(k) => k,

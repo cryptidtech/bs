@@ -273,7 +273,10 @@ mod tests {
         let vlad = vlad::Builder::default()
             .with_nonce(&nonce)
             .with_cid(&cid)
-            .try_build_encoded()
+            .try_build_encoded(|cid| {
+                let v: Vec<u8> = cid.clone().into();
+                Ok(v)
+            })
             .unwrap();
 
         assert_tokens(
@@ -305,7 +308,10 @@ mod tests {
         let vlad = vlad::Builder::default()
             .with_nonce(&nonce)
             .with_cid(&cid)
-            .try_build()
+            .try_build(|cid| {
+                let v: Vec<u8> = cid.clone().into();
+                Ok(v)
+            })
             .unwrap();
 
         assert_tokens(
@@ -369,7 +375,10 @@ mod tests {
         let vlad = vlad::Builder::default()
             .with_nonce(&nonce)
             .with_cid(&cid)
-            .try_build()
+            .try_build(|cid| {
+                let v: Vec<u8> = cid.clone().into();
+                Ok(v)
+            })
             .unwrap();
 
         let s = serde_json::to_string(&vlad).unwrap();
@@ -400,7 +409,10 @@ mod tests {
         let vlad = vlad::Builder::default()
             .with_nonce(&nonce)
             .with_cid(&cid)
-            .try_build()
+            .try_build(|cid| {
+                let v: Vec<u8> = cid.clone().into();
+                Ok(v)
+            })
             .unwrap();
 
         let v = serde_cbor::to_vec(&vlad).unwrap();
@@ -432,7 +444,10 @@ mod tests {
         let vlad = vlad::Builder::default()
             .with_nonce(&nonce)
             .with_cid(&cid)
-            .try_build()
+            .try_build(|cid| {
+                let v: Vec<u8> = cid.clone().into();
+                Ok(v)
+            })
             .unwrap();
 
         let v = serde_cbor::to_vec(&vlad).unwrap();

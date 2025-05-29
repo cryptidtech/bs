@@ -116,7 +116,7 @@ mod tests {
     use crate::platform::common::RawBlakeBlock;
 
     use super::*;
-    use blockstore::{block::Block, Blockstore as _};
+    use blockstore::block::Block;
     use tempfile::tempdir;
 
     #[tokio::test]

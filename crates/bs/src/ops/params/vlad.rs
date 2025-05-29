@@ -79,6 +79,14 @@ pub struct VladParams {
     cid: VladCid,
 }
 
+impl Default for VladParams {
+    fn default() -> Self {
+        let key_codec = KeyCodec(Codec::Ed25519Priv);
+        let hash_codec = HashCodec(Codec::Sha2256);
+        Self::new(key_codec, hash_codec)
+    }
+}
+
 impl VladParams {
     /// Key path for Vlad operations.
     pub const KEY_PATH: &str = "/vlad/key";
@@ -117,6 +125,12 @@ impl VladParams {
     /// Sets the limit for the VladKey OpParams.
     pub fn with_limit(&mut self, limit: u32) {
         self.key.set_limit(limit);
+    }
+}
+
+impl From<VladParams> for (OpParams, OpParams) {
+    fn from(params: VladParams) -> Self {
+        (params.key.0, params.cid.0)
     }
 }
 

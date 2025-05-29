@@ -34,7 +34,7 @@ pub use op::{Op, OpId};
 
 /// The virtual key-value pair store
 pub mod pairs;
-pub use pairs::Kvp;
+pub use pairs::{Kvp, Pairs};
 
 /// Script related functions
 pub mod script;

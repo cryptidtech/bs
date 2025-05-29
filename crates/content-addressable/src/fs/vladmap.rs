@@ -14,7 +14,7 @@ mod tests {
     use multicid::{cid, vlad, Cid, EncodedVlad, Vlad};
     use multicodec::Codec;
     use multihash::mh;
-    use multikey::{mk, Multikey};
+    use multikey::{mk, Multikey, Views as _};
     use multiutil::EncodingInfo;
     use rng::StdRng;
     use std::path::PathBuf;
@@ -52,7 +52,13 @@ mod tests {
         vlad::Builder::default()
             .with_signing_key(&mk)
             .with_cid(&cid)
-            .try_build_encoded()
+            .try_build_encoded(|cid| {
+                let signing_view = mk.sign_view()?;
+                let cidv: Vec<u8> = cid.clone().into();
+                let ms = signing_view.sign(&cidv, false, None)?;
+                let msv: Vec<u8> = ms.clone().into();
+                Ok(msv)
+            })
             .unwrap()
     }
 

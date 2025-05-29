@@ -15,12 +15,18 @@ multicodec.workspace = true
 multihash.workspace = true
 multikey.workspace = true
 multisig.workspace = true
+multiutil.workspace = true
 provenance-log.workspace = true
 rand.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 serde = { workspace = true, optional = true }
 bon = "3.6.3"
+
+[dev-dependencies]
+tracing-subscriber.workspace = true
+bs-wallets.workspace = true
+multibase.workspace = true
 
 [lints]
 workspace = true

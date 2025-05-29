@@ -22,6 +22,8 @@ pub use native::{Error, NativeBlockstore as Blockstore};
 // pub use native::{start, StartConfig};
 
 /// Spawn for tokio
+// allow dead
+#[allow(unused)]
 #[cfg(not(target_arch = "wasm32"))]
 pub fn spawn(f: impl Future<Output = ()> + Send + 'static) {
     tokio::spawn(f);

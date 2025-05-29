@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: FSL-1.1
-
-use crate::error::Error as BsError;
 use multicid::Error as MulticidError;
 use multihash::Error as MultihashError;
 use multikey::Error as MultikeyError;
@@ -118,7 +116,7 @@ pub trait BsCompatibleError:
     + From<MulticidError>
     + From<MultikeyError>
     + From<MultihashError>
-    + From<BsError>
+    + From<Error>
     + ToString
     + Debug
 {
@@ -133,7 +131,7 @@ impl<T> BsCompatibleError for T where
         + From<MulticidError>
         + From<MultikeyError>
         + From<MultihashError>
-        + From<BsError>
+        + From<Error>
         + ToString
         + Debug
 {

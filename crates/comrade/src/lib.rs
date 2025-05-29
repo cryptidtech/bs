@@ -160,6 +160,7 @@ pub mod tests {
         // Autotrait test
         // Comrade is not Send or Sync, but it is Unpin
         // pub(crate) fn is_normal<T: Sized + Send + Sync + Unpin>() {}
+        #[cfg(not(target_arch = "wasm32"))]
         pub(crate) fn is_sized_unnpin<T: Sized + Unpin>() {}
 
         pub fn unlock_script(entry_key: &str, proof_key: &str) -> String {

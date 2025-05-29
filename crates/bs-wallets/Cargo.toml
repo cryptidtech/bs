@@ -14,6 +14,7 @@ multibase.workspace = true
 multicodec.workspace = true
 multikey.workspace = true
 multihash.workspace = true
+multicid.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 rand.workspace = true

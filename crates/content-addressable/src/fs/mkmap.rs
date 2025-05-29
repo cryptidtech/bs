@@ -17,7 +17,7 @@ mod tests {
     use multikey::{mk, EncodedMultikey, Multikey};
     use multiutil::EncodingInfo;
     use rng::StdRng;
-    use std::path::{Path, PathBuf};
+    use std::path::PathBuf;
     use tokio::{fs, test};
     use tracing::{span, Level};
 

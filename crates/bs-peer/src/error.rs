@@ -59,4 +59,24 @@ pub enum Error {
     /// From<multihash::Error>
     #[error("Multihash error: {0}")]
     Multihash(#[from] multihash::Error),
+
+    /// Error during verification of the provenance log.
+    #[error("Plog verification failed: {0}")]
+    PlogVerificationFailed(provenance_log::Error),
+
+    /// Generic string error
+    #[error("{0}")]
+    StringError(String),
+}
+
+impl From<String> for Error {
+    fn from(s: String) -> Self {
+        Error::StringError(s)
+    }
+}
+
+impl From<&str> for Error {
+    fn from(s: &str) -> Self {
+        Error::StringError(s.to_string())
+    }
 }

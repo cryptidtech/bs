@@ -196,22 +196,6 @@ struct VerifyIter<'a> {
     prev_cid: Cid,
     kvp: Kvp<'a>,
     lock_scripts: Vec<Script>,
-    error: Option<Error>,
-}
-
-impl<'a> VerifyIter<'a> {
-    /// Helper method to set error state and return early
-    fn set_error<E>(&mut self, error: E) -> Option<Result<(usize, Entry, Kvp<'a>), Error>>
-    where
-        E: Into<Error>,
-    {
-        // Set index out of range
-        self.seqno = self.entries.len();
-        // Set the error state
-        self.error = Some(error.into());
-        // Return the error
-        Some(Err(self.error.clone().unwrap()))
-    }
 }
 
 impl<'a> Iterator for VerifyIter<'a> {
@@ -372,7 +356,6 @@ impl Log {
             prev_cid: Cid::null(),
             kvp: Kvp::default(),
             lock_scripts: vec![self.first_lock.clone()],
-            error: None,
         }
     }
 
@@ -507,19 +490,51 @@ mod tests {
     use multicid::{cid, vlad};
     use multihash::mh;
     use multikey::{EncodedMultikey, Multikey, Views};
-    use std::path::PathBuf;
     use test_log::test;
     use tracing::{span, Level};
+    use tracing_subscriber::{fmt, EnvFilter};
 
-    fn load_script(path: &Key, file_name: &str) -> Script {
-        let mut pb = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        pb.push("examples");
-        pb.push("wast");
-        pb.push(file_name);
-        crate::script::Builder::from_code_file(&pb)
-            .with_path(path)
-            .try_build()
-            .unwrap()
+    fn first_lock_script() -> Script {
+        Script::Code(
+            Key::default(),
+            r#"
+                check_signature("/ephemeral", "/entry/")
+            "#
+            .to_string(),
+        )
+    }
+
+    fn lock_script() -> Script {
+        Script::Code(
+            Key::default(),
+            r#"
+                check_signature("/recovery", "/entry/") ||
+                check_signature("/pubkey", "/entry/") ||
+                check_preimage("/hash")
+            "#
+            .to_string(),
+        )
+    }
+
+    fn unlock_script() -> Script {
+        Script::Code(
+            Key::default(),
+            r#"
+push("/entry/");
+push("/entry/proof");
+"#
+            .to_string(),
+        )
+    }
+
+    #[allow(unused)]
+    fn init_logger() {
+        let subscriber = fmt()
+            .with_env_filter(EnvFilter::from_default_env())
+            .finish();
+        if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
+            tracing::warn!("failed to set subscriber: {}", e);
+        }
     }
 
     fn get_key_update_op(k: &str, key: &Multikey) -> Op {
@@ -572,12 +587,16 @@ mod tests {
         let vlad = vlad::Builder::default()
             .with_signing_key(&ephemeral)
             .with_cid(&cid)
-            .try_build()
+            .try_build(|cid| {
+                // sign those bytes
+                let v: Vec<u8> = cid.clone().into();
+                Ok(v)
+            })
             .unwrap();
 
         // load the entry scripts
-        let lock = load_script(&Key::default(), "lock.wast");
-        let unlock = load_script(&Key::default(), "unlock.wast");
+        let lock = lock_script();
+        let unlock = unlock_script();
         let ephemeral_op = get_key_update_op("/ephemeral", &ephemeral);
         let pubkey_op = get_key_update_op("/pubkey", &key);
 
@@ -600,7 +619,7 @@ mod tests {
             .unwrap();
 
         // load the first lock script
-        let first = load_script(&Key::default(), "first.wast");
+        let first = first_lock_script();
 
         let log = Builder::new()
             .with_vlad(&vlad)
@@ -658,7 +677,11 @@ mod tests {
         let vlad = vlad::Builder::default()
             .with_signing_key(&ephemeral)
             .with_cid(&cid)
-            .try_build()
+            .try_build(|cid| {
+                // sign those bytes
+                let v: Vec<u8> = cid.clone().into();
+                Ok(v)
+            })
             .unwrap();
 
         let ephemeral_op = get_key_update_op("/ephemeral", &ephemeral);
@@ -669,8 +692,8 @@ mod tests {
         let preimage2_op = get_hash_update_op("/hash", "move every zig");
 
         // load the entry scripts
-        let lock = load_script(&Key::default(), "lock.wast");
-        let unlock = load_script(&Key::default(), "unlock.wast");
+        let unlock = unlock_script();
+        let lock = lock_script();
 
         // create the first, self-signed Entry object
         let e1 = entry::Builder::default()
@@ -735,7 +758,7 @@ mod tests {
         //println!("{:?}", e4);
 
         // load the first lock script
-        let first = load_script(&Key::default(), "first.wast");
+        let first = first_lock_script();
 
         let log = Builder::new()
             .with_vlad(&vlad)

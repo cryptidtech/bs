@@ -64,7 +64,7 @@ wasm-bindgen-test = "0.3"
 wasm-bindgen = "0.2.93"
 tempfile = "3.20.0"
 bs-wallets.workspace = true
-
+tracing-subscriber.workspace = true
 [lints]
 workspace = true
 

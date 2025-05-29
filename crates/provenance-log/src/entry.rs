@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1
+mod fields;
+pub use fields::Field;
+
 use crate::{error::EntryError, Error, Key, Lipmaa, Op, Script, Value};
 use core::fmt;
 use multibase::Base;
@@ -14,19 +17,6 @@ pub const SIGIL: Codec = Codec::ProvenanceLogEntry;
 
 /// the current version of provenance entries this supports
 pub const ENTRY_VERSION: u64 = 1;
-
-/// the list of keys for the fields in an entry
-pub const ENTRY_FIELDS: &[&str] = &[
-    "/entry/",
-    "/entry/verions",
-    "/entry/vlad",
-    "/entry/prev",
-    "/entry/lipmaa",
-    "/entry/seqno",
-    "/entry/ops",
-    "/entry/unlock",
-    "/entry/proof",
-];
 
 /// a base encoded provenance entry
 pub type EncodedEntry = BaseEncoded<Entry>;
@@ -269,7 +259,7 @@ impl Default for Entry {
 }
 
 struct Iter<'a> {
-    iter: std::slice::Iter<'static, &'static str>,
+    field_idx: usize,
     entry: &'a Entry,
 }
 
@@ -277,15 +267,18 @@ impl Iterator for Iter<'_> {
     type Item = (Key, Value);
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.iter.next() {
-            Some(k) => {
-                let key = match Key::try_from(*k) {
-                    Ok(key) => key,
-                    Err(_) => return None,
-                };
-                self.entry.get_value(&key).map(|value| (key, value))
-            }
-            None => None,
+        if self.field_idx < Field::all().len() {
+            let field = Field::all()[self.field_idx];
+            self.field_idx += 1;
+
+            let key = match Key::try_from(field.as_str()) {
+                Ok(key) => key,
+                Err(_) => return self.next(), // Skip this one and try the next
+            };
+
+            self.entry.get_value(&key).map(|value| (key, value))
+        } else {
+            None
         }
     }
 }
@@ -294,25 +287,25 @@ impl Entry {
     /// get an iterator over the keys and values
     pub fn iter(&self) -> impl Iterator<Item = (Key, Value)> + '_ {
         Iter {
-            iter: ENTRY_FIELDS.iter(),
+            field_idx: 0,
             entry: self,
         }
     }
 
-    /// get the Entry's values by Key
+    /// Get the Entry's values by Key
     pub fn get_value(&self, key: &Key) -> Option<Value> {
         match key.as_str() {
-            "/entry/" => {
+            Field::ENTRY => {
                 let mut e = self.clone();
                 e.proof = Vec::default();
                 Some(Value::Data(e.into()))
             }
-            "/entry/version" => Some(Value::Data(Varuint(self.version).into())),
-            "/entry/vlad" => Some(Value::Data(self.vlad.clone().into())),
-            "/entry/prev" => Some(Value::Data(self.prev.clone().into())),
-            "/entry/lipmaa" => Some(Value::Data(self.lipmaa.clone().into())),
-            "/entry/seqno" => Some(Value::Data(Varuint(self.seqno).into())),
-            "/entry/ops" => {
+            Field::VERSION => Some(Value::Data(Varuint(self.version).into())),
+            Field::VLAD => Some(Value::Data(self.vlad.clone().into())),
+            Field::PREV => Some(Value::Data(self.prev.clone().into())),
+            Field::LIPMAA => Some(Value::Data(self.lipmaa.clone().into())),
+            Field::SEQNO => Some(Value::Data(Varuint(self.seqno).into())),
+            Field::OPS => {
                 let mut v = Vec::new();
                 v.append(&mut Varuint(self.ops.len()).into());
                 self.ops
@@ -320,10 +313,8 @@ impl Entry {
                     .for_each(|op| v.append(&mut op.clone().into()));
                 Some(Value::Data(v))
             }
-            // TODO: make this accessible via an iterator
-            //"/entry/locks" => Some(Value::Data(self.locks.clone().into())),
-            "/entry/unlock" => Some(Value::Data(self.unlock.clone().into())),
-            "/entry/proof" => Some(Value::Data(self.proof.clone())),
+            Field::UNLOCK => Some(Value::Data(self.unlock.clone().into())),
+            Field::PROOF => Some(Value::Data(self.proof.clone())),
             _ => None,
         }
     }
@@ -661,7 +652,7 @@ mod tests {
         assert_eq!(format!("{}", entry.context()), "/".to_string());
 
         for (key, _value) in entry.iter() {
-            assert!(ENTRY_FIELDS.contains(&key.as_str()));
+            assert!(Field::all_paths().contains(&key.as_str()));
         }
     }
 
@@ -930,7 +921,10 @@ mod tests {
         let vlad = vlad::Builder::default()
             .with_nonce(&nonce)
             .with_cid(&cid)
-            .try_build()
+            .try_build(|cid| {
+                let v: Vec<u8> = cid.clone().into();
+                Ok(v)
+            })
             .unwrap();
 
         let script = Script::Cid(Key::default(), cid);
@@ -955,10 +949,3 @@ mod tests {
         assert_eq!(format!("{}", entry.context()), "/".to_string());
     }
 }
-
-/*
-in wild's embrace, hearts find their rest,
-nature's gifts, for the loving, are best.
-in every leaf, in each bird's song,
-the wilderness, where souls belong.
-*/

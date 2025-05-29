@@ -11,9 +11,9 @@ use provenance_log::Key;
 /// use bs::ops::params::pubkey::PubkeyParams;
 /// use multicodec::Codec;
 /// let params = PubkeyParams::builder()
-///    .codec(Codec::Sha2256)
-///    .threshold(2)
-///    .limit(10)
+///    .codec(Codec::Ed25519Priv)
+///    .threshold(1)
+///    .limit(1)
 ///    .revoke(false)
 ///    .build();
 ///
@@ -28,6 +28,17 @@ pub struct PubkeyParams {
     revoke: bool,
 }
 
+impl Default for PubkeyParams {
+    fn default() -> Self {
+        Self {
+            codec: Codec::Ed25519Priv,
+            threshold: 1,
+            limit: 1,
+            revoke: false,
+        }
+    }
+}
+
 impl PubkeyParams {
     /// Key path
     pub const KEY_PATH: &'static str = "/pubkey";
@@ -40,6 +51,11 @@ impl PubkeyParams {
             limit,
             revoke,
         }
+    }
+
+    /// Creates a new ed25519 private key parameters instance.
+    pub fn new_ed25519() -> Self {
+        Self::new(Codec::Ed25519Priv, 1, 1, false)
     }
 }
 

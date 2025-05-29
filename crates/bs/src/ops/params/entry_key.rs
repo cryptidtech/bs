@@ -80,7 +80,6 @@ mod tests {
 
     #[test]
     fn test_entrykey_params_conversion() {
-        let key = Key::try_from("/test/entry").unwrap();
         let params = EntryKeyParams::new(Codec::Ed25519Priv, 2, 10, false);
         let op_params: OpParams = params.into();
 

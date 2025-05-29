@@ -1,4 +1,4 @@
-use bs_peer::Error;
+#![cfg(target_arch = "wasm32")]
 use bs_wallets::memory::*;
 use multicodec::Codec;
 use multikey::mk;
@@ -14,22 +14,13 @@ async fn basic_test() {
     // To crteate a new Peer, we call default() to get default values.
     let seed: [u8; 32] = [42; 32];
     let codec = Codec::Ed25519Priv;
-    let mk = mk::Builder::new_from_seed(codec, &seed)
+    let _mk = mk::Builder::new_from_seed(codec, &seed)
         .unwrap()
         .try_build()
         .unwrap();
 
-    pub fn create_memory_key_manager() -> InMemoryKeyManager<Error> {
-        InMemoryKeyManager::new()
-    }
-
-    let mut key_manager = InMemoryKeyManager::<bs_peer::Error>::new();
-    let key_path = InMemoryKeyManager::<bs_peer::Error>::PUBKEY_KEY_PATH;
-    key_manager.store_key(key_path, &mk).unwrap();
-
-    let p = bs_peer::peer::BsPeer::new(key_manager.clone(), key_manager)
-        .await
-        .unwrap();
+    let key_manager = InMemoryKeyManager::default();
+    let _p = bs_peer::peer::BsPeer::new(key_manager).await.unwrap();
 
     // create
     // update
