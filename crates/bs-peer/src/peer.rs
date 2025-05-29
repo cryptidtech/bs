@@ -161,7 +161,10 @@ where
     /// Create a new Peer with the given key provider, opens
     /// a new platform-specific Blockstore for the Peer.
     pub async fn new(key_provider: KP) -> Result<Self, Error> {
-        let blockstore = platform::Blockstore::new("bs-peer".into()).await?;
+        let directory = directories::ProjectDirs::from("tech", "cryptid", "BetterSignPeer")
+            .map(|dirs| dirs.data_dir().to_path_buf())
+            .unwrap_or_else(|| "bs-peer".into());
+        let blockstore = platform::Blockstore::new(directory).await?;
         Ok(Self::with_blockstore(key_provider, blockstore))
     }
 }
