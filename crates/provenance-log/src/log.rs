@@ -218,54 +218,76 @@ impl<'a> Iterator for VerifyIter<'a> {
     type Item = Result<(usize, Entry, Kvp<'a>), Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        //println!("iter::next({})", self.seqno);
-        let entry = match self.entries.get(self.seqno) {
-            Some(e) => *e,
-            None => return None,
-        };
+        // Check if we've reached the end of entries
+        let entry = self.entries.get(self.seqno)?;
+        let entry = *entry;
 
         // this is the check count if successful
         let mut count = 0;
 
         // check the seqno meet the criteria
         if self.seqno > 0 && self.seqno != self.prev_seqno + 1 {
-            return self.set_error(LogError::InvalidSeqno);
+            self.seqno = self.entries.len(); // End the iterator
+            return Some(Err(LogError::InvalidSeqno.into()));
         }
 
         // check if the cid meets the criteria
         if self.seqno > 0 && entry.prev() != self.prev_cid {
-            return self.set_error(LogError::EntryCidMismatch);
+            self.seqno = self.entries.len(); // End the iterator
+            return Some(Err(LogError::EntryCidMismatch.into()));
         }
 
         // 'unlock:
         let Script::Code(_, ref unlock) = entry.unlock else {
-            return self.set_error(ScriptError::WrongScriptFormat {
+            self.seqno = self.entries.len(); // End the iterator
+            return Some(Err(Error::Script(ScriptError::WrongScriptFormat {
                 expected: "unlock".to_string(),
                 found: format!("{:?}", entry.unlock),
-            });
+            })));
         };
 
         // if this is the first entry, then we need to apply the
         // mutation ops
         if self.seqno == 0 {
-            //println!("applying kvp ops for seqno 0");
-            if let Some(e) = self.kvp.apply_entry_ops(entry).err() {
-                return self.set_error(LogError::UnlockFailed(e.to_string()));
+            if let Err(e) = self.kvp.apply_entry_ops(entry) {
+                self.seqno = self.entries.len(); // End the iterator
+                return Some(Err(LogError::UnlockFailed(e.to_string()).into()));
             }
         }
 
         let kvp_lock = self.kvp.clone();
 
-        let mut unlocked = Comrade::new(&kvp_lock, &entry)
-            .try_unlock(unlock)
-            .map_err(|e| self.set_error(LogError::UnlockFailed(format!("unlock failed: {}", e))))
-            .ok()?;
+        tracing::debug!(
+            "verifying entry with seqno {} and prev_seqno {} unlock script: {:?}",
+            self.seqno,
+            self.prev_seqno,
+            unlock
+        );
+
+        let mut unlocked = match Comrade::new(&kvp_lock, &entry).try_unlock(unlock) {
+            Ok(u) => u,
+            Err(e) => {
+                tracing::error!("unlock failed: {}", e);
+                self.seqno = self.entries.len(); // End the iterator
+                return Some(Err(
+                    LogError::UnlockFailed(format!("unlock failed: {}", e)).into()
+                ));
+            }
+        };
+
+        // show lock scripts
+        tracing::debug!(
+            "entry seqno {} has {:?} lock scripts",
+            self.seqno,
+            self.lock_scripts
+        );
 
         // build the set of lock scripts to run in order from root to longest branch to leaf
         let locks = match entry.sort_locks(&self.lock_scripts) {
             Ok(l) => l,
             Err(e) => {
-                return self.set_error(e);
+                self.seqno = self.entries.len(); // End the iterator
+                return Some(Err(e));
             }
         };
 
@@ -274,10 +296,12 @@ impl<'a> Iterator for VerifyIter<'a> {
         // run each of the lock scripts
         for lock in locks {
             let Script::Code(_, lock) = lock else {
-                return self.set_error(ScriptError::WrongScriptFormat {
+                self.seqno = self.entries.len(); // End the iterator
+                return Some(Err(ScriptError::WrongScriptFormat {
                     found: format!("{:?}", lock),
                     expected: "Script::Code".to_string(),
-                });
+                }
+                .into()));
             };
 
             match unlocked.try_lock(&lock) {
@@ -287,29 +311,38 @@ impl<'a> Iterator for VerifyIter<'a> {
                     break;
                 }
                 Err(e) => {
-                    self.set_error(LogError::LockFailed(e.to_string()));
+                    self.seqno = self.entries.len(); // End the iterator
+                    return Some(Err(LogError::LockFailed(e.to_string()).into()));
                 }
                 _ => continue,
             }
         }
 
         if !results {
-            self.set_error(LogError::VerifyFailed("entry failed to verify".to_string()));
+            self.seqno = self.entries.len(); // End the iterator
+            return Some(Err(LogError::VerifyFailed(
+                "entry failed to verify".to_string(),
+            )
+            .into()));
         }
 
-        // if the entry verifies, apply it's mutataions to the kvp
+        // if the entry verifies, apply it's mutatations to the kvp
         // the 0th entry has already been applied at this point so no
         // need to do it here
         if self.seqno > 0 {
-            if let Some(e) = self.kvp.apply_entry_ops(entry).err() {
-                return self.set_error(LogError::UpdateKvpFailed(e.to_string()));
+            if let Err(e) = self.kvp.apply_entry_ops(entry) {
+                self.seqno = self.entries.len(); // End the iterator
+                return Some(Err(LogError::UpdateKvpFailed(e.to_string()).into()));
             }
         }
+
         // update the lock script to validate the next entry
         self.lock_scripts.clone_from(&entry.locks);
-        // update the seqno
+        // update the seqno and prev_cid
         self.prev_seqno = self.seqno;
+        self.prev_cid = entry.cid();
         self.seqno += 1;
+
         // return the check count, validated entry, and kvp state
         Some(Ok((count, entry.clone(), self.kvp.clone())))
     }
