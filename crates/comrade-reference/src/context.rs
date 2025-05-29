@@ -603,6 +603,88 @@ mod tests {
     }
 
     #[test]
+    fn test_run_fails_with_invalid_scripts() {
+        // Setup common test resources
+        let kvp_unlock = ContextPairs::default();
+        let kvp_lock = ContextPairs::default();
+        let logger = TestLogger;
+
+        // Test case 1: Syntax error (unbalanced parentheses)
+        let script_with_syntax_error = r#"
+        // This is a malformed script with unbalanced parentheses
+        push("/some/key"
+    "#;
+
+        let mut ctx = Context::new(&kvp_lock, &kvp_unlock, &logger);
+        let result = ctx.run(script_with_syntax_error);
+        assert!(result.is_err(), "Expected error for unbalanced parentheses");
+
+        // Test case 2: Invalid function name
+        let script_with_invalid_function = r#"
+        // This function doesn't exist in our grammar
+        invalid_function("/some/key")
+    "#;
+
+        let mut ctx = Context::new(&kvp_lock, &kvp_unlock, &logger);
+        let result = ctx.run(script_with_invalid_function);
+        assert!(result.is_err(), "Expected error for invalid function name");
+
+        // Test case 3: Wrong number of arguments
+        let script_with_wrong_arg_count = r#"
+        // check_signature requires two arguments
+        check_signature("/pubkey")
+    "#;
+
+        let mut ctx = Context::new(&kvp_lock, &kvp_unlock, &logger);
+        let result = ctx.run(script_with_wrong_arg_count);
+        assert!(
+            result.is_err(),
+            "Expected error for wrong number of arguments"
+        );
+
+        // Test case 4: Invalid token that doesn't match any grammar rule
+        let script_with_invalid_token = r#"
+        this_is_not_a_valid_script_token
+    "#;
+
+        let mut ctx = Context::new(&kvp_lock, &kvp_unlock, &logger);
+        let result = ctx.run(script_with_invalid_token);
+        assert!(result.is_err(), "Expected error for invalid token");
+
+        // Test case 5: Branch as top-level function (not allowed per parser)
+        let script_with_branch_as_toplevel = r#"
+        branch("pubkey")
+    "#;
+
+        let mut ctx = Context::new(&kvp_lock, &kvp_unlock, &logger);
+        let result = ctx.run(script_with_branch_as_toplevel);
+        assert!(
+            result.is_err(),
+            "Expected error for branch as top-level function"
+        );
+
+        // Test case 6: Missing quotes around string literals
+        let script_with_missing_quotes = r#"
+        push(/missing/quotes)
+    "#;
+
+        let mut ctx = Context::new(&kvp_lock, &kvp_unlock, &logger);
+        let result = ctx.run(script_with_missing_quotes);
+        assert!(
+            result.is_err(),
+            "Expected error for missing quotes around string literals"
+        );
+
+        // Test case 7: Empty string that passes parsing but should evaluate to false
+        let empty_script = "";
+
+        let mut ctx = Context::new(&kvp_lock, &kvp_unlock, &logger);
+        let result = ctx.run(empty_script);
+        assert!(result.is_ok(), "Empty script should parse successfully");
+        assert!(!result.unwrap(), "Empty script should evaluate to false");
+    }
+
+    #[test]
     fn generate_test_signatures() {
         use multikey::Views as _;
         use multikey::{self};
