@@ -1,5 +1,5 @@
 //! Platform specific code (Browser and Native)
-
+use bs_traits::CondSend;
 pub(super) mod common;
 
 #[cfg(target_arch = "wasm32")]
@@ -25,7 +25,7 @@ pub use native::{Error, NativeBlockstore as Blockstore};
 // allow dead
 #[allow(unused)]
 #[cfg(not(target_arch = "wasm32"))]
-pub fn spawn(f: impl Future<Output = ()> + Send + 'static) {
+pub fn spawn(f: impl Future<Output = ()> + CondSend + 'static) {
     tokio::spawn(f);
 }
 

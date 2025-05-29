@@ -6,6 +6,7 @@
 /// without having to use tokio::block_in_place or similar.
 mod r#async;
 mod cond_send;
+pub use cond_send::{CondSend, CondSync};
 mod error;
 mod sync;
 mod wait_queue;

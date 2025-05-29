@@ -56,6 +56,10 @@ pub enum Error {
     #[error("Multicid error: {0}")]
     Multicid(#[from] multicid::Error),
 
+    /// cid::Cid error
+    #[error("CID error: {0}")]
+    Cid(#[from] cid::Error),
+
     /// From<multihash::Error>
     #[error("Multihash error: {0}")]
     Multihash(#[from] multihash::Error),
@@ -63,6 +67,10 @@ pub enum Error {
     /// Error during verification of the provenance log.
     #[error("Plog verification failed: {0}")]
     PlogVerificationFailed(provenance_log::Error),
+
+    /// Blockstore error
+    #[error("Blockstore error: {0}")]
+    Blockstore(#[from] blockstore::Error),
 
     /// Generic string error
     #[error("{0}")]
