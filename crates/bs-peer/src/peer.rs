@@ -9,6 +9,7 @@ use bs::{
 };
 use bs_traits::CondSync;
 use multicid::cid;
+use multicodec::Codec;
 use multihash::mh;
 use provenance_log::{self as p, Key, Script};
 
@@ -169,6 +170,36 @@ where
     }
 }
 
+#[cfg(test)]
+impl<KP, BS> BsPeer<KP, BS>
+where
+    KP: KeyManager<Error> + MultiSigner<Error> + KeyPathProvider + CondSync,
+    BS: BlockstoreTrait + CondSync,
+{
+    /// Helper to create CID from the same parameters for testing
+    async fn verify_cid_stored(
+        &self,
+        version: Codec,
+        target: Codec,
+        hash: Codec,
+        data: &[u8],
+    ) -> Result<bool, Error> {
+        // Create CID
+        let multi_cid = cid::Builder::new(version)
+            .with_target_codec(target)
+            .with_hash(&mh::Builder::new_from_bytes(hash, data)?.try_build()?)
+            .try_build()?;
+
+        // Convert to cid::Cid
+        let multi_cid_bytes: Vec<u8> = multi_cid.into();
+        let cid = Cid::try_from(multi_cid_bytes)?;
+
+        // Check if stored in blockstore
+        let result = self.blockstore.has(&cid).await?;
+        Ok(result)
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 mod tests {
@@ -231,6 +262,9 @@ mod tests {
             "#
         );
 
+        // Create test data
+        let test_data = b"test data".to_vec();
+
         // Create the peer with valid scripts and with CIDs to store
         // Add some OpParams::CidGen entries to test blockstore storage
         let config = bs::open::Config {
@@ -246,12 +280,12 @@ mod tests {
             additional_ops: vec![
                 // Add a CidGen entry for testing
                 OpParams::CidGen {
-                    key: Key::try_from("/test/image").unwrap(),
+                    key: Key::try_from("/test/image/").unwrap(),
                     version: Codec::Cidv1,
                     target: Codec::Raw,
                     hash: Codec::Sha2256,
                     inline: true,
-                    data: b"test data".to_vec(),
+                    data: test_data.clone(),
                 },
             ],
         };
@@ -260,8 +294,46 @@ mod tests {
         // This would require modifying the create method to accept a config parameter
         // For now, we'll continue with basic test but add a recommendation in comments
 
-        let res = peer.create(&lock_script, &unlock_script).await;
+        // Create peer with this config
+        let res = peer.create_with_config(config).await;
+
+        match &res {
+            Ok(_) => tracing::info!("create_with_config succeeded"),
+            Err(e) => tracing::error!("create_with_config failed: {:?}", e),
+        }
+
         assert!(res.is_ok(), "Expected successful creation of peer");
+
+        // Verify the CID was stored
+        let stored = peer
+            .verify_cid_stored(Codec::Cidv1, Codec::Raw, Codec::Sha2256, &test_data)
+            .await
+            .unwrap();
+
+        assert!(stored, "CID should be stored in blockstore");
+
+        // If you want to verify the actual data:
+        let multi_cid = cid::Builder::new(Codec::Cidv1)
+            .with_target_codec(Codec::Raw)
+            .with_hash(
+                &mh::Builder::new_from_bytes(Codec::Sha2256, &test_data)
+                    .unwrap()
+                    .try_build()
+                    .unwrap(),
+            )
+            .try_build()
+            .unwrap();
+
+        let multi_cid_bytes: Vec<u8> = multi_cid.into();
+        let cid = Cid::try_from(multi_cid_bytes).unwrap();
+
+        let stored_data = peer.blockstore().get(&cid).await.unwrap();
+        assert!(stored_data.is_some(), "Data should be in blockstore");
+        assert_eq!(
+            stored_data.unwrap(),
+            test_data,
+            "Stored data should match original"
+        );
 
         // TODO: Verify that CIDs were stored in the blockstore
     }
