@@ -48,6 +48,14 @@ impl Vlad {
         vv.verify(&ms, Some(&cidv))?;
         Ok(())
     }
+
+    /// Return the Vlad's [Cid].
+    ///
+    /// This is the content address of the verification function.
+    /// It should match the `vlad/cid` field in a Provenance Log's first Entry.
+    pub fn cid(&self) -> &Cid {
+        &self.cid
+    }
 }
 
 impl CodecInfo for Vlad {
