@@ -48,6 +48,7 @@ where
 
     /// Store CIDs from config to the blockstore
     async fn store_ops(&self, ops: Vec<OpParams>) -> Result<(), Error> {
+        tracing::debug!("Storing CIDs in blockstore... {:?}", ops);
         for params in ops {
             if let OpParams::CidGen {
                 version,
@@ -77,6 +78,41 @@ where
         Ok(())
     }
 
+    /// Store all the plog [provenance_log::Entry]s in the [blockstore::Blockstore]
+    async fn store_entries(&self) -> Result<(), Error> {
+        let plog = self.plog.as_ref().ok_or(Error::PlogNotInitialized)?;
+        // add the first lock CID to the blockstore
+        // first we need to convert from multicid::Cid to cid::Cid
+        let first_lock_cid = plog.vlad.cid();
+        let first_lock_cid_bytes: Vec<u8> = first_lock_cid.clone().into();
+        let first_lock_cid = Cid::try_from(first_lock_cid_bytes.clone())?;
+
+        // Next we need to extract the first lock script as Script
+        let first_lock_bytes: Vec<u8> = plog.first_lock.clone().into();
+
+        // the Cid of the extracted bytes should match those in the vlad.cid()
+        let plog_vlad_cid_bytes: Vec<u8> = plog.vlad.cid().clone().into();
+        debug_assert_eq!(first_lock_cid_bytes, plog_vlad_cid_bytes);
+
+        self.blockstore
+            .put_keyed(&first_lock_cid, &first_lock_bytes)
+            .await?;
+
+        // Put all the entries in the blockstore
+        for (multi_cid, entry) in plog.entries.clone() {
+            let entry_bytes: Vec<u8> = entry.into();
+
+            // we need to convert multicid::Cid to cid:Cid first before putting it in the blockstore,
+            // as the two are different types.
+            let multi_cid_bytes: Vec<u8> = multi_cid.into();
+            let cid = Cid::try_from(multi_cid_bytes)?;
+
+            self.blockstore.put_keyed(&cid, &entry_bytes).await?;
+        }
+
+        Ok(())
+    }
+
     pub async fn create_with_config(&mut self, config: bs::open::Config) -> Result<(), Error> {
         if self.plog.is_some() {
             return Err(Error::PlogAlreadyExists);
@@ -97,6 +133,7 @@ where
 
         self.store_ops(config.into()).await?;
         self.plog = Some(plog);
+        self.store_entries().await?;
         Ok(())
     }
 
@@ -227,13 +264,10 @@ mod tests {
         let key_manager = InMemoryKeyManager::<Error>::default();
 
         // Create an in-memory blockstore with a reasonable size limit
-        let blockstore = InMemoryBlockstore::<128>::new();
+        let blockstore = InMemoryBlockstore::<64>::new();
 
         // Create peer with the in-memory blockstore
         let mut peer = BsPeer::with_blockstore(key_manager, blockstore);
-
-        // Rest of test is similar to basic_test
-        // ...
 
         let entry_key = Field::ENTRY;
         let proof_key = Field::PROOF;
@@ -303,6 +337,16 @@ mod tests {
         }
 
         assert!(res.is_ok(), "Expected successful creation of peer");
+
+        // verify the plog
+        let plog = peer.plog.as_ref().unwrap();
+        let verify_iter = &mut plog.verify();
+        for result in verify_iter {
+            if let Err(e) = result {
+                tracing::error!("Plog verification failed: {}", e);
+                panic!("Plog verification failed: {}", e);
+            }
+        }
 
         // Verify the CID was stored
         let stored = peer
@@ -405,5 +449,72 @@ mod tests {
         tracing::info!("Plog verification successful");
     }
 
-    // test save to in memory blockstore
+    #[tokio::test]
+    async fn test_store_entries() {
+        let key_manager = InMemoryKeyManager::<Error>::default();
+        let blockstore = InMemoryBlockstore::<64>::new();
+        let mut peer = BsPeer::with_blockstore(key_manager, blockstore);
+
+        let entry_key = Field::ENTRY;
+        let proof_key = Field::PROOF;
+        let pubkey = PubkeyParams::KEY_PATH;
+
+        let unlock_script = format!(
+            r#"
+         // push the serialized Entry as the message
+         push("{entry_key}");
+
+         // push the proof data
+         push("{proof_key}");
+    "#
+        );
+
+        let lock_script = format!(
+            r#"
+            // then check a possible threshold sig...
+            check_signature("/recoverykey", "{entry_key}") ||
+
+            // then check a possible pubkey sig...
+            check_signature("{pubkey}", "{entry_key}") ||
+            
+            // then the pre-image proof...
+            check_preimage("/hash")
+        "#
+        );
+
+        let res = peer.create(&lock_script, &unlock_script).await;
+        assert!(res.is_ok(), "Expected successful creation of peer");
+
+        assert!(peer.plog.is_some(), "Expected plog to be initialized");
+
+        let plog = peer.plog.as_ref().unwrap();
+        let first_lock_cid = plog.vlad.cid();
+        let first_lock_cid_bytes: Vec<u8> = first_lock_cid.clone().into();
+        let cid = Cid::try_from(first_lock_cid_bytes).unwrap();
+
+        let stored_first_lock = peer.blockstore().has(&cid).await.unwrap();
+        assert!(
+            stored_first_lock,
+            "First lock should be stored in blockstore"
+        );
+
+        // Verify we can retrieve the first lock data
+        let first_lock_data = peer.blockstore().get(&cid).await.unwrap();
+        assert!(
+            first_lock_data.is_some(),
+            "First lock data should be retrievable"
+        );
+
+        // Verify each entry is stored in the blockstore
+        for (multi_cid, _) in plog.entries.iter() {
+            let multi_cid_bytes: Vec<u8> = multi_cid.clone().into();
+            let entry_cid = Cid::try_from(multi_cid_bytes).unwrap();
+
+            let stored_entry = peer.blockstore().has(&entry_cid).await.unwrap();
+            assert!(stored_entry, "Entry should be stored in blockstore");
+
+            let entry_data = peer.blockstore().get(&entry_cid).await.unwrap();
+            assert!(entry_data.is_some(), "Entry data should be retrievable");
+        }
+    }
 }
