@@ -248,6 +248,14 @@ mod tests {
     use provenance_log::entry::Field;
     use tracing_subscriber::fmt;
 
+    // Common test fixtures
+    struct TestFixture {
+        peer: BsPeer<InMemoryKeyManager<Error>, InMemoryBlockstore<64>>,
+        lock_script: String,
+        unlock_script: String,
+    }
+
+    // Setup utilities
     fn init_logger() {
         let subscriber = fmt().with_env_filter("bs_peer=trace").finish();
         if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
@@ -255,19 +263,15 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn in_memory_blockstore_test() {
-        init_logger();
-        tracing::info!("Starting in_memory_blockstore_test");
-
+    async fn setup_test_peer() -> TestFixture {
         // Set up key manager
         let key_manager = InMemoryKeyManager::<Error>::default();
 
-        // Create an in-memory blockstore with a reasonable size limit
+        // Create an in-memory blockstore
         let blockstore = InMemoryBlockstore::<64>::new();
 
         // Create peer with the in-memory blockstore
-        let mut peer = BsPeer::with_blockstore(key_manager, blockstore);
+        let peer = BsPeer::with_blockstore(key_manager, blockstore);
 
         let entry_key = Field::ENTRY;
         let proof_key = Field::PROOF;
@@ -296,6 +300,78 @@ mod tests {
             "#
         );
 
+        TestFixture {
+            peer,
+            lock_script,
+            unlock_script,
+        }
+    }
+
+    async fn setup_initialized_peer() -> TestFixture {
+        let mut fixture = setup_test_peer().await;
+
+        // Initialize the peer
+        let res = fixture
+            .peer
+            .create(&fixture.lock_script, &fixture.unlock_script)
+            .await;
+        assert!(res.is_ok(), "Expected successful creation of peer");
+
+        fixture
+    }
+
+    #[tokio::test]
+    async fn basic_test() {
+        init_logger();
+        tracing::info!("Starting basic_test");
+        tracing::debug!("Initializing key manager and peer");
+
+        // Include the seed and multikey code from original test
+        let seed: [u8; 32] = [42; 32];
+        let codec = Codec::Ed25519Priv;
+        let _mk = mk::Builder::new_from_seed(codec, &seed)
+            .unwrap()
+            .try_build()
+            .unwrap();
+
+        let mut fixture = setup_test_peer().await;
+
+        // Now we create the peer with valid scripts
+        let res = fixture
+            .peer
+            .create(&fixture.lock_script, &fixture.unlock_script)
+            .await;
+
+        // Check if the creation was successful
+        assert!(res.is_ok(), "Expected successful creation of peer");
+        tracing::info!("Peer created successfully");
+        // Check if the plog is initialized
+        assert!(
+            fixture.peer.plog.is_some(),
+            "Expected plog to be initialized"
+        );
+        tracing::info!("Plog initialized successfully");
+
+        // Check if the plog can be verified
+        let plog = fixture.peer.plog.as_ref().unwrap();
+        let verify_iter = &mut plog.verify();
+        for result in verify_iter {
+            if let Err(e) = result {
+                tracing::error!("Plog verification failed: {}", e);
+                panic!("Plog verification failed: {}", e);
+            }
+        }
+
+        tracing::info!("Plog verification successful");
+    }
+
+    #[tokio::test]
+    async fn in_memory_blockstore_test() {
+        init_logger();
+        tracing::info!("Starting in_memory_blockstore_test");
+
+        let mut fixture = setup_test_peer().await;
+
         // Create test data
         let test_data = b"test data".to_vec();
 
@@ -309,8 +385,8 @@ mod tests {
                 Key::default(),
                 VladParams::FIRST_LOCK_SCRIPT.into(),
             ),
-            entry_lock_script: Script::Code(Key::default(), lock_script.clone()),
-            entry_unlock_script: Script::Code(Key::default(), unlock_script.clone()),
+            entry_lock_script: Script::Code(Key::default(), fixture.lock_script.clone()),
+            entry_unlock_script: Script::Code(Key::default(), fixture.unlock_script.clone()),
             additional_ops: vec![
                 // Add a CidGen entry for testing
                 OpParams::CidGen {
@@ -324,12 +400,8 @@ mod tests {
             ],
         };
 
-        // Create the peer with this config instead of default one
-        // This would require modifying the create method to accept a config parameter
-        // For now, we'll continue with basic test but add a recommendation in comments
-
         // Create peer with this config
-        let res = peer.create_with_config(config).await;
+        let res = fixture.peer.create_with_config(config).await;
 
         match &res {
             Ok(_) => tracing::info!("create_with_config succeeded"),
@@ -339,7 +411,7 @@ mod tests {
         assert!(res.is_ok(), "Expected successful creation of peer");
 
         // verify the plog
-        let plog = peer.plog.as_ref().unwrap();
+        let plog = fixture.peer.plog.as_ref().unwrap();
         let verify_iter = &mut plog.verify();
         for result in verify_iter {
             if let Err(e) = result {
@@ -349,7 +421,8 @@ mod tests {
         }
 
         // Verify the CID was stored
-        let stored = peer
+        let stored = fixture
+            .peer
             .verify_cid_stored(Codec::Cidv1, Codec::Raw, Codec::Sha2256, &test_data)
             .await
             .unwrap();
@@ -371,135 +444,40 @@ mod tests {
         let multi_cid_bytes: Vec<u8> = multi_cid.into();
         let cid = Cid::try_from(multi_cid_bytes).unwrap();
 
-        let stored_data = peer.blockstore().get(&cid).await.unwrap();
+        let stored_data = fixture.peer.blockstore().get(&cid).await.unwrap();
         assert!(stored_data.is_some(), "Data should be in blockstore");
         assert_eq!(
             stored_data.unwrap(),
             test_data,
             "Stored data should match original"
         );
-
-        // TODO: Verify that CIDs were stored in the blockstore
-    }
-    #[tokio::test]
-    async fn basic_test() {
-        init_logger();
-        tracing::info!("Starting basic_test");
-        tracing::debug!("Initializing key manager and peer");
-        // We create a Plog and Vlad and save the data to the Browser Blockstore
-        // To create a new Peer, we call default() to get default values.
-        let seed: [u8; 32] = [42; 32];
-        let codec = Codec::Ed25519Priv;
-        let _mk = mk::Builder::new_from_seed(codec, &seed)
-            .unwrap()
-            .try_build()
-            .unwrap();
-
-        let key_manager = InMemoryKeyManager::<Error>::default();
-
-        let mut peer = DefaultBsPeer::new(key_manager).await.unwrap();
-
-        let entry_key = Field::ENTRY;
-        let proof_key = Field::PROOF;
-        let pubkey = PubkeyParams::KEY_PATH;
-
-        let unlock_script = format!(
-            r#"
-             // push the serialized Entry as the message
-             push("{entry_key}");
-
-             // push the proof data
-             push("{proof_key}");
-        "#
-        );
-
-        let lock_script = format!(
-            r#"
-                // then check a possible threshold sig...
-                check_signature("/recoverykey", "{entry_key}") ||
-
-                // then check a possible pubkey sig...
-                check_signature("{pubkey}", "{entry_key}") ||
-                
-                // then the pre-image proof...
-                check_preimage("/hash")
-            "#
-        );
-
-        // Now we create the peer with valid scripts
-        let res = peer.create(&lock_script, &unlock_script).await;
-
-        // Check if the creation was successful
-        assert!(res.is_ok(), "Expected successful creation of peer");
-        tracing::info!("Peer created successfully");
-        // Check if the plog is initialized
-        assert!(peer.plog.is_some(), "Expected plog to be initialized");
-        tracing::info!("Plog initialized successfully");
-
-        // Check if the plog can be verified
-        let plog = peer.plog.as_ref().unwrap();
-        let verify_iter = &mut plog.verify();
-        for result in verify_iter {
-            if let Err(e) = result {
-                tracing::error!("Plog verification failed: {}", e);
-                panic!("Plog verification failed: {}", e);
-            }
-        }
-
-        tracing::info!("Plog verification successful");
     }
 
     #[tokio::test]
     async fn test_store_entries() {
-        let key_manager = InMemoryKeyManager::<Error>::default();
-        let blockstore = InMemoryBlockstore::<64>::new();
-        let mut peer = BsPeer::with_blockstore(key_manager, blockstore);
+        init_logger();
+        tracing::info!("Starting test_store_entries");
 
-        let entry_key = Field::ENTRY;
-        let proof_key = Field::PROOF;
-        let pubkey = PubkeyParams::KEY_PATH;
+        let fixture = setup_initialized_peer().await;
 
-        let unlock_script = format!(
-            r#"
-         // push the serialized Entry as the message
-         push("{entry_key}");
+        // The peer is initialized, so store_entries has already been called
+        // Let's verify the stored entries
 
-         // push the proof data
-         push("{proof_key}");
-    "#
-        );
-
-        let lock_script = format!(
-            r#"
-            // then check a possible threshold sig...
-            check_signature("/recoverykey", "{entry_key}") ||
-
-            // then check a possible pubkey sig...
-            check_signature("{pubkey}", "{entry_key}") ||
-            
-            // then the pre-image proof...
-            check_preimage("/hash")
-        "#
-        );
-
-        let res = peer.create(&lock_script, &unlock_script).await;
-        assert!(res.is_ok(), "Expected successful creation of peer");
-
-        assert!(peer.plog.is_some(), "Expected plog to be initialized");
-
-        let plog = peer.plog.as_ref().unwrap();
+        // Get the first lock CID from the plog for verification
+        let plog = fixture.peer.plog.as_ref().unwrap();
         let first_lock_cid = plog.vlad.cid();
         let first_lock_cid_bytes: Vec<u8> = first_lock_cid.clone().into();
         let cid = Cid::try_from(first_lock_cid_bytes).unwrap();
 
-        let stored_first_lock = peer.blockstore().has(&cid).await.unwrap();
+        // Verify first lock is in blockstore
+        let stored_first_lock = fixture.peer.blockstore().has(&cid).await.unwrap();
         assert!(
             stored_first_lock,
             "First lock should be stored in blockstore"
         );
 
         // Verify we can retrieve the first lock data
-        let first_lock_data = peer.blockstore().get(&cid).await.unwrap();
+        let first_lock_data = fixture.peer.blockstore().get(&cid).await.unwrap();
         assert!(
             first_lock_data.is_some(),
             "First lock data should be retrievable"
@@ -510,10 +488,10 @@ mod tests {
             let multi_cid_bytes: Vec<u8> = multi_cid.clone().into();
             let entry_cid = Cid::try_from(multi_cid_bytes).unwrap();
 
-            let stored_entry = peer.blockstore().has(&entry_cid).await.unwrap();
+            let stored_entry = fixture.peer.blockstore().has(&entry_cid).await.unwrap();
             assert!(stored_entry, "Entry should be stored in blockstore");
 
-            let entry_data = peer.blockstore().get(&entry_cid).await.unwrap();
+            let entry_data = fixture.peer.blockstore().get(&entry_cid).await.unwrap();
             assert!(entry_data.is_some(), "Entry data should be retrievable");
         }
     }
