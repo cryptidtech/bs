@@ -55,4 +55,7 @@ pub enum VladError {
     /// Missing nonce
     #[error("Missing cid")]
     MissingCid,
+    /// Missing signing key
+    #[error("Missing signing key")]
+    MissingSigningKey,
 }

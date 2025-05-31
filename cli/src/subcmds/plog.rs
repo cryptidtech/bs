@@ -2,7 +2,9 @@
 
 /// Plog command
 pub mod command;
-use bs_traits::{GetKey, Signer, SyncGetKey, SyncSigner};
+use bs_traits::{
+    EphemeralKey, GetKey, Signer, SyncGetKey, SyncPrepareEphemeralSigning, SyncSigner,
+};
 pub use command::Command;
 
 use crate::{error::PlogError, Config, Error};
@@ -10,6 +12,7 @@ use best_practices::cli::io::{reader, writer, writer_name};
 use bs::{
     self,
     ops::{open, update},
+    params::anykey::EntryKeyParams,
     update::OpParams,
 };
 use comrade::Pairs;
@@ -20,21 +23,22 @@ use multihash::EncodedMultihash;
 use multikey::{mk, Multikey, Views};
 use multisig::Multisig;
 use multiutil::{BaseEncoded, CodecInfo, DetectedEncoder, EncodingInfo};
-use provenance_log::{Key, Log, Script};
+use provenance_log::{key::util::KeyParamsType, Key, Log, Script};
 use rng::StdRng;
-use std::{collections::VecDeque, convert::TryFrom};
+use std::{
+    collections::{HashMap, VecDeque},
+    convert::TryFrom,
+};
 use tracing::debug;
 
 /// Cli KeyManager
-struct KeyManager;
+#[derive(Clone, Debug, Default)]
+struct KeyManager(HashMap<Key, Multikey>);
 
 impl GetKey for KeyManager {
     type Key = Multikey;
-
     type KeyPath = Key;
-
     type Codec = Codec;
-
     type Error = Error;
 }
 
@@ -60,16 +64,71 @@ impl SyncGetKey for KeyManager {
     }
 }
 
-impl Signer for KeyManager {
+// EphemeralKey
+impl EphemeralKey for KeyManager {
     type Key = Multikey;
+}
 
+// Implement the new SyncPrepareEphemeralSigning trait
+impl SyncPrepareEphemeralSigning for KeyManager {
+    type Codec = Codec;
+
+    fn prepare_ephemeral_signing(
+        &self,
+        codec: &Self::Codec,
+        threshold: usize,
+        limit: usize,
+    ) -> Result<
+        (
+            <Self as EphemeralKey>::Key,
+            Box<dyn FnOnce(&[u8]) -> Result<<Self as Signer>::Signature, <Self as Signer>::Error>>,
+        ),
+        <Self as Signer>::Error,
+    > {
+        debug!(
+            "Preparing ephemeral signing with {} key ({} of {})...",
+            codec, threshold, limit
+        );
+
+        // Generate a new key for signing
+        let mut rng = StdRng::from_os_rng();
+        let secret_key = mk::Builder::new_from_random_bytes(*codec, &mut rng)?
+            .with_threshold(threshold)
+            .with_limit(limit)
+            .try_build()?;
+
+        // Get the public key
+        let public_key = secret_key.conv_view()?.to_public_key()?;
+
+        // Create the signing closure that owns the secret key
+        let sign_once = Box::new(
+            move |data: &[u8]| -> Result<<Self as Signer>::Signature, <Self as Signer>::Error> {
+                debug!("Signing data with ephemeral key");
+                let signature = secret_key.sign_view()?.sign(data, false, None)?;
+                Ok(signature)
+            },
+        );
+
+        Ok((public_key, sign_once))
+    }
+}
+
+impl Signer for KeyManager {
+    type KeyPath = Key;
     type Signature = Multisig;
-
     type Error = Error;
 }
 
 impl SyncSigner for KeyManager {
-    fn try_sign(&self, key: &Self::Key, data: &[u8]) -> Result<Self::Signature, Self::Error> {
+    fn try_sign(
+        &self,
+        key_path: &Self::KeyPath,
+        data: &[u8],
+    ) -> Result<Self::Signature, Self::Error> {
+        let key = self
+            .0
+            .get(key_path)
+            .ok_or(PlogError::NoKeyPresent(key_path.clone()))?;
         Ok(key.sign_view()?.sign(data, false, None)?)
     }
 }
@@ -109,8 +168,7 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
             cfg.with_entry_lock_script(lock_script)
                 .with_entry_unlock_script(unlock_script);
 
-            let key_manager = KeyManager;
-
+            let key_manager = KeyManager::default();
             let cfg = cfg.to_owned();
 
             // open the p.log
@@ -126,7 +184,6 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
             let mut v = Vec::default();
             reader(&input)?.read_to_end(&mut v)?;
             let plog: Log = serde_cbor::from_slice(&v)?;
-            //let plog: Log = serde_cbor::from_reader(reader(&input)?)?;
             println!("p.log");
             print_plog(&plog)?;
         }
@@ -138,7 +195,7 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
             file_ops,
             lock_script_path: _,
             unlock_script_path,
-            entry_signing_key,
+            entry_signing_key: _, // This parameter appears unused
             output,
             input,
         } => {
@@ -150,27 +207,20 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
             };
             debug!("read p.log");
 
-            let entry_signing_key = {
-                let mut v = Vec::default();
-                reader(&Some(entry_signing_key))?.read_to_end(&mut v)?;
-                serde_cbor::from_slice::<Multikey>(&v)?
-            };
-            debug!("read p.log signing key");
-
             let unlock_script = {
                 let mut v = Vec::default();
                 reader(&Some(unlock_script_path))?.read_to_end(&mut v)?;
                 Script::Code(Key::default(), String::from_utf8(v)?)
             };
 
-            let cfg = update::Config::new(unlock_script, entry_signing_key)
+            let cfg = update::Config::new(unlock_script, EntryKeyParams::KEY_PATH.into())
                 .with_ops(&build_delete_params(&delete_ops)?)
                 .with_ops(&build_key_params(&key_ops)?)
                 .with_ops(&build_string_params(&string_ops)?)
                 .with_ops(&build_file_params(&file_ops)?)
                 .build();
 
-            let key_manager = KeyManager;
+            let key_manager = KeyManager::default();
 
             // update the p.log
             update::update_plog::<Error>(&mut plog, &cfg, &key_manager, &key_manager)?;
@@ -287,16 +337,7 @@ fn print_plog(plog: &Log) -> Result<(), Error> {
             }
         }
     }
-    /*
-    let kvp_lines = kvp.to_string().lines().map(|s| s.to_string()).collect::<Vec<_>>();
-    for i in 0..kvp_lines.len() {
-        if i < kvp_lines.len() - 1 {
-            println!("    ├─ {}", kvp_lines[i]);
-        } else {
-            println!("    ╰─ {}", kvp_lines[i]);
-        }
-    }
-    */
+
     Ok(())
 }
 
@@ -307,24 +348,6 @@ fn get_codec_from_plog_value(value: &provenance_log::Value) -> Option<Codec> {
         _ => None,
     }
 }
-/*
-fn get_from_plog_value<'a, T>(value: &'a provenance_log::Value) -> Option<T>
-where
-    T: TryFrom<&'a [u8]> + EncodingInfo,
-    BaseEncoded<T, DetectedEncoder>: TryFrom<&'a str>,
-{
-    match value {
-        provenance_log::Value::Data(v) => T::try_from(v.as_slice()).ok(),
-        provenance_log::Value::Str(s) => {
-            match BaseEncoded::<T, DetectedEncoder>::try_from(s.as_str()) {
-                Ok(be) => Some(be.to_inner()),
-                Err(_) => None
-            }
-        }
-        _ => None,
-    }
-}
-*/
 
 fn get_from_wacc_value<'a, T>(value: &'a comrade::Value) -> Option<T>
 where

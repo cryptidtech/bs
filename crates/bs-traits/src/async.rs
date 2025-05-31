@@ -29,7 +29,7 @@ pub trait AsyncSigner: Signer {
     /// Attempt to sign the data asynchronously
     fn try_sign<'a>(
         &'a self,
-        key: &'a Self::Key,
+        key: &'a Self::KeyPath,
         data: &'a [u8],
     ) -> SignerFuture<'a, Self::Signature, Self::Error>;
 
@@ -45,12 +45,12 @@ pub trait AsyncSigner: Signer {
     #[cfg(not(feature = "dyn-compatible"))]
     fn sign<'a>(
         &'a self,
-        key: &'a Self::Key,
+        key: &'a Self::KeyPath,
         data: &'a [u8],
     ) -> Pin<Box<dyn CondSendFuture<Self::Signature> + 'a>>
     where
         Self: CondSync,
-        Self::Key: CondSync,
+        Self::KeyPath: CondSync,
     {
         Box::pin(async move {
             self.try_sign(key, data)

@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: FSL-1.1
+use provenance_log::Key;
+
 /// Errors generated from this crate
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -171,4 +173,8 @@ pub enum PlogError {
     /// No string value given
     #[error("No string value given")]
     NoStringValue,
+
+    /// No key present for that KeyPath
+    #[error("No key present for that KeyPath {0}")]
+    NoKeyPresent(Key),
 }

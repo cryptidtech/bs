@@ -1,5 +1,5 @@
 //! Sync alterntives to the asynchronous traits.
-use bs_traits::{SyncGetKey, SyncSigner};
+use bs_traits::{EphemeralKey, SyncGetKey, SyncPrepareEphemeralSigning, SyncSigner};
 
 use super::*;
 
@@ -9,26 +9,26 @@ pub trait KeyManager<E>:
 {
 }
 
-/// Supertrait for signing operations
-pub trait MultiSigner<E>:
-    Signer<Key = Multikey, Signature = Multisig, Error = E> + SyncSigner
-{
-}
-
 impl<T, E> KeyManager<E> for T where
     T: GetKey<KeyPath = Key, Codec = Codec, Key = Multikey, Error = E> + SyncGetKey
 {
 }
 
-impl<T, E> MultiSigner<E> for T where
-    T: Signer<Key = Multikey, Signature = Multisig, Error = E> + SyncSigner
+/// Supertrait for signing operations
+pub trait MultiSigner<E>:
+    Signer<KeyPath = Key, Signature = Multisig, Error = E>
+    + SyncSigner
+    + EphemeralKey<Key = Multikey>
+    + GetKey<KeyPath = Key, Codec = Codec, Key = Multikey, Error = E>
+    + SyncPrepareEphemeralSigning<Codec = Codec>
 {
 }
 
-/// Trait for key providers that have standardized paths
-pub trait KeyPathProvider {
-    /// Path for the Vlad key operations
-    const VLAD_KEY_PATH: &'static str;
-    /// Path for the public key operations
-    const PUBKEY_KEY_PATH: &'static str;
+impl<T, E> MultiSigner<E> for T where
+    T: Signer<KeyPath = Key, Signature = Multisig, Error = E>
+        + SyncSigner
+        + EphemeralKey<Key = Multikey>
+        + GetKey<KeyPath = Key, Codec = Codec, Key = Multikey, Error = E>
+        + SyncPrepareEphemeralSigning<Codec = Codec>
+{
 }

@@ -79,6 +79,10 @@ pub enum Error {
     /// Plog not initialized
     #[error("Plog not initialized")]
     PlogNotInitialized,
+
+    /// Wallets error
+    #[error(transparent)]
+    Wallets(#[from] bs_wallets::Error),
 }
 
 impl From<String> for Error {

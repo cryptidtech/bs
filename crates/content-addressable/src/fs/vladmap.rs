@@ -52,7 +52,7 @@ mod tests {
         vlad::Builder::default()
             .with_signing_key(&mk)
             .with_cid(&cid)
-            .try_build_encoded(|cid| {
+            .try_build_encoded(|cid, mk| {
                 let signing_view = mk.sign_view()?;
                 let cidv: Vec<u8> = cid.clone().into();
                 let ms = signing_view.sign(&cidv, false, None)?;

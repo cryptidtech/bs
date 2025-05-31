@@ -1045,6 +1045,7 @@ impl Builder {
             for share in &shares {
                 mk = {
                     let tv = mk.threshold_view()?;
+                    // if ConversionsError::UnsupportedCodec, we can just ignore it
                     tv.add_share(share)?
                 };
             }

@@ -177,8 +177,9 @@ impl<'un, 'lo> Context<'un, 'lo> {
             }
         };
 
-        self.logger
-            .log(&format!("OK check_signature: message: {message:?}"));
+        self.logger.log(&format!(
+            "check_signature({key}, {msg}) ->: message: {message:?}"
+        ));
 
         // make sure we have at least one parameter on the stack
         if self.pstack.is_empty() {
@@ -197,7 +198,7 @@ impl<'un, 'lo> Context<'un, 'lo> {
             match self.pstack.top() {
                 Some(Value::Bin { hint: _, data }) => {
                     self.logger.log(&format!(
-                        "check_signature: found multisig on stack: {data:?}"
+                        "check_signature({key}, {msg}) ->: found multisig on stack: {data:?}"
                     ));
                     match Multisig::try_from(data.as_ref()) {
                         Ok(sig) => sig,
@@ -224,7 +225,8 @@ impl<'un, 'lo> Context<'un, 'lo> {
                 self.succeed()
             }
             Err(e) => {
-                self.logger.log("check_signature({key}, {msg}) -> false");
+                self.logger
+                    .log(&format!("check_signature({key}, {msg}) -> false"));
                 self.check_fail(&e.to_string())
             }
         }

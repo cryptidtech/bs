@@ -8,21 +8,25 @@ readme.workspace = true
 license.workspace = true
 
 [dependencies]
-bs.workspace = true
 bs-traits.workspace = true
 multibase.workspace = true
 multicodec.workspace = true
 multikey.workspace = true
 multihash.workspace = true
 multicid.workspace = true
+multiutil.workspace = true
+multisig.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 rand.workspace = true
 rand_core_6.workspace = true
+provenance-log.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true
+bs.workspace = true
 bs-peer.workspace = true
+tracing-subscriber.workspace = true
 
 [lints]
 workspace = true

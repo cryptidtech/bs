@@ -18,10 +18,17 @@ pub use wait_queue::*;
 
 use std::fmt::Debug;
 
+/// Trait for types that enables an initial throw away key to be overwritten by a Ephemeral
+/// PublicKey, can sign data using [ASyncSigner]
+pub trait EphemeralKey {
+    /// The type of key used to sign
+    type Key;
+}
+
 /// Trait for types that can sign data using [AsyncSigner] or [SyncSigner]
 pub trait Signer {
     /// The type of key used to sign
-    type Key;
+    type KeyPath;
     /// The type of signature
     type Signature;
     /// Any Signing Error

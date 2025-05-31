@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: FSL-1.1
+pub mod util;
+
 use crate::{error::KeyError, Error};
 use multibase::Base;
 use multitrait::TryDecodeFrom;
@@ -6,14 +8,16 @@ use multiutil::{EncodingInfo, Varbytes, VarbytesIter};
 use std::fmt;
 use tracing::info;
 
-/// the separator for the parts of a key
+/// The separator for the parts of a key.
 pub const KEY_SEPARATOR: char = '/';
 
-/// The keys used to reference values in a Pairs storage. These form a path of namespaces
-/// each part separated by the separator "/" and they come in two flavors: branch or leaf
-/// A branch is a key-path that ends with the separator: "/foo/bar/baz/"
-/// A leaf is a key-path that does not end with the separator: "/foo/bar/baz"
-/// Branches identify a namespace full of leaves and a leaf identifies a single value
+/// The keys used to reference values in a Pairs storage.
+///
+/// These form a path of namespaces each part separated by the separator "/" and they come in two flavors:
+/// - A **branch** is a key-path that ends with the separator: "/foo/bar/baz/"
+/// - A **leaf** is a key-path that does not end with the separator: "/foo/bar/baz"
+///
+/// Branches identify a namespace full of leaves and a leaf identifies a single value.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Key {
     parts: Vec<String>,
@@ -21,17 +25,24 @@ pub struct Key {
 }
 
 impl Key {
-    /// true if this key is a branch
+    /// Returns true if this key is a branch.
     pub fn is_branch(&self) -> bool {
         self.parts.last().unwrap().is_empty()
     }
 
-    /// true if this key is a leaf
+    /// Returns true if this key is a leaf.
     pub fn is_leaf(&self) -> bool {
         !self.parts.last().unwrap().is_empty()
     }
 
-    /// add a key-path to us
+    /// Adds a key-path to this key.
+    ///
+    /// The current key must be a branch (ending with a separator) for this operation to succeed.
+    ///
+    /// # Errors
+    ///
+    /// Returns `KeyError::NotABranch` if the current key is not a branch.
+    /// Returns error if the provided string is not a valid key.
     pub fn push<S: AsRef<str>>(&mut self, s: S) -> Result<(), Error> {
         if !self.is_branch() {
             return Err(KeyError::NotABranch.into());
@@ -48,8 +59,10 @@ impl Key {
         Ok(())
     }
 
-    /// true if this path is a branch and the passed in path is achild of it
-    /// treu if this path is a leaf and the passed in path is the same path
+    /// Determines if this key is a parent of (or equal to) the other key.
+    ///
+    /// - If this path is a leaf, returns true if the passed-in path is exactly the same.
+    /// - If this path is a branch, returns true if the passed-in path starts with this path.
     pub fn parent_of(&self, other: &Self) -> bool {
         info!(
             "\t{} is a {}",
@@ -93,7 +106,7 @@ impl Key {
         }
     }
 
-    /// returns the number of parts in the key
+    /// Returns the number of parts in the key.
     pub fn len(&self) -> usize {
         match self.parts.len() {
             0 => 0,
@@ -107,12 +120,15 @@ impl Key {
         }
     }
 
-    /// return if the key has zero length
+    /// Returns true if the key has zero length.
     pub fn is_empty(&self) -> bool {
         self.parts.is_empty()
     }
 
-    /// returns the branch part of the key
+    /// Returns the branch part of the key.
+    ///
+    /// If this key is already a branch or is empty, returns a clone of itself.
+    /// If this key is a leaf, returns a branch version by adding a trailing separator.
     pub fn branch(&self) -> Self {
         if self.is_branch() || self.is_empty() {
             self.clone()
@@ -125,7 +141,9 @@ impl Key {
         }
     }
 
-    /// returns the longest common branch between this and the other Key
+    /// Returns the longest common branch between this and the other Key.
+    ///
+    /// This finds the common ancestor path between two keys.
     pub fn longest_common_branch(&self, rhs: &Key) -> Self {
         let lhs = self.branch();
         let rhs = rhs.branch();
@@ -158,7 +176,7 @@ impl Key {
         Self { parts, s }
     }
 
-    /// return the key as a &str
+    /// Returns the key as a string slice.
     pub fn as_str(&self) -> &str {
         self.s.as_str()
     }
@@ -173,12 +191,12 @@ impl Default for Key {
 }
 
 impl EncodingInfo for Key {
-    /// Return the preferred string encoding
+    /// Returns the preferred string encoding.
     fn preferred_encoding() -> Base {
         Base::Base16Lower
     }
 
-    /// Same
+    /// Returns the encoding for this key.
     fn encoding(&self) -> Base {
         Self::preferred_encoding()
     }
@@ -272,6 +290,57 @@ impl AsRef<str> for Key {
 impl fmt::Display for Key {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(&self.parts.join(&KEY_SEPARATOR.to_string()))
+    }
+}
+
+/// A minimal const validator for [Key] path strings, for use in const contexts.
+/// Will panic at compile time if the string is invalid.
+///
+/// This validator checks:
+/// - non-empty
+/// - must start with '/'
+/// - no double slashes '//' (no empty path segments except at the end)
+///
+/// # Example
+/// ```rust
+/// use provenance_log::key::validate_key_path;
+///
+/// // Valid key paths
+/// validate_key_path("/foo/bar/baz/"); // branch
+/// validate_key_path("/foo/bar/baz");  // leaf
+///
+/// // The following would panic at compile time:
+/// // validate_key_path("/foo//bar/baz");  // double slash
+/// // validate_key_path("foo/bar/baz");    // no leading slash
+/// // validate_key_path("");               // empty string
+///
+/// // Example trait for compile-time key path verification
+/// pub trait HasKeyPath {
+///     const KEY_PATH: &'static str;
+///     // This will cause a compile error if KEY_PATH is not valid
+///     const VALIDATE: () = {
+///         validate_key_path(Self::KEY_PATH);
+///     };
+/// }
+/// ```
+///
+/// # Panics
+/// This function will panic if the string does not meet the [Key] criteria.
+pub const fn validate_key_path(s: &str) {
+    let bytes = s.as_bytes();
+    if bytes.is_empty() {
+        panic!("Key must not be empty");
+    }
+    if bytes[0] != b'/' {
+        panic!("Key must start with '/'");
+    }
+    // Check for double slashes anywhere except possibly at the end
+    let mut i = 1;
+    while i < bytes.len() {
+        if bytes[i] == b'/' && bytes[i - 1] == b'/' {
+            panic!("Key must not contain '//' (double slash)");
+        }
+        i += 1;
     }
 }
 

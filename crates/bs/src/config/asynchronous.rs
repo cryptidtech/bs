@@ -13,7 +13,7 @@ pub trait KeyManager:
 
 /// Supertrait for signing operations
 pub trait MultiSigner:
-    Signer<Key = Multikey, Signature = Multisig, Error = Error> + AsyncSigner + Send + Sync + 'static
+    Signer<KeyPath = Key, Signature = Multisig, Error = Error> + AsyncSigner + Send + Sync + 'static
 {
 }
 
@@ -27,7 +27,7 @@ impl<T> KeyManager for T where
 }
 
 impl<T> MultiSigner for T where
-    T: Signer<Key = Multikey, Signature = Multisig, Error = Error>
+    T: Signer<KeyPath = Key, Signature = Multisig, Error = Error>
         + AsyncSigner
         + Send
         + Sync

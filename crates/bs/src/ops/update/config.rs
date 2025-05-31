@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: FSL-1.1
 use crate::update::op_params::OpParams;
-use multikey::Multikey;
-use provenance_log::Script;
+use provenance_log::{Key, Script};
 
 /// the configuration for opening a new provenance log
 #[derive(Clone, Debug, Default)]
@@ -19,7 +18,7 @@ pub struct Config {
     pub entry_unlock_script: Script,
 
     /// entry signing key
-    pub entry_signing_key: Multikey,
+    pub entry_signing_key: Key,
 
     /// entry operations
     pub entry_ops: Vec<OpParams>,
@@ -27,7 +26,7 @@ pub struct Config {
 
 impl Config {
     /// Create a new Config with the given unlock script and entry signing key
-    pub fn new(entry_unlock_script: Script, entry_signing_key: Multikey) -> Self {
+    pub fn new(entry_unlock_script: Script, entry_signing_key: Key) -> Self {
         Self {
             clear_lock_scripts: false,
             add_entry_lock_scripts: Vec::new(),

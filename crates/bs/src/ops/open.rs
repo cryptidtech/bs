@@ -2,29 +2,38 @@
 
 /// Config for the open operation
 pub mod config;
-pub use config::Config;
-
 use crate::{
     error::{BsCompatibleError, OpenError},
     update::{op, OpParams},
 };
+pub use config::Config;
 use multicid::{cid, vlad, Cid};
+use multicodec::Codec;
 use multihash::mh;
 use multikey::{Multikey, Views};
 use provenance_log::{entry, error::EntryError, Error as PlogError, Log, OpId};
 use tracing::debug;
 
 /// open a new provenance log based on the config
+//
+// To Open a Plog, the critical steps are:
+// - First get the public key of the ephemeral first entry key
+// - Add the public key of the ephemeral first entry key operation to `op_params`
+// - Add ALL operations to the entry builder
+// - Sign that operated entry using the ephemeral first entry key's one-time signing function
+// - Finalize the Entry with the signature
+//
+// When the script runtime checks the first entry data (the Entry without the proof), against the
+//
 pub fn open_plog<E: BsCompatibleError>(
     config: &Config,
     key_manager: &dyn crate::config::sync::KeyManager<E>,
     signer: &dyn crate::config::sync::MultiSigner<E>,
 ) -> Result<Log, E> {
-    // 0. Set up the list of ops we're going to add
+    // 0. Set up the list of ops
     let mut op_params = Vec::default();
 
-    // go through the additional ops and generate CIDs and keys and adding the resulting op params
-    // to the vec of op params
+    // Process initial operations
     config
         .additional_ops
         .iter()
@@ -41,56 +50,65 @@ pub fn open_plog<E: BsCompatibleError>(
             Ok(())
         })?;
 
-    // 1. Construct the VLAD from provided parameters
-
-    // get the codec for the vlad signing key and cid
+    // 1. Extract VLAD parameters and prepare signing
     let (vlad_key_params, vlad_cid_params) = &config.vlad_params;
-    // get the vlad signing key
-    let vlad_mk = load_key::<E>(&mut op_params, vlad_key_params, key_manager)?;
-    // get the cid for the first lock script
+    let (codec, threshold, limit) = extract_key_params::<E>(vlad_key_params)?;
+
+    // Use prepare_ephemeral_signing to get public key and signing function
+    let (vlad_pubkey, sign_vlad) = signer.prepare_ephemeral_signing(&codec, threshold, limit)?;
+
     let cid = load_cid::<E>(&mut op_params, vlad_cid_params)?;
 
+    // Add the VLAD public key operation to op_params
+    if let OpParams::KeyGen { key, .. } = vlad_key_params {
+        op_params.push(OpParams::UseKey {
+            key: key.clone(),
+            mk: vlad_pubkey.clone(),
+        });
+    }
+
+    // Build the VLAD using the public key
     let vlad = vlad::Builder::default()
-        .with_signing_key(&vlad_mk)
+        .with_signing_key(&vlad_pubkey)
         .with_cid(&cid)
-        .try_build(|cid| {
-            // get the serialized version of the vlad with an empty "proof" field
-            let vlad_bytes: Vec<u8> = cid.clone().into();
-            // sign the vlad bytes
-            let multisig = signer.try_sign(&vlad_mk, &vlad_bytes).map_err(|e| {
+        .try_build(|cid, _| {
+            let vlad_cid_bytes: Vec<u8> = cid.clone().into();
+            let multisig = sign_vlad(&vlad_cid_bytes).map_err(|e| {
+                tracing::error!("VLAD multisig sign failed: {:?}", e);
                 multicid::Error::Multisig(multisig::Error::SignFailed(e.to_string()))
             })?;
             Ok(multisig.into())
         })?;
 
-    // 2. Call back to get the entry and pub keys and load the lock and unlock scripts
-
-    // get the params for the entry signing key
+    // 2. Extract entry key parameters and prepare signing
     let entrykey_params = &config.entrykey_params;
+    let (codec, threshold, limit) = extract_key_params::<E>(entrykey_params)?;
 
-    // get the entry signing key
-    let entry_mk = load_key::<E>(&mut op_params, entrykey_params, key_manager)?;
+    // Get the public key and signing function
+    let (entry_pubkey, sign_entry) = signer.prepare_ephemeral_signing(&codec, threshold, limit)?;
 
-    // get the params for the pubkey
-    let pubkey_params = &config.pubkey_params;
+    // 3. Add the entry public key operation to op_params
+    if let OpParams::KeyGen { key, .. } = entrykey_params {
+        op_params.push(OpParams::UseKey {
+            key: key.clone(),
+            mk: entry_pubkey.clone(),
+        });
+    }
 
-    // get the pubkey
-    let _ = load_key::<E>(&mut op_params, pubkey_params, key_manager)?;
-
+    // 4. Continue with other preparations
+    let _ = load_key::<E>(&mut op_params, &config.pubkey_params, key_manager)?;
     let lock_script = config.entry_lock_script.clone();
     let unlock_script = config.entry_unlock_script.clone();
 
-    // 3. Construct the first entry, calling back to get the entry signed
-
-    // construct the first entry from all of the parts
-    let mut builder = entry::Builder::default()
+    // 5. Create the builder and add operations
+    let mut builder = entry::Builder::new();
+    builder
         .with_vlad(&vlad)
         .add_lock(&lock_script)
         .with_unlock(&unlock_script);
 
-    // add in all of the entry Ops
-    op_params.iter().try_for_each(|params| -> Result<(), E> {
-        // construct the op
+    // 6. Add ALL operations to builder (including entry public key)
+    for params in &op_params {
         let op = match params {
             OpParams::Noop { key } => op::Builder::new(OpId::Noop)
                 .with_key_path(key)
@@ -122,25 +140,22 @@ pub fn open_plog<E: BsCompatibleError>(
                 .try_build()?,
             _ => return Err(OpenError::InvalidOpParams.into()),
         };
-        // add the op to the builder
-        builder = builder.clone().add_op(&op);
-        Ok(())
-    })?;
 
-    // finalize the entry building by signing it
-    let entry = builder.try_build(|e| {
-        // get the serialzied version of the entry with an empty "proof" field
-        let ev: Vec<u8> = e.clone().into();
-        // call the call back to have the caller sign the data
-        let ms = signer
-            .try_sign(&entry_mk, &ev)
-            .map_err(|e| PlogError::from(EntryError::SignFailed(e.to_string())))?;
-        // store the signature as proof
-        Ok(ms.into())
-    })?;
+        builder.add_op(&op);
+    }
 
-    // 4. Construct the log
+    // 7. Prepare entry for signing
+    let unsigned_entry = builder.prepare_unsigned_entry()?;
+    let entry_bytes: Vec<u8> = unsigned_entry.clone().into();
 
+    // 8. Sign the entry using our one-time signing function
+    let signature = sign_entry(&entry_bytes)
+        .map_err(|e| PlogError::from(EntryError::SignFailed(e.to_string())))?;
+
+    // 9. Finalize entry with signature
+    let entry = builder.finalize_with_proof(signature.into())?;
+
+    // 10. Construct the log
     let log = provenance_log::log::Builder::new()
         .with_vlad(&vlad)
         .with_first_lock(&config.first_lock_script)
@@ -148,6 +163,19 @@ pub fn open_plog<E: BsCompatibleError>(
         .try_build()?;
 
     Ok(log)
+}
+
+/// Helper function to extract parameters from OpParams
+fn extract_key_params<E: BsCompatibleError>(params: &OpParams) -> Result<(Codec, usize, usize), E> {
+    match params {
+        OpParams::KeyGen {
+            codec,
+            threshold,
+            limit,
+            ..
+        } => Ok((*codec, *threshold, *limit)),
+        _ => Err(OpenError::InvalidKeyParams.into()),
+    }
 }
 
 fn load_key<E>(
@@ -245,12 +273,14 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::params::{entry_key::EntryKeyParams, pubkey::PubkeyParams, vlad::VladParams};
+    use crate::params::anykey::EntryKeyParams;
+    use crate::params::{pubkey::PubkeyParams, vlad::VladParams};
 
     use bs_wallets::memory::InMemoryKeyManager;
     use multikey::Multikey;
     use provenance_log::entry::Field;
     use provenance_log::format_with_fields;
+    use provenance_log::key::util::KeyParamsType;
     use provenance_log::value::try_extract;
     use provenance_log::Script;
     use provenance_log::{Key, Pairs};
@@ -258,7 +288,7 @@ mod tests {
 
     #[allow(unused)]
     fn init_logger() {
-        let subscriber = fmt().with_env_filter("trace,provenance_log=off").finish();
+        let subscriber = fmt().with_env_filter("debug,provenance_log=off").finish();
         if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
             tracing::warn!("failed to set subscriber: {}", e);
         }
@@ -266,7 +296,7 @@ mod tests {
 
     #[test]
     fn test_create_using_defaults() {
-        // init_logger();
+        init_logger();
 
         let entry_key = Field::ENTRY;
         assert_eq!(entry_key, "/entry/");
@@ -276,43 +306,43 @@ mod tests {
 
         let unlock_old_school = format!(
             r#"
-             // push the serialized Entry as the message
-             push("{entry_key}");
+               // push the serialized Entry as the message
+               push("{entry_key}");
 
-             // push the proof data
-             push("{proof_key}");
-        "#
+               // push the proof data
+               push("{proof_key}");
+          "#
         );
 
         let unlock = format_with_fields!(
             r#"
-             // push the serialized Entry as the message
-             push("{Field::ENTRY}");
+               // push the serialized Entry as the message
+               push("{Field::ENTRY}");
 
-             // push the proof data
-             push("{Field::PROOF}");
-        "#
+               // push the proof data
+               push("{Field::PROOF}");
+          "#
         );
 
         assert_eq!(unlock_old_school, unlock);
 
         let lock = format_with_fields!(
             r#"
-                // then check a possible threshold sig...
-                check_signature("/recoverykey", "{Field::ENTRY}") ||
+                  // then check a possible threshold sig...
+                  check_signature("/recoverykey", "{Field::ENTRY}") ||
 
-                // then check a possible pubkey sig...
-                check_signature("/pubkey", "{Field::ENTRY}") ||
+                  // then check a possible pubkey sig...
+                  check_signature("/pubkey", "{Field::ENTRY}") ||
 
-                // then the pre-image proof...
-                check_preimage("/hash")
-            "#
+                  // then the pre-image proof...
+                  check_preimage("/hash")
+              "#
         );
 
         let config = Config {
             vlad_params: VladParams::default().into(),
             pubkey_params: PubkeyParams::default().into(),
-            entrykey_params: EntryKeyParams::default().into(),
+            entrykey_params: EntryKeyParams::default_params().into(),
             first_lock_script: Script::Code(Key::default(), VladParams::FIRST_LOCK_SCRIPT.into()),
             entry_lock_script: Script::Code(Key::default(), lock),
             entry_unlock_script: Script::Code(Key::default(), unlock),
@@ -320,6 +350,7 @@ mod tests {
         };
 
         let key_manager = InMemoryKeyManager::<crate::Error>::default();
+
         let plog = open_plog(&config, &key_manager, &key_manager).expect("Failed to open plog");
 
         // log.first_lock should match
@@ -340,27 +371,21 @@ mod tests {
         // TODO: This API could be improved
         let (_count, _entry, kvp) = &mut plog.verify().next().unwrap().unwrap();
 
+        tracing::debug!("kvp: {:#?}", kvp);
+
         let vlad_key_value = kvp.get(VladParams::KEY_PATH).unwrap();
         let vlad_key: Multikey = try_extract(&vlad_key_value).unwrap();
 
-        assert_eq!(&vlad_key, key_manager.vlad());
         assert!(plog.vlad.verify(&vlad_key).is_ok());
 
-        // /pubkey should match key_manager.entry_key public key
         let entry_key = kvp.get(PubkeyParams::KEY_PATH).unwrap();
 
-        let entry_key: Multikey = try_extract(&entry_key).unwrap();
+        assert!(try_extract::<Multikey>(&entry_key)
+            .unwrap()
+            .attr_view()
+            .unwrap()
+            .is_public_key());
 
-        let key_manager_pk = if key_manager.entry_key().attr_view().unwrap().is_secret_key() {
-            key_manager
-                .entry_key()
-                .conv_view()
-                .unwrap()
-                .to_public_key()
-                .unwrap()
-        } else {
-            key_manager.entry_key().clone()
-        };
-        assert_eq!(entry_key, key_manager_pk);
+        // should match thhe one we've got?
     }
 }

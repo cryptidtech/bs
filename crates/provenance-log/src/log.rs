@@ -587,7 +587,7 @@ push("/entry/proof");
         let vlad = vlad::Builder::default()
             .with_signing_key(&ephemeral)
             .with_cid(&cid)
-            .try_build(|cid| {
+            .try_build(|cid, _| {
                 // sign those bytes
                 let v: Vec<u8> = cid.clone().into();
                 Ok(v)
@@ -677,7 +677,7 @@ push("/entry/proof");
         let vlad = vlad::Builder::default()
             .with_signing_key(&ephemeral)
             .with_cid(&cid)
-            .try_build(|cid| {
+            .try_build(|cid, _| {
                 // sign those bytes
                 let v: Vec<u8> = cid.clone().into();
                 Ok(v)

@@ -3,20 +3,19 @@ use crate::{platform, Error};
 use ::cid::Cid;
 use blockstore::Blockstore as BlockstoreTrait;
 use bs::{
-    config::sync::{KeyManager, KeyPathProvider, MultiSigner},
+    config::sync::{KeyManager, MultiSigner},
     params::{entry_key::EntryKeyParams, pubkey::PubkeyParams, vlad::VladParams},
     update::OpParams,
 };
 use bs_traits::CondSync;
 use multicid::cid;
-use multicodec::Codec;
 use multihash::mh;
 use provenance_log::{self as p, Key, Script};
 
 /// A peer in the network that is generic over the blockstore type
 pub struct BsPeer<KP, BS>
 where
-    KP: KeyManager<Error> + MultiSigner<Error> + KeyPathProvider,
+    KP: KeyManager<Error> + MultiSigner<Error>,
     BS: BlockstoreTrait + CondSync,
 {
     plog: Option<p::Log>,
@@ -29,7 +28,7 @@ pub type DefaultBsPeer<KP> = BsPeer<KP, platform::Blockstore>;
 
 impl<KP, BS> BsPeer<KP, BS>
 where
-    KP: KeyManager<Error> + MultiSigner<Error> + KeyPathProvider + CondSync,
+    KP: KeyManager<Error> + MultiSigner<Error> + CondSync,
     BS: BlockstoreTrait + CondSync,
 {
     /// Create a BsPeer with a custom blockstore implementation
@@ -191,49 +190,32 @@ where
     }
 }
 
+// directories for the platform-specific blockstore
+#[cfg(target_arch = "wasm32")]
+fn directories() -> String {
+    // For wasm, we use a default directory
+    "bs-peer".into()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn directories() -> std::path::PathBuf {
+    // For non-wasm, we use the platform-specific directories
+    directories::ProjectDirs::from("tech", "cryptid", "BetterSignPeer")
+        .map(|dirs| dirs.data_dir().to_path_buf())
+        .unwrap_or_else(|| "bs-peer".into())
+}
+
 // Default implementation for platform-specific blockstore
 impl<KP> DefaultBsPeer<KP>
 where
-    KP: KeyManager<Error> + MultiSigner<Error> + KeyPathProvider + CondSync,
+    KP: KeyManager<Error> + MultiSigner<Error> + CondSync,
 {
     /// Create a new Peer with the given key provider, opens
     /// a new platform-specific Blockstore for the Peer.
     pub async fn new(key_provider: KP) -> Result<Self, Error> {
-        let directory = directories::ProjectDirs::from("tech", "cryptid", "BetterSignPeer")
-            .map(|dirs| dirs.data_dir().to_path_buf())
-            .unwrap_or_else(|| "bs-peer".into());
+        let directory = directories();
         let blockstore = platform::Blockstore::new(directory).await?;
         Ok(Self::with_blockstore(key_provider, blockstore))
-    }
-}
-
-#[cfg(test)]
-impl<KP, BS> BsPeer<KP, BS>
-where
-    KP: KeyManager<Error> + MultiSigner<Error> + KeyPathProvider + CondSync,
-    BS: BlockstoreTrait + CondSync,
-{
-    /// Helper to create CID from the same parameters for testing
-    async fn verify_cid_stored(
-        &self,
-        version: Codec,
-        target: Codec,
-        hash: Codec,
-        data: &[u8],
-    ) -> Result<bool, Error> {
-        // Create CID
-        let multi_cid = cid::Builder::new(version)
-            .with_target_codec(target)
-            .with_hash(&mh::Builder::new_from_bytes(hash, data)?.try_build()?)
-            .try_build()?;
-
-        // Convert to cid::Cid
-        let multi_cid_bytes: Vec<u8> = multi_cid.into();
-        let cid = Cid::try_from(multi_cid_bytes)?;
-
-        // Check if stored in blockstore
-        let result = self.blockstore.has(&cid).await?;
-        Ok(result)
     }
 }
 
@@ -262,7 +244,34 @@ mod tests {
             tracing::warn!("failed to set subscriber: {}", e);
         }
     }
+    impl<KP, BS> BsPeer<KP, BS>
+    where
+        KP: KeyManager<Error> + MultiSigner<Error> + CondSync,
+        BS: BlockstoreTrait + CondSync,
+    {
+        /// Helper to create CID from the same parameters for testing
+        async fn verify_cid_stored(
+            &self,
+            version: Codec,
+            target: Codec,
+            hash: Codec,
+            data: &[u8],
+        ) -> Result<bool, Error> {
+            // Create CID
+            let multi_cid = cid::Builder::new(version)
+                .with_target_codec(target)
+                .with_hash(&mh::Builder::new_from_bytes(hash, data)?.try_build()?)
+                .try_build()?;
 
+            // Convert to cid::Cid
+            let multi_cid_bytes: Vec<u8> = multi_cid.into();
+            let cid = Cid::try_from(multi_cid_bytes)?;
+
+            // Check if stored in blockstore
+            let result = self.blockstore.has(&cid).await?;
+            Ok(result)
+        }
+    }
     async fn setup_test_peer() -> TestFixture {
         // Set up key manager
         let key_manager = InMemoryKeyManager::<Error>::default();
@@ -377,6 +386,9 @@ mod tests {
 
         // Create the peer with valid scripts and with CIDs to store
         // Add some OpParams::CidGen entries to test blockstore storage
+        // This is a bit awkward:
+        // We're stating the PubkeyParams here, yet
+        // the actual key is in the wallet. Would be better if one came from the other, yeah?
         let config = bs::open::Config {
             vlad_params: VladParams::default().into(),
             pubkey_params: PubkeyParams::default().into(),

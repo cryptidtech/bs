@@ -45,6 +45,10 @@ pub enum Error {
     /// I/O error
     #[error(transparent)]
     Io(#[from] std::io::Error),
+
+    /// Wallets error
+    #[error(transparent)]
+    Wallets(#[from] bs_wallets::Error),
 }
 
 /// Open op errors

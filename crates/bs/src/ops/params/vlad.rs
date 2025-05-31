@@ -91,7 +91,7 @@ impl VladParams {
     /// Key path for Vlad operations.
     pub const KEY_PATH: &str = "/vlad/key";
     /// CID key path for Vlad CID
-    pub const CID_KEY: &str = "/vlad/";
+    pub const CID_KEY: &str = "/vlad/"; // the trailing /cid is added in open_plog()
     /// The first lock script
     pub const FIRST_LOCK_SCRIPT: &str = r#"check_signature("/entrykey", "/entry/")"#;
 

@@ -15,6 +15,7 @@ thiserror.workspace = true
 bs.workspace = true
 bs-p2p.workspace = true
 bs-traits.workspace = true
+bs-wallets.workspace = true
 libp2p.workspace = true
 tracing.workspace = true
 provenance-log.workspace = true
@@ -64,8 +65,8 @@ web-sys = { version = "0.3.70", features = [
 wasm-bindgen-test = "0.3"
 wasm-bindgen = "0.2.93"
 tempfile = "3.20.0"
-bs-wallets.workspace = true
 tracing-subscriber.workspace = true
+
 [lints]
 workspace = true
 

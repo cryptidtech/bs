@@ -174,8 +174,8 @@ impl Builder {
 
     /// build a base encoded vlad
     pub fn try_build_encoded(
-        &self,
-        gen_proof: impl FnMut(&Cid) -> Result<Vec<u8>, Error>,
+        &mut self,
+        gen_proof: impl FnMut(&Cid, &mut Multikey) -> Result<Vec<u8>, Error>,
     ) -> Result<EncodedVlad, Error> {
         Ok(EncodedVlad::new(
             self.base_encoding.unwrap_or_else(Vlad::preferred_encoding),
@@ -185,8 +185,8 @@ impl Builder {
 
     /// build the vlad
     pub fn try_build(
-        &self,
-        mut gen_proof: impl FnMut(&Cid) -> Result<Vec<u8>, Error>,
+        &mut self,
+        gen_proof: impl FnOnce(&Cid, &mut Multikey) -> Result<Vec<u8>, Error>,
     ) -> Result<Vlad, Error> {
         let cid = self.cid.clone().ok_or(VladError::MissingCid)?;
         match &self.nonce {
@@ -195,7 +195,7 @@ impl Builder {
                 cid,
             }),
             None => {
-                let msv = gen_proof(&cid)?;
+                let msv = gen_proof(&cid, self.mk.as_mut().ok_or(VladError::MissingSigningKey)?)?;
                 let nonce = nonce::Builder::new_from_bytes(&msv).try_build()?;
 
                 Ok(Vlad { nonce, cid })
@@ -239,7 +239,7 @@ mod tests {
         let vlad = Builder::default()
             .with_nonce(&nonce)
             .with_cid(&cid)
-            .try_build(|cid| {
+            .try_build(|cid, _| {
                 // sign those bytes
                 let v: Vec<u8> = cid.clone().into();
                 Ok(v)
@@ -273,7 +273,7 @@ mod tests {
         let vlad = Builder::default()
             .with_nonce(&nonce)
             .with_cid(&cid)
-            .try_build(|cid| {
+            .try_build(|cid, _| {
                 // sign those bytes
                 let v: Vec<u8> = cid.clone().into();
                 Ok(v)
@@ -309,7 +309,7 @@ mod tests {
         let vlad = Builder::default()
             .with_nonce(&nonce)
             .with_cid(&cid)
-            .try_build_encoded(|cid| {
+            .try_build_encoded(|cid, _| {
                 // sign those bytes
                 let v: Vec<u8> = cid.clone().into();
                 Ok(v)
@@ -351,7 +351,7 @@ mod tests {
                 .with_nonce(&nonce)
                 .with_cid(&cid)
                 .with_base_encoding(encoding)
-                .try_build_encoded(|cid| {
+                .try_build_encoded(|cid, _| {
                     // sign those bytes
                     let v: Vec<u8> = cid.clone().into();
                     Ok(v)
@@ -418,7 +418,7 @@ mod tests {
             .with_signing_key(&mk)
             .with_cid(&cid)
             .with_base_encoding(Base::Base32Z)
-            .try_build_encoded(|cid| {
+            .try_build_encoded(|cid, _mk| {
                 // use mk to sign those cid bytes
                 let signing_view = mk.sign_view()?;
                 let cidv: Vec<u8> = cid.clone().into();

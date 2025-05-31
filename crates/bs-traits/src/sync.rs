@@ -6,16 +6,36 @@ use crate::*;
 /// Trait for types that can sign data
 pub trait SyncSigner: Signer {
     /// Attempt to sign the data
-    fn try_sign(&self, key: &Self::Key, data: &[u8]) -> Result<Self::Signature, Self::Error>;
+    fn try_sign(&self, key: &Self::KeyPath, data: &[u8]) -> Result<Self::Signature, Self::Error>;
 
     /// Sign the data and return the signature
     ///
     /// # Panics
     ///
     /// This function will panic if the signing operation fails.
-    fn sign(&self, key: &Self::Key, data: &[u8]) -> Self::Signature {
+    fn sign(&self, key: &Self::KeyPath, data: &[u8]) -> Self::Signature {
         self.try_sign(key, data).expect("signing operation failed")
     }
+}
+
+/// Trait for types that can prepare an ephemeral key for signing
+pub trait SyncPrepareEphemeralSigning: Signer + EphemeralKey {
+    /// The codec used for encoding/decoding keys
+    type Codec;
+
+    /// Prepares an ephemeral keypair, returning the public key and a one-time signing function
+    fn prepare_ephemeral_signing(
+        &self,
+        codec: &Self::Codec, // Use concrete type to avoid associated type dependency
+        threshold: usize,
+        limit: usize,
+    ) -> Result<
+        (
+            <Self as EphemeralKey>::Key, // Use trait's associated type
+            Box<dyn FnOnce(&[u8]) -> Result<<Self as Signer>::Signature, <Self as Signer>::Error>>,
+        ),
+        <Self as Signer>::Error,
+    >;
 }
 
 /// Trait for types that can verify signatures

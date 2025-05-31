@@ -473,66 +473,78 @@ impl From<&Entry> for Builder {
 }
 
 impl Builder {
+    /// Create a new builder with default values
+    pub fn new() -> Self {
+        Self::default()
+    }
     /// Set the Vlad
-    pub fn with_vlad(mut self, vlad: &Vlad) -> Self {
+    pub fn with_vlad(&mut self, vlad: &Vlad) -> &mut Self {
         self.vlad = Some(vlad.clone());
         self
     }
 
     /// Set the prev Cid
-    pub fn with_prev(mut self, cid: &Cid) -> Self {
+    pub fn with_prev(&mut self, cid: &Cid) -> &mut Self {
         self.prev = Some(cid.clone());
         self
     }
 
     /// Set the sequence number
-    pub fn with_seqno(mut self, seqno: u64) -> Self {
+    pub fn with_seqno(&mut self, seqno: u64) -> &mut Self {
         self.seqno = Some(seqno);
         self
     }
 
     /// Set the lipmaa Cid
-    pub fn with_lipmaa(mut self, lipmaa: &Cid) -> Self {
+    pub fn with_lipmaa(&mut self, lipmaa: &Cid) -> &mut Self {
         self.lipmaa = Some(lipmaa.clone());
         self
     }
 
-    /// Set the ops
-    pub fn with_ops(mut self, ops: &[Op]) -> Self {
-        ops.clone_into(&mut self.ops);
+    /// Set all operations at once, replacing any existing ones
+    pub fn with_ops(&mut self, ops: &[Op]) -> &mut Self {
+        self.ops = ops.to_vec();
         self
     }
 
-    /// Add an op
-    pub fn add_op(mut self, op: &Op) -> Self {
+    /// Add an operation to the builder
+    pub fn add_op(&mut self, op: &Op) -> &mut Self {
         self.ops.push(op.clone());
         self
     }
 
-    /// Set the lock scripts
-    pub fn with_locks(mut self, locks: &[Script]) -> Self {
-        locks.clone_into(&mut self.locks);
+    /// Add multiple operations from an iterator
+    pub fn extend_ops<I>(&mut self, ops: I) -> &mut Self
+    where
+        I: IntoIterator,
+        I::Item: Into<Op>,
+    {
+        for op in ops {
+            self.ops.push(op.into());
+        }
         self
     }
 
-    /// Set the lock script
-    pub fn add_lock(mut self, script: &Script) -> Self {
+    /// Set all lock scripts at once, replacing any existing ones
+    pub fn with_locks(&mut self, locks: &[Script]) -> &mut Self {
+        self.locks = locks.to_vec();
+        self
+    }
+
+    /// Add a lock script
+    pub fn add_lock(&mut self, script: &Script) -> &mut Self {
         self.locks.push(script.clone());
         self
     }
 
     /// Set the unlock script
-    pub fn with_unlock(mut self, unlock: &Script) -> Self {
+    pub fn with_unlock(&mut self, unlock: &Script) -> &mut Self {
         self.unlock = Some(unlock.clone());
         self
     }
 
-    /// Build the Entry from the provided data and then call the `gen_proof`
-    /// closure to generate a lock script and proof
-    pub fn try_build<F>(&self, mut gen_proof: F) -> Result<Entry, Error>
-    where
-        F: FnMut(&mut Entry) -> Result<Vec<u8>, Error>,
-    {
+    /// Prepare an unsigned entry with empty proof for signing
+    pub fn prepare_unsigned_entry(&self) -> Result<Entry, Error> {
         let version = self.version;
         let vlad = self.vlad.clone().ok_or(EntryError::MissingVlad)?;
         let prev = self.prev.clone().unwrap_or_else(Cid::null);
@@ -544,8 +556,7 @@ impl Builder {
         };
         let unlock = self.unlock.clone().ok_or(EntryError::MissingUnlockScript)?;
 
-        // first construct an entry with every field except the proof
-        let mut entry = Entry {
+        Ok(Entry {
             version,
             vlad,
             prev,
@@ -555,12 +566,25 @@ impl Builder {
             locks: self.locks.clone(),
             unlock,
             proof: Vec::default(),
-        };
+        })
+    }
 
-        // call the gen_proof closure to create and store the proof data
-        entry.proof = gen_proof(&mut entry)?;
-
+    /// Finalize the entry with the provided proof
+    pub fn finalize_with_proof(&self, proof: Vec<u8>) -> Result<Entry, Error> {
+        let mut entry = self.prepare_unsigned_entry()?;
+        entry.proof = proof;
         Ok(entry)
+    }
+
+    /// Backward compatibility method that combines prepare and finalize
+    /// This maintains the same interface for existing code
+    pub fn try_build<F>(&self, gen_proof: F) -> Result<Entry, Error>
+    where
+        F: FnOnce(&Entry) -> Result<Vec<u8>, Error>,
+    {
+        let unsigned_entry = self.prepare_unsigned_entry()?;
+        let proof = gen_proof(&unsigned_entry)?;
+        self.finalize_with_proof(proof)
     }
 }
 
@@ -921,7 +945,7 @@ mod tests {
         let vlad = vlad::Builder::default()
             .with_nonce(&nonce)
             .with_cid(&cid)
-            .try_build(|cid| {
+            .try_build(|cid, _| {
                 let v: Vec<u8> = cid.clone().into();
                 Ok(v)
             })
