@@ -1,4 +1,4 @@
-//! Key Parameters Types for Operation Parameters.
+//! Common and Custom Key Parameters Types, for [OpParams::KeyGen] Operation Parameters.
 //!
 //! This module provides some concrete implementations of the generic way to define parameters for any key type based on
 //! a path that identifies the key.
@@ -8,10 +8,11 @@
 //! You can easily create your own key parameter types by using the [KeyParamsType] trait:
 //!
 //! ```rust
-//! use provenance_log::key::util::{KeyParamsType, KeyParams};
+//! use provenance_log::key::key_paths::{KeyParamsType, KeyParams};
 //! use provenance_log::const_assert_valid_key;
-//! use provenance_log::key::util::ValidatedKeyPath;
+//! use provenance_log::key::key_paths::ValidatedKeyPath;
 //! use bs::ops::update::OpParams;
+//! use multicodec::Codec;
 //!
 //! pub struct MyCustomKeyParams;
 //!
@@ -19,13 +20,27 @@
 //!     const KEY_PATH: ValidatedKeyPath = const_assert_valid_key!("/my/special/key");
 //! }
 //!
-//! // Create parameters with defaults
-//! let params: OpParams = MyCustomKeyParams::default_params().into();
+//! // Create parameters with some details
+//! let custom_key_params = MyCustomKeyParams::builder()
+//!    .codec(Codec::Ed25519Priv)
+//!    .threshold(1)
+//!    .limit(1)
+//!    .revoke(false)
+//!    .build();
 //!
-//! // Or customize them
-//! let custom = MyCustomKeyParams::params()
-//!     .threshold(3)
-//!     .build();
+//! // Convert parameters to OpParams enum
+//! let params: OpParams = custom_key_params.into();
+//!
+//! // You can destructure the OpParams to access the key parameters
+//! let OpParams::KeyGen {
+//!    key,
+//!    codec,
+//!    threshold,
+//!    limit,
+//!    revoke,
+//!    } = params else {
+//!    panic!("Expected OpParams::KeyGen");
+//!    };
 //! ```
 //!
 //! The blanket implementation to convert any type implementing `KeyParamsType` into a `Key`
@@ -35,7 +50,7 @@
 //!
 //! ```rust
 //! use provenance_log::Key;
-//! use provenance_log::key::util::{KeyParamsType};
+//! use provenance_log::key::key_paths::{KeyParamsType};
 //! use bs::params::anykey::PubkeyParams;
 //!
 //! // Works with predefined types or your custom types
@@ -46,11 +61,9 @@
 //! assert_eq!(<bs::params::anykey::PubkeyParams as Into<Key>>::into(PubkeyParams), PubkeyParams::key());
 //! ```
 use crate::ops::update::OpParams;
-use multicodec::Codec;
 use provenance_log::{
     const_assert_valid_key,
-    key::util::{KeyParams, KeyParamsType, ValidatedKeyPath},
-    Key,
+    key::key_paths::{KeyParams, KeyParamsType, ValidatedKeyPath},
 };
 
 /// Public Key parameters type
@@ -60,13 +73,6 @@ impl KeyParamsType for PubkeyParams {
     const KEY_PATH: ValidatedKeyPath = const_assert_valid_key!("/pubkey");
 }
 
-impl PubkeyParams {
-    /// Creates a new ed25519 private key parameters instance.
-    pub fn new_ed25519() -> KeyParams {
-        Self::params().codec(Codec::Ed25519Priv).build()
-    }
-}
-
 /// Entry Key parameters type
 pub struct EntryKeyParams;
 
@@ -74,15 +80,10 @@ impl KeyParamsType for EntryKeyParams {
     const KEY_PATH: ValidatedKeyPath = const_assert_valid_key!("/entrykey");
 }
 
-/// Returns default entry key parameters.
-pub fn default_entrykey_params() -> OpParams {
-    EntryKeyParams::default_params().into()
-}
-
 impl From<KeyParams> for OpParams {
     fn from(params: KeyParams) -> Self {
         OpParams::KeyGen {
-            key: Key::try_from(params.key_path()).unwrap(),
+            key: params.key_path().clone(),
             codec: params.codec(),
             threshold: params.threshold(),
             limit: params.limit(),
@@ -95,10 +96,11 @@ impl From<KeyParams> for OpParams {
 mod tests {
     use super::*;
     use crate::ops::update::OpParams;
+    use multicodec::Codec;
 
     #[test]
     fn test_pubkey_params() {
-        let params = PubkeyParams::params()
+        let params = PubkeyParams::builder()
             .codec(Codec::Ed25519Priv)
             .threshold(2)
             .limit(10)
@@ -129,7 +131,7 @@ mod tests {
 
     #[test]
     fn test_entrykey_params() {
-        let params = EntryKeyParams::params()
+        let params = EntryKeyParams::builder()
             .codec(Codec::Ed25519Priv)
             .threshold(2)
             .limit(10)
@@ -167,10 +169,11 @@ mod tests {
             const KEY_PATH: ValidatedKeyPath = const_assert_valid_key!("/mycustomkey");
         }
 
-        let params = CustomKey::params()
+        let params = CustomKey::builder()
             .codec(Codec::Ed25519Priv)
             .threshold(3)
             .limit(5)
+            .revoke(false)
             .build();
 
         let op_params: OpParams = params.into();
@@ -182,24 +185,12 @@ mod tests {
             panic!("Expected OpParams::KeyGen");
         }
     }
-
-    #[test]
-    fn test_default_params() {
-        let params = PubkeyParams::default_params();
-        assert_eq!(params.key_path(), PubkeyParams::KEY_PATH.as_str());
-        assert_eq!(params.threshold(), 1);
-    }
-
-    #[test]
-    fn test_ed25519_convenience() {
-        let params = PubkeyParams::new_ed25519();
-        assert_eq!(params.codec(), Codec::Ed25519Priv);
-    }
 }
 
 #[cfg(test)]
 mod invalid_path_tests {
     use super::*;
+    use multicodec::Codec;
 
     // This module tests compile-time validation - no actual test code is run
 
@@ -212,7 +203,12 @@ mod invalid_path_tests {
             const KEY_PATH: ValidatedKeyPath = const_assert_valid_key!("/valid/path");
         }
 
-        let _ = ValidKey::default_params();
+        let _ = ValidKey::builder()
+            .codec(Codec::Ed25519Priv)
+            .threshold(1)
+            .limit(10)
+            .revoke(false)
+            .build();
 
         // The following would fail to compile if uncommented:
         /*

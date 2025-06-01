@@ -280,7 +280,7 @@ mod tests {
     use multikey::Multikey;
     use provenance_log::entry::Field;
     use provenance_log::format_with_fields;
-    use provenance_log::key::util::KeyParamsType;
+    use provenance_log::key::key_paths::KeyParamsType;
     use provenance_log::value::try_extract;
     use provenance_log::Script;
     use provenance_log::{Key, Pairs};
@@ -296,7 +296,7 @@ mod tests {
 
     #[test]
     fn test_create_using_defaults() {
-        init_logger();
+        // init_logger();
 
         let entry_key = Field::ENTRY;
         assert_eq!(entry_key, "/entry/");
@@ -342,7 +342,13 @@ mod tests {
         let config = Config {
             vlad_params: VladParams::default().into(),
             pubkey_params: PubkeyParams::default().into(),
-            entrykey_params: EntryKeyParams::default_params().into(),
+            entrykey_params: EntryKeyParams::builder()
+                .codec(Codec::Ed25519Priv)
+                .threshold(1)
+                .limit(1)
+                .revoke(false)
+                .build()
+                .into(),
             first_lock_script: Script::Code(Key::default(), VladParams::FIRST_LOCK_SCRIPT.into()),
             entry_lock_script: Script::Code(Key::default(), lock),
             entry_unlock_script: Script::Code(Key::default(), unlock),

@@ -1,5 +1,5 @@
 use super::*;
-use bs_traits::{AsyncGetKey, AsyncSigner};
+use bs_traits::asyncro::{AsyncGetKey, AsyncSigner};
 
 /// Supertrait for key management operations
 pub trait KeyManager:

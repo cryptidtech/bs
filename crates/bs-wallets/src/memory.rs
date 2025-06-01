@@ -1,7 +1,9 @@
 //! Basic in-memory wallet implementation.
 //! In memory Key manager and [Signer]
-pub use bs_traits::SyncGetKey;
-use bs_traits::{EphemeralKey, GetKey, Signer, SyncPrepareEphemeralSigning, SyncSigner};
+pub use bs_traits::sync::{
+    EphemeralSigningTuple, SyncGetKey, SyncPrepareEphemeralSigning, SyncSigner,
+};
+use bs_traits::{EphemeralKey, GetKey, Signer};
 use multicodec::Codec;
 use multikey::{mk, Multikey, Views as _};
 use multisig::Multisig;
@@ -185,7 +187,7 @@ impl<E> EphemeralKey for InMemoryKeyManager<E>
 where
     E: From<multikey::Error> + From<multihash::Error> + Debug,
 {
-    type Key = Multikey;
+    type PubKey = Multikey;
 }
 
 impl<E> SyncSigner for InMemoryKeyManager<E>
@@ -241,11 +243,9 @@ where
         codec: &Self::Codec,
         threshold: usize,
         limit: usize,
-    ) -> Result<
-        (
-            <Self as EphemeralKey>::Key,
-            Box<dyn FnOnce(&[u8]) -> Result<<Self as Signer>::Signature, <Self as Signer>::Error>>,
-        ),
+    ) -> EphemeralSigningTuple<
+        <Self as EphemeralKey>::PubKey,
+        <Self as Signer>::Signature,
         <Self as Signer>::Error,
     > {
         let mut rng = rand_core_6::OsRng;
@@ -275,7 +275,7 @@ where
 mod tests {
     use super::*;
     use bs::config::sync::{KeyManager, MultiSigner};
-    use bs_traits::SyncSigner;
+    use bs_traits::sync::SyncSigner;
     use tracing_subscriber::fmt;
 
     fn init_logger() {

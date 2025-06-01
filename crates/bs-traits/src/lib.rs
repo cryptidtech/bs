@@ -4,25 +4,39 @@
 ///
 /// It also provides a `WaitQueue` type that can be used to implement synchronous and asynchronous operations
 /// without having to use tokio::block_in_place or similar.
-mod r#async;
+pub mod asyncro;
 mod cond_send;
 pub use cond_send::{CondSend, CondSync};
 mod error;
-mod sync;
+pub mod sync;
 mod wait_queue;
 
 pub use error::Error;
-pub use r#async::*;
-pub use sync::*;
 pub use wait_queue::*;
 
-use std::fmt::Debug;
+use std::{fmt::Debug, num::NonZeroUsize};
 
-/// Trait for types that enables an initial throw away key to be overwritten by a Ephemeral
-/// PublicKey, can sign data using [ASyncSigner]
+/// Trait for types that sets the type of public key used for ephemeral signing operations,
+/// can sign data using [SyncPrepareEphemeralSigning] or [AsyncPrepareEphemeralSigning],
 pub trait EphemeralKey {
-    /// The type of key used to sign
+    /// The type of public key used to sign
+    type PubKey;
+}
+
+/// Each key needs to have a Codec, KeyPath, threshold, and limit.
+pub trait KeyDetails {
+    /// The key type
     type Key;
+    /// The codec used for the key
+    type Codec;
+    /// The key path used to identify the key
+    type KeyPath;
+
+    fn key(&self) -> &Self::Key;
+    fn codec(&self) -> Self::Codec;
+    fn key_path(&self) -> &Self::KeyPath;
+    fn threshold(&self) -> NonZeroUsize;
+    fn limit(&self) -> NonZeroUsize;
 }
 
 /// Trait for types that can sign data using [AsyncSigner] or [SyncSigner]

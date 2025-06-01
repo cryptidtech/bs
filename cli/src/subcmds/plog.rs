@@ -2,9 +2,8 @@
 
 /// Plog command
 pub mod command;
-use bs_traits::{
-    EphemeralKey, GetKey, Signer, SyncGetKey, SyncPrepareEphemeralSigning, SyncSigner,
-};
+use bs_traits::sync::{SyncGetKey, SyncPrepareEphemeralSigning, SyncSigner};
+use bs_traits::{EphemeralKey, GetKey, Signer};
 pub use command::Command;
 
 use crate::{error::PlogError, Config, Error};
@@ -23,7 +22,7 @@ use multihash::EncodedMultihash;
 use multikey::{mk, Multikey, Views};
 use multisig::Multisig;
 use multiutil::{BaseEncoded, CodecInfo, DetectedEncoder, EncodingInfo};
-use provenance_log::{key::util::KeyParamsType, Key, Log, Script};
+use provenance_log::{key::key_paths::KeyParamsType, Key, Log, Script};
 use rng::StdRng;
 use std::{
     collections::{HashMap, VecDeque},
@@ -66,7 +65,7 @@ impl SyncGetKey for KeyManager {
 
 // EphemeralKey
 impl EphemeralKey for KeyManager {
-    type Key = Multikey;
+    type PubKey = Multikey;
 }
 
 // Implement the new SyncPrepareEphemeralSigning trait
@@ -80,7 +79,7 @@ impl SyncPrepareEphemeralSigning for KeyManager {
         limit: usize,
     ) -> Result<
         (
-            <Self as EphemeralKey>::Key,
+            <Self as EphemeralKey>::PubKey,
             Box<dyn FnOnce(&[u8]) -> Result<<Self as Signer>::Signature, <Self as Signer>::Error>>,
         ),
         <Self as Signer>::Error,
@@ -212,8 +211,13 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
                 reader(&Some(unlock_script_path))?.read_to_end(&mut v)?;
                 Script::Code(Key::default(), String::from_utf8(v)?)
             };
-
-            let cfg = update::Config::new(unlock_script, EntryKeyParams::KEY_PATH.into())
+            let entry_params = EntryKeyParams::builder()
+                .codec(Codec::Ed25519Priv)
+                .threshold(1)
+                .limit(1)
+                .revoke(false)
+                .build();
+            let cfg = update::Config::new(unlock_script, entry_params.key_path().clone())
                 .with_ops(&build_delete_params(&delete_ops)?)
                 .with_ops(&build_key_params(&key_ops)?)
                 .with_ops(&build_string_params(&string_ops)?)

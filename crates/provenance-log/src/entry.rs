@@ -578,6 +578,10 @@ impl Builder {
 
     /// Backward compatibility method that combines prepare and finalize
     /// This maintains the same interface for existing code
+    #[deprecated(
+        since = "1.1.0",
+        note = "Please use prepare_unsigned_entry() then finalize_with_proof() instead"
+    )]
     pub fn try_build<F>(&self, gen_proof: F) -> Result<Entry, Error>
     where
         F: FnOnce(&Entry) -> Result<Vec<u8>, Error>,

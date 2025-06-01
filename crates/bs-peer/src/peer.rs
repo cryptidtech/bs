@@ -331,7 +331,7 @@ mod tests {
 
     #[tokio::test]
     async fn basic_test() {
-        init_logger();
+        // init_logger();
         tracing::info!("Starting basic_test");
         tracing::debug!("Initializing key manager and peer");
 
@@ -376,7 +376,7 @@ mod tests {
 
     #[tokio::test]
     async fn in_memory_blockstore_test() {
-        init_logger();
+        // init_logger();
         tracing::info!("Starting in_memory_blockstore_test");
 
         let mut fixture = setup_test_peer().await;
@@ -467,7 +467,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_store_entries() {
-        init_logger();
+        // init_logger();
         tracing::info!("Starting test_store_entries");
 
         let fixture = setup_initialized_peer().await;

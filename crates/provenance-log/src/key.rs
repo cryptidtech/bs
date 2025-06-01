@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: FSL-1.1
-pub mod util;
+pub mod key_paths;
 
 use crate::{error::KeyError, Error};
 use multibase::Base;

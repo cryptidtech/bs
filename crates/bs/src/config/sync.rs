@@ -1,5 +1,6 @@
 //! Sync alterntives to the asynchronous traits.
-use bs_traits::{EphemeralKey, SyncGetKey, SyncPrepareEphemeralSigning, SyncSigner};
+use bs_traits::sync::{SyncGetKey, SyncPrepareEphemeralSigning, SyncSigner};
+use bs_traits::EphemeralKey;
 
 use super::*;
 
@@ -18,7 +19,7 @@ impl<T, E> KeyManager<E> for T where
 pub trait MultiSigner<E>:
     Signer<KeyPath = Key, Signature = Multisig, Error = E>
     + SyncSigner
-    + EphemeralKey<Key = Multikey>
+    + EphemeralKey<PubKey = Multikey>
     + GetKey<KeyPath = Key, Codec = Codec, Key = Multikey, Error = E>
     + SyncPrepareEphemeralSigning<Codec = Codec>
 {
@@ -27,7 +28,7 @@ pub trait MultiSigner<E>:
 impl<T, E> MultiSigner<E> for T where
     T: Signer<KeyPath = Key, Signature = Multisig, Error = E>
         + SyncSigner
-        + EphemeralKey<Key = Multikey>
+        + EphemeralKey<PubKey = Multikey>
         + GetKey<KeyPath = Key, Codec = Codec, Key = Multikey, Error = E>
         + SyncPrepareEphemeralSigning<Codec = Codec>
 {

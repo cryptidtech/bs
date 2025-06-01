@@ -18,6 +18,10 @@ pub trait SyncSigner: Signer {
     }
 }
 
+pub type OneTimeSignFn<Sig, E> = Box<dyn FnOnce(&[u8]) -> Result<Sig, E>>;
+
+pub type EphemeralSigningTuple<PK, Sig, E> = Result<(PK, OneTimeSignFn<Sig, E>), E>;
+
 /// Trait for types that can prepare an ephemeral key for signing
 pub trait SyncPrepareEphemeralSigning: Signer + EphemeralKey {
     /// The codec used for encoding/decoding keys
@@ -29,11 +33,9 @@ pub trait SyncPrepareEphemeralSigning: Signer + EphemeralKey {
         codec: &Self::Codec, // Use concrete type to avoid associated type dependency
         threshold: usize,
         limit: usize,
-    ) -> Result<
-        (
-            <Self as EphemeralKey>::Key, // Use trait's associated type
-            Box<dyn FnOnce(&[u8]) -> Result<<Self as Signer>::Signature, <Self as Signer>::Error>>,
-        ),
+    ) -> EphemeralSigningTuple<
+        <Self as EphemeralKey>::PubKey,
+        <Self as Signer>::Signature,
         <Self as Signer>::Error,
     >;
 }

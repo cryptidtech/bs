@@ -238,11 +238,12 @@ mod tests {
     };
     use crate::{open, open_plog};
 
-    use bs_traits::SyncGetKey;
+    use bs_traits::sync::SyncGetKey;
     use bs_wallets::memory::InMemoryKeyManager;
+    use multicodec::Codec;
     use provenance_log::entry::Field;
     use provenance_log::format_with_fields;
-    use provenance_log::key::util::KeyParamsType;
+    use provenance_log::key::key_paths::KeyParamsType;
     use provenance_log::Script;
     use provenance_log::{Key, Pairs};
     use tracing_subscriber::fmt;
@@ -301,10 +302,23 @@ mod tests {
 
         let lock_script = Script::Code(Key::default(), lock);
 
+        let pubkey_params = PubkeyParams::builder()
+            .codec(Codec::Ed25519Priv)
+            .threshold(1)
+            .limit(1)
+            .revoke(false)
+            .build();
+
         let open_config = open::Config {
             vlad_params: VladParams::default().into(),
-            pubkey_params: PubkeyParams::default_params().into(),
-            entrykey_params: EntryKeyParams::default_params().into(),
+            pubkey_params: pubkey_params.clone().into(),
+            entrykey_params: EntryKeyParams::builder()
+                .codec(Codec::Ed25519Priv)
+                .threshold(1)
+                .limit(1)
+                .revoke(false)
+                .build()
+                .into(),
             first_lock_script: Script::Code(Key::default(), VladParams::FIRST_LOCK_SCRIPT.into()),
             entry_lock_script: lock_script.clone(),
             entry_unlock_script: Script::Code(Key::default(), unlock),
@@ -319,9 +333,9 @@ mod tests {
         key_manager
             .get_key(
                 &PubkeyParams::KEY_PATH.into(),
-                &PubkeyParams::default_params().codec(),
-                PubkeyParams::default_params().threshold(),
-                PubkeyParams::default_params().limit(),
+                &pubkey_params.codec(),
+                pubkey_params.threshold(),
+                pubkey_params.limit(),
             )
             .expect("Failed to create and store pubkey");
 
