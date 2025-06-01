@@ -1,80 +1,74 @@
 // SPDX-License-Identifier: FSL-1.1
 
-use provenance_log::Script;
+use provenance_log::{key::key_paths::ValidatedKeyParams, Script};
 
-use crate::update::op_params::OpParams;
+use crate::{
+    params::vlad::{FirstEntryKeyParams, VladParams},
+    update::op_params::OpParams,
+};
 
 /// the configuration for opening a new provenance log
-#[derive(Clone, Debug, Default)]
-pub struct Config {
+#[derive(bon::Builder, Clone, Debug)]
+pub struct Config<T: ValidatedKeyParams = FirstEntryKeyParams> {
     /// the vlad key and cid params
-    pub vlad_params: (OpParams, OpParams),
+    pub vlad: (OpParams, OpParams),
 
     /// the entry key params
-    pub entrykey_params: OpParams,
+    pub entrykey: OpParams,
 
     /// the pubkey params
-    pub pubkey_params: OpParams,
+    pub pubkey: OpParams,
 
     /// The first lock script
-    pub first_lock_script: Script,
+    pub first_lock: Script,
 
     /// entry lock script
-    pub entry_lock_script: Script,
+    pub lock: Script,
 
     /// entry unlock script
-    pub entry_unlock_script: Script,
+    pub unlock: Script,
 
     /// additional ops for the first entry
+    #[builder(default = Vec::new())]
     pub additional_ops: Vec<OpParams>,
+
+    /// Phantom data to remember the FirstEntryKey parameter type
+    #[builder(skip)]
+    pub _phantom: std::marker::PhantomData<T>,
 }
 
-impl Config {
-    /// add the vlad key and cid params
-    pub fn with_vlad_params(mut self, key: OpParams, cid: OpParams) -> Self {
-        self.vlad_params = (key, cid);
+impl<T: ValidatedKeyParams> Config<T> {
+    /// Set up the config with VladParams of the same type parameter
+    pub fn with_typed_vlad_params(mut self, params: VladParams<T>) -> Self {
+        self.vlad = params.into();
         self
     }
 
-    /// add the entrykey params
-    pub fn with_entrykey_params(mut self, key: OpParams) -> Self {
-        self.entrykey_params = key;
+    /// Set up the first lock script automatically from VladParams
+    pub fn with_default_first_lock_script(mut self) -> Self {
+        self.first_lock = Script::Code(
+            provenance_log::Key::default(),
+            VladParams::<T>::first_lock_script(),
+        );
         self
     }
 
-    /// add the pubkey params
-    pub fn with_pubkey_params(mut self, key: OpParams) -> Self {
-        self.pubkey_params = key;
+    /// Add additional operations
+    pub fn add_ops(mut self, ops: Vec<OpParams>) -> Self {
+        self.additional_ops.extend(ops);
         self
     }
 
-    /// Set the entry lock Script
-    pub fn with_entry_lock_script(&mut self, script: Script) -> &mut Self {
-        self.entry_lock_script = script;
-        self
-    }
-
-    /// Set the entry unlock script
-    pub fn with_entry_unlock_script(&mut self, script: Script) -> &mut Self {
-        self.entry_unlock_script = script;
-        self
-    }
-
-    /// add additional ops
-    pub fn with_additional_ops(mut self, ops: &[OpParams]) -> Self {
-        self.additional_ops.append(&mut ops.to_vec());
+    /// Add a single additional operation
+    pub fn add_op(mut self, op: OpParams) -> Self {
+        self.additional_ops.push(op);
         self
     }
 }
 
-impl From<Config> for Vec<OpParams> {
-    fn from(config: Config) -> Self {
-        let mut ops = vec![
-            config.vlad_params.0,
-            config.vlad_params.1,
-            config.entrykey_params,
-            config.pubkey_params,
-        ];
+impl<T: ValidatedKeyParams> From<Config<T>> for Vec<OpParams> {
+    fn from(config: Config<T>) -> Self {
+        let mut ops = vec![config.vlad.0, config.vlad.1, config.entrykey, config.pubkey];
         ops.extend(config.additional_ops);
         ops
     }

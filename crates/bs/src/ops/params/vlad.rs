@@ -9,6 +9,7 @@ use provenance_log::{
 use std::num::NonZeroUsize;
 
 /// The First Entry Key parameters, associated with "/entrykey" key path.
+#[derive(Debug, Clone)]
 pub struct FirstEntryKeyParams;
 
 impl ValidatedKeyParams for FirstEntryKeyParams {
@@ -17,6 +18,10 @@ impl ValidatedKeyParams for FirstEntryKeyParams {
 }
 
 /// Vlad parameters, made up of a Key and Vlad Cid fields.
+///
+/// The Type T on VladParams<T> ensures we use the same type for the first entry key
+/// which is used to generate the first lock script in the VladParams. Defaults to
+/// [FirstEntryKeyParams].
 ///
 /// # Example
 ///
@@ -33,28 +38,31 @@ impl ValidatedKeyParams for FirstEntryKeyParams {
 ///    .build();
 /// ```
 #[derive(bon::Builder, Debug, Clone)]
-pub struct VladParams {
+pub struct VladParams<T: ValidatedKeyParams = FirstEntryKeyParams> {
     /// [Codec] used for the [multikey::Multikey] part of the [multicid::Vlad], defaults to [Codec::Ed25519Priv].
     #[builder(default = Codec::Ed25519Priv)]
     key: Codec,
     /// [Codec] used for the  [multihash::Multihash] of the [multicid::Vlad] [multicid::Cid], defaults to [Codec::Sha2256].
     #[builder(default = Codec::Sha2256)]
     hash: Codec,
+    /// Phantom data to remember the FirstEntryKey parameter type
+    #[builder(skip)]
+    _phantom: std::marker::PhantomData<T>,
 }
 
-impl Default for VladParams {
+impl Default for VladParams<FirstEntryKeyParams> {
     fn default() -> Self {
         VladParams::builder().build()
     }
 }
 
-impl VladParams {
+impl<T: ValidatedKeyParams> VladParams<T> {
     /// Key path for Vlad key
     pub const KEY_PATH: ValidatedKeyPath = const_assert_valid_key!("/vlad/key");
     /// CID key path for Vlad CID
     pub const CID_KEY: ValidatedKeyPath = const_assert_valid_key!("/vlad/"); // the trailing /cid is added in open_plog()
     /// The First Entry Key associated with Vlad, which is used to generate the first lock script.
-    pub const FIRST_ENTRY_KEY_PATH: ValidatedKeyPath = FirstEntryKeyParams::KEY_PATH;
+    pub const FIRST_ENTRY_KEY_PATH: ValidatedKeyPath = T::KEY_PATH;
 
     /// Generate the first lock script for [multicid::Vlad].in a type-safe manner.
     ///
@@ -74,22 +82,22 @@ impl VladParams {
     }
 }
 
-impl From<VladParams> for (OpParams, OpParams) {
-    fn from(params: VladParams) -> Self {
+impl<T: ValidatedKeyParams> From<VladParams<T>> for (OpParams, OpParams) {
+    fn from(params: VladParams<T>) -> Self {
         let key_params = OpParams::KeyGen {
             codec: params.key,
             threshold: NonZeroUsize::new(1).unwrap(), // vlad will never have threshold > 1
-            key: VladParams::KEY_PATH.into(),         // the key path is always the vlad key path
+            key: VladParams::<T>::KEY_PATH.into(),    // the key path is always the vlad key path
             limit: NonZeroUsize::new(1).unwrap(),     // vlad will never have limit > 1
             revoke: false,                            // vlad does not support revoking keys
         };
 
         let cid_params = OpParams::CidGen {
             hash: params.hash,
-            data: VladParams::first_lock_script().as_bytes().to_vec(), // data is always the first lock script
-            key: VladParams::CID_KEY.into(), // the cid key is always the vlad key
-            version: Codec::Cidv1,           // v1 is the latest version right now
-            target: Codec::Identity,         // vlad cid is always identity
+            data: VladParams::<T>::first_lock_script().as_bytes().to_vec(), // data is always the first lock script
+            key: VladParams::<T>::CID_KEY.into(), // the cid key is always the vlad key
+            version: Codec::Cidv1,                // v1 is the latest version right now
+            target: Codec::Identity,              // vlad cid is always identity
             inline: true, // vlad cid is always inline since we want to preserve the bytes in-log
         };
         (key_params, cid_params)
@@ -103,7 +111,7 @@ mod tests {
     // test builder
     #[test]
     fn test_vlad_params_builder() {
-        let vlad_params = VladParams::builder()
+        let vlad_params = VladParams::<FirstEntryKeyParams>::builder()
             .key(Codec::Ed25519Priv)
             .hash(Codec::Sha2256)
             .build();
@@ -121,7 +129,7 @@ mod tests {
             revoke,
         } = op_params.0
         {
-            assert_eq!(key, VladParams::KEY_PATH.into());
+            assert_eq!(key, VladParams::<FirstEntryKeyParams>::KEY_PATH.into());
             assert_eq!(codec, Codec::Ed25519Priv);
             assert_eq!(threshold, NonZeroUsize::new(1).unwrap());
             assert_eq!(limit, NonZeroUsize::new(1).unwrap());
@@ -139,12 +147,17 @@ mod tests {
             data,
         } = op_params.1
         {
-            assert_eq!(key, VladParams::CID_KEY.into());
+            assert_eq!(key, VladParams::<FirstEntryKeyParams>::CID_KEY.into());
             assert_eq!(version, Codec::Cidv1);
             assert_eq!(target, Codec::Identity);
             assert_eq!(hash, Codec::Sha2256);
             assert!(inline);
-            assert_eq!(data, VladParams::first_lock_script().as_bytes().to_vec());
+            assert_eq!(
+                data,
+                VladParams::<FirstEntryKeyParams>::first_lock_script()
+                    .as_bytes()
+                    .to_vec()
+            );
         } else {
             panic!("Expected CidGen OpParams");
         }
@@ -152,7 +165,7 @@ mod tests {
 
     #[test]
     fn test_vlad_params_default() {
-        let vlad_params = VladParams::default();
+        let vlad_params = VladParams::<FirstEntryKeyParams>::default();
 
         assert_eq!(vlad_params.key, Codec::Ed25519Priv);
         assert_eq!(vlad_params.hash, Codec::Sha2256);
@@ -167,7 +180,7 @@ mod tests {
             revoke,
         } = op_params.0
         {
-            assert_eq!(key, VladParams::KEY_PATH.into());
+            assert_eq!(key, VladParams::<FirstEntryKeyParams>::KEY_PATH.into());
             assert_eq!(codec, Codec::Ed25519Priv);
             assert_eq!(threshold, NonZeroUsize::new(1).unwrap());
             assert_eq!(limit, NonZeroUsize::new(1).unwrap());
@@ -185,12 +198,17 @@ mod tests {
             data,
         } = op_params.1
         {
-            assert_eq!(key, VladParams::CID_KEY.into());
+            assert_eq!(key, VladParams::<FirstEntryKeyParams>::CID_KEY.into());
             assert_eq!(version, Codec::Cidv1);
             assert_eq!(target, Codec::Identity);
             assert_eq!(hash, Codec::Sha2256);
             assert!(inline);
-            assert_eq!(data, VladParams::first_lock_script().as_bytes().to_vec());
+            assert_eq!(
+                data,
+                VladParams::<FirstEntryKeyParams>::first_lock_script()
+                    .as_bytes()
+                    .to_vec()
+            );
         } else {
             panic!("Expected CidGen OpParams");
         }

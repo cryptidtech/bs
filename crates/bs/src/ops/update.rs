@@ -305,16 +305,20 @@ mod tests {
         let pubkey_params = PubkeyParams::builder().codec(Codec::Ed25519Priv).build();
 
         let open_config = open::Config {
-            vlad_params: VladParams::default().into(),
-            pubkey_params: pubkey_params.clone().into(),
-            entrykey_params: FirstEntryKeyParams::builder()
+            vlad: VladParams::<FirstEntryKeyParams>::default().into(),
+            pubkey: pubkey_params.clone().into(),
+            entrykey: FirstEntryKeyParams::builder()
                 .codec(Codec::Ed25519Priv)
                 .build()
                 .into(),
-            first_lock_script: Script::Code(Key::default(), VladParams::first_lock_script()),
-            entry_lock_script: lock_script.clone(),
-            entry_unlock_script: Script::Code(Key::default(), unlock),
+            first_lock: Script::Code(
+                Key::default(),
+                VladParams::<FirstEntryKeyParams>::first_lock_script(),
+            ),
+            lock: lock_script.clone(),
+            unlock: Script::Code(Key::default(), unlock),
             additional_ops: vec![],
+            _phantom: std::marker::PhantomData,
         };
 
         let key_manager = InMemoryKeyManager::<crate::Error>::default();
@@ -337,7 +341,7 @@ mod tests {
         // - add an op
         let update_cfg = Config::new(unlock_script.clone(), PubkeyParams::KEY_PATH.into())
             .with_ops(&[OpParams::Delete {
-                key: VladParams::FIRST_ENTRY_KEY_PATH.into(),
+                key: VladParams::<FirstEntryKeyParams>::FIRST_ENTRY_KEY_PATH.into(),
             }])
             // Entry lock scripts define conditions which must be met by the next entry in the plog for it to be valid.
             .add_lock_script(Key::try_from("/delegated/").unwrap(), lock_script)
@@ -369,7 +373,7 @@ mod tests {
         }
 
         let (_count, _entry, kvp) = last.ok_or("No last entry").unwrap();
-        let op = kvp.get(&VladParams::FIRST_ENTRY_KEY_PATH);
+        let op = kvp.get(&VladParams::<FirstEntryKeyParams>::FIRST_ENTRY_KEY_PATH);
 
         assert!(op.is_none());
     }

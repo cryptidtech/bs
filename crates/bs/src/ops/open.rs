@@ -53,7 +53,7 @@ pub fn open_plog<E: BsCompatibleError>(
         })?;
 
     // 1. Extract VLAD parameters and prepare signing
-    let (vlad_key_params, vlad_cid_params) = &config.vlad_params;
+    let (vlad_key_params, vlad_cid_params) = &config.vlad;
     let (codec, threshold, limit) = extract_key_params::<E>(vlad_key_params)?;
 
     // Use prepare_ephemeral_signing to get public key and signing function
@@ -83,7 +83,7 @@ pub fn open_plog<E: BsCompatibleError>(
         })?;
 
     // 2. Extract entry key parameters and prepare signing
-    let entrykey_params = &config.entrykey_params;
+    let entrykey_params = &config.entrykey;
     let (codec, threshold, limit) = extract_key_params::<E>(entrykey_params)?;
 
     // Get the public key and signing function
@@ -98,9 +98,9 @@ pub fn open_plog<E: BsCompatibleError>(
     }
 
     // 4. Continue with other preparations
-    let _ = load_key::<E>(&mut op_params, &config.pubkey_params, key_manager)?;
-    let lock_script = config.entry_lock_script.clone();
-    let unlock_script = config.entry_unlock_script.clone();
+    let _ = load_key::<E>(&mut op_params, &config.pubkey, key_manager)?;
+    let lock_script = config.lock.clone();
+    let unlock_script = config.unlock.clone();
 
     // 5. Create the builder and add operations
     let mut builder = entry::Builder::new();
@@ -160,7 +160,7 @@ pub fn open_plog<E: BsCompatibleError>(
     // 10. Construct the log
     let log = provenance_log::log::Builder::new()
         .with_vlad(&vlad)
-        .with_first_lock(&config.first_lock_script)
+        .with_first_lock(&config.first_lock)
         .append_entry(&entry)
         .try_build()?;
 
@@ -278,7 +278,7 @@ where
 mod tests {
     use super::*;
     use crate::params::{
-        anykey::{PubkeyParams, RecoveryKeyParams},
+        anykey::PubkeyParams,
         vlad::{FirstEntryKeyParams, VladParams},
     };
 
@@ -303,8 +303,6 @@ mod tests {
     #[test]
     fn test_create_using_defaults() {
         // init_logger();
-
-        // Recovery Key: TODO
 
         let pubkey_params = PubkeyParams::builder().codec(Codec::Ed25519Priv).build();
 
@@ -363,25 +361,32 @@ mod tests {
               "#
         );
 
-        let config = Config {
-            vlad_params: VladParams::builder().build().into(),
-            pubkey_params: pubkey_params.into(),
-            entrykey_params: FirstEntryKeyParams::builder()
-                .codec(Codec::Ed25519Priv)
-                .build()
-                .into(),
-            first_lock_script: Script::Code(Key::default(), VladParams::first_lock_script()),
-            entry_lock_script: Script::Code(Key::default(), lock),
-            entry_unlock_script: Script::Code(Key::default(), unlock),
-            additional_ops: vec![],
-        };
+        // The Type on VladParams ensures we use the same type for the first entry key
+        // which is used to generate the first lock script in the VladParams.
+        let vlad_params = VladParams::<FirstEntryKeyParams>::default();
+
+        let entry_key_params = FirstEntryKeyParams::builder()
+            .codec(Codec::Ed25519Priv)
+            .build();
+
+        let config = Config::builder() // Uses default type parameter FirstEntryKeyParams
+            .vlad(vlad_params.into())
+            .pubkey(pubkey_params.into())
+            .entrykey(entry_key_params.into())
+            .first_lock(Script::Code(
+                Key::default(),
+                VladParams::<FirstEntryKeyParams>::first_lock_script(),
+            ))
+            .lock(Script::Code(Key::default(), lock))
+            .unlock(Script::Code(Key::default(), unlock))
+            .build();
 
         let key_manager = InMemoryKeyManager::<crate::Error>::default();
 
         let plog = open_plog(&config, &key_manager, &key_manager).expect("Failed to open plog");
 
         // log.first_lock should match
-        assert_eq!(plog.first_lock, config.first_lock_script);
+        assert_eq!(plog.first_lock, config.first_lock);
 
         // 1. Get vlad_key from plog first entry
         let verify_iter = &mut plog.verify();
@@ -400,7 +405,9 @@ mod tests {
 
         tracing::debug!("kvp: {:#?}", kvp);
 
-        let vlad_key_value = kvp.get(&VladParams::KEY_PATH).unwrap();
+        let vlad_key_value = kvp
+            .get(&VladParams::<FirstEntryKeyParams>::KEY_PATH)
+            .unwrap();
         let vlad_key: Multikey = try_extract(&vlad_key_value).unwrap();
 
         assert!(plog.vlad.verify(&vlad_key).is_ok());

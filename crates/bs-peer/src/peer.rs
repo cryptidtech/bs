@@ -151,22 +151,23 @@ where
         }
 
         let config = bs::open::Config {
-            vlad_params: VladParams::default().into(),
-            pubkey_params: PubkeyParams::builder()
+            vlad: VladParams::<FirstEntryKeyParams>::default().into(),
+            pubkey: PubkeyParams::builder()
                 .codec(Codec::Ed25519Priv)
                 .build()
                 .into(),
-            entrykey_params: FirstEntryKeyParams::builder()
+            entrykey: FirstEntryKeyParams::builder()
                 .codec(Codec::Ed25519Priv)
                 .build()
                 .into(),
-            first_lock_script: provenance_log::Script::Code(
+            first_lock: provenance_log::Script::Code(
                 Key::default(),
-                VladParams::first_lock_script(),
+                VladParams::<FirstEntryKeyParams>::first_lock_script(),
             ),
-            entry_lock_script: Script::Code(Key::default(), lock.as_ref().into()),
-            entry_unlock_script: Script::Code(Key::default(), unlock.as_ref().into()),
+            lock: Script::Code(Key::default(), lock.as_ref().into()),
+            unlock: Script::Code(Key::default(), unlock.as_ref().into()),
             additional_ops: vec![],
+            _phantom: std::marker::PhantomData::<FirstEntryKeyParams>,
         };
 
         self.create_with_config(config).await
@@ -406,21 +407,21 @@ mod tests {
         // We're stating the PubkeyParams here, yet
         // the actual key is in the wallet. Would be better if one came from the other, yeah?
         let config = bs::open::Config {
-            vlad_params: VladParams::default().into(),
-            pubkey_params: PubkeyParams::builder()
+            vlad: VladParams::<FirstEntryKeyParams>::default().into(),
+            pubkey: PubkeyParams::builder()
                 .codec(Codec::Ed25519Priv)
                 .build()
                 .into(),
-            entrykey_params: FirstEntryKeyParams::builder()
+            entrykey: FirstEntryKeyParams::builder()
                 .codec(Codec::Ed25519Priv)
                 .build()
                 .into(),
-            first_lock_script: provenance_log::Script::Code(
+            first_lock: provenance_log::Script::Code(
                 Key::default(),
-                VladParams::first_lock_script(),
+                VladParams::<FirstEntryKeyParams>::first_lock_script(),
             ),
-            entry_lock_script: Script::Code(Key::default(), fixture.lock_script.clone()),
-            entry_unlock_script: Script::Code(Key::default(), fixture.unlock_script.clone()),
+            lock: Script::Code(Key::default(), fixture.lock_script.clone()),
+            unlock: Script::Code(Key::default(), fixture.unlock_script.clone()),
             additional_ops: vec![
                 // Add a CidGen entry for testing
                 OpParams::CidGen {
@@ -432,6 +433,7 @@ mod tests {
                     data: test_data.clone(),
                 },
             ],
+            _phantom: std::marker::PhantomData::<FirstEntryKeyParams>,
         };
 
         // Create peer with this config
