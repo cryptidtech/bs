@@ -159,18 +159,21 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
                 std::fs::read_to_string(&unlock_script_path).map_err(|_| PlogError::NoKeyPath)?,
             );
 
-            let mut cfg = open::Config::default()
-                .with_pubkey_params(parse_key_params(&pub_key_params, Some("/pubkey"))?)
-                .with_additional_ops(&build_key_params(&key_ops)?)
-                .with_additional_ops(&build_string_params(&string_ops)?)
-                .with_additional_ops(&build_file_params(&file_ops)?)
-                .with_vlad_params(vlad_key, vlad_cid)
-                .with_entrykey_params(parse_key_params(&entry_key_codec, Some("/entrykey"))?);
-            cfg.with_entry_lock_script(lock_script)
-                .with_entry_unlock_script(unlock_script);
+            let cfg = open::Config::builder()
+                .pubkey(parse_key_params(&pub_key_params, Some("/pubkey"))?)
+                .vlad((vlad_key, vlad_cid))
+                .entrykey(parse_key_params(&entry_key_codec, Some("/entrykey"))?)
+                .unlock(unlock_script)
+                .lock(lock_script.clone())
+                .first_lock(lock_script)
+                .build();
+
+            cfg.clone()
+                .add_ops(build_key_params(&key_ops)?)
+                .add_ops(build_string_params(&string_ops)?)
+                .add_ops(build_file_params(&file_ops)?);
 
             let key_manager = KeyManager::default();
-            let cfg = cfg.to_owned();
 
             // open the p.log
             let plog = open::open_plog(&cfg, &key_manager, &key_manager)?;

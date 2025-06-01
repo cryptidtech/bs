@@ -32,7 +32,7 @@ impl ValidatedKeyParams for FirstEntryKeyParams {
 /// use bs::ops::params::vlad::VladParams;
 ///
 /// // Create parameters with explicit settings
-/// let vlad_params = VladParams::builder()
+/// let vlad_params: VladParams = VladParams::builder()
 ///    .key(Codec::Ed25519Priv)
 ///    .hash(Codec::Sha2256)
 ///    .build();
