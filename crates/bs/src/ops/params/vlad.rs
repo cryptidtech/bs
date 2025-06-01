@@ -3,7 +3,10 @@ use std::{num::NonZeroUsize, ops::Deref};
 
 use crate::ops::update::OpParams;
 use multicodec::Codec;
-use provenance_log::Key;
+use provenance_log::{
+    const_assert_valid_key,
+    key::key_paths::{ValidatedKeyParams, ValidatedKeyPath},
+};
 
 /// NewType wrapper around KeyCodec
 #[derive(Debug, Clone)]
@@ -71,31 +74,33 @@ impl Default for VladParams {
     }
 }
 
+impl ValidatedKeyParams for VladParams {
+    const KEY_PATH: ValidatedKeyPath = const_assert_valid_key!("/vlad/key");
+}
+
 impl VladParams {
-    /// Key path for Vlad operations.
-    pub const KEY_PATH: &str = "/vlad/key";
     /// CID key path for Vlad CID
-    pub const CID_KEY: &str = "/vlad/"; // the trailing /cid is added in open_plog()
+    pub const CID_KEY: ValidatedKeyPath = const_assert_valid_key!("/vlad/"); // the trailing /cid is added in open_plog()
     /// The first lock script
     pub const FIRST_LOCK_SCRIPT: &str = r#"check_signature("/entrykey", "/entry/")"#;
 
     /// Makes a VladConfig with default key and cid paths.
     pub fn new(key_codec: KeyCodec, hash_codec: HashCodec) -> Self {
         let key = VladKey(OpParams::KeyGen {
-            key: Key::try_from(Self::KEY_PATH).unwrap(),
             codec: *key_codec,
-            threshold: NonZeroUsize::new(1).unwrap(),
-            limit: NonZeroUsize::new(1).unwrap(),
-            revoke: false,
+            threshold: NonZeroUsize::new(1).unwrap(), // vlad will never have threshold > 1
+            key: Self::KEY_PATH.into(),               // the key path is always the vlad key path
+            limit: NonZeroUsize::new(1).unwrap(),     // vlad will never have limit > 1
+            revoke: false,                            // vlad does not support revoking keys
         });
 
         let cid = VladCid(OpParams::CidGen {
-            key: Key::try_from(Self::CID_KEY).unwrap(),
-            version: Codec::Cidv1,
-            target: Codec::Identity,
             hash: *hash_codec,
-            inline: true,
-            data: Self::FIRST_LOCK_SCRIPT.as_bytes().to_vec(),
+            data: Self::FIRST_LOCK_SCRIPT.as_bytes().to_vec(), // data is always the first lock script
+            key: Self::CID_KEY.into(),                         // the cid key is always the vlad key
+            version: Codec::Cidv1,                             // v1 is the latest version right now
+            target: Codec::Identity,                           // vlad cid is always identity
+            inline: true, // vlad cid is always inline since we want to preserve the bytes in-log
         });
 
         VladParams { key, cid }
@@ -121,7 +126,7 @@ mod tests {
         assert_eq!(
             vlad_config.key.0,
             OpParams::KeyGen {
-                key: Key::try_from(VladParams::KEY_PATH).unwrap(),
+                key: VladParams::KEY_PATH.into(),
                 codec: Codec::Identity,
                 threshold: NonZeroUsize::new(1).unwrap(),
                 limit: NonZeroUsize::new(1).unwrap(),
@@ -131,7 +136,7 @@ mod tests {
         assert_eq!(
             vlad_config.cid.0,
             OpParams::CidGen {
-                key: Key::try_from(VladParams::CID_KEY).unwrap(),
+                key: VladParams::CID_KEY.into(),
                 version: Codec::Cidv1,
                 target: Codec::Identity,
                 hash: Codec::Sha2256,
