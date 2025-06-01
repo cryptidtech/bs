@@ -49,7 +49,7 @@ where
     // go through the additional ops and generate CIDs and keys and adding the resulting op params
     // to the vec of op params
     config
-        .entry_ops
+        .additional_ops()
         .iter()
         .try_for_each(|params| -> Result<(), E> {
             match params {
@@ -70,10 +70,10 @@ where
     let (_, last_entry, _kvp) = plog.verify().last().ok_or(UpdateError::NoLastEntry)??;
 
     // 2. load the entry unlock script
-    let unlock_script = &config.entry_unlock_script;
+    let unlock_script = &config.unlock();
 
     // get the entry signing key
-    let entry_mk = &config.entry_signing_key;
+    let entry_mk = &config.entry_signing_key();
 
     // 3. Construct the next entry, starting from the last entry
     let mut builder = entry::Builder::from(&last_entry);
@@ -326,14 +326,14 @@ mod tests {
 
         // CHANGED: Now using the builder pattern
         let update_cfg = Config::builder()
-            .entry_unlock_script(unlock_script.clone())
+            .unlock(unlock_script.clone())
             .entry_signing_key(PubkeyParams::KEY_PATH.into())
-            .build()
-            .add_op(OpParams::Delete {
+            .additional_ops(vec![OpParams::Delete {
                 key: VladParams::<FirstEntryKeyParams>::FIRST_ENTRY_KEY_PATH.into(),
-            })
+            }])
             // Entry lock scripts define conditions which must be met by the next entry in the plog for it to be valid.
-            .add_lock_script(Key::try_from("/delegated/").unwrap(), lock_script);
+            .add_entry_lock_scripts(vec![(Key::try_from("/delegated/").unwrap(), lock_script)])
+            .build();
 
         let prev = plog.head.clone();
 

@@ -288,3 +288,121 @@ pub async fn run_store_entries_test() {
         assert!(entry_data.is_some(), "Entry data should be retrievable");
     }
 }
+
+pub async fn run_update_test() {
+    tracing::info!("Starting update_test");
+
+    // Setup peer with initial configuration
+    let mut fixture = setup_initialized_peer().await;
+
+    // Create some new data to update with
+    let new_data = b"updated data".to_vec();
+    let hash = Codec::Sha2256;
+    let target = Codec::Raw;
+    let version = Codec::Cidv1;
+
+    // Create an update configuration
+    let update_config = bs::update::Config::builder()
+        .entry_signing_key(PubkeyParams::KEY_PATH.into())
+        .unlock(Script::Code(Key::default(), fixture.unlock_script.clone()))
+        .additional_ops(vec![OpParams::CidGen {
+            key: Key::try_from("/test/updated/").unwrap(),
+            version,
+            target,
+            hash,
+            inline: true,
+            data: new_data.clone(),
+        }])
+        .build();
+
+    // Apply the update
+    let res = fixture.peer.update(update_config).await;
+    assert!(res.is_ok(), "Expected successful update");
+
+    // Verify the update was stored
+    let stored = fixture
+        .peer
+        .verify_cid_stored(version, target, hash, &new_data)
+        .await
+        .unwrap();
+
+    assert!(stored, "Updated CID should be stored in blockstore");
+
+    // Verify plog is still valid after update
+    let plog = fixture.peer.plog();
+    let verify_iter = &mut plog.as_ref().unwrap().verify();
+    for result in verify_iter {
+        if let Err(e) = result {
+            panic!("Plog verification failed after update: {}", e);
+        }
+    }
+}
+
+pub async fn run_load_test() {
+    tracing::info!("Starting load_test");
+
+    // Setup an initialized peer to get a valid plog
+    let fixture = setup_initialized_peer().await;
+
+    // Get the plog from the initialized peer
+    let original_plog = fixture.peer.plog().unwrap().clone();
+
+    // Create a new peer with empty state
+    let mut new_fixture = setup_test_peer().await;
+
+    // Ensure the new peer has no plog yet
+    assert!(
+        new_fixture.peer.plog().is_none(),
+        "New peer should have no plog initially"
+    );
+
+    // Load the plog into the new peer
+    let res = new_fixture.peer.load(original_plog.clone()).await;
+    assert!(res.is_ok(), "Expected successful loading of plog");
+
+    // Verify the plog was loaded
+    assert!(
+        new_fixture.peer.plog().is_some(),
+        "Plog should now be loaded"
+    );
+
+    // Verify the loaded plog has the correct data
+    let loaded_plog = new_fixture.peer.plog().unwrap();
+    assert_eq!(
+        loaded_plog.vlad.cid(),
+        original_plog.vlad.cid(),
+        "Loaded plog should have same first lock CID"
+    );
+    assert_eq!(
+        loaded_plog.entries.len(),
+        original_plog.entries.len(),
+        "Loaded plog should have same number of entries"
+    );
+
+    // Verify the loaded plog can be verified
+    let verify_iter = &mut loaded_plog.verify();
+    for result in verify_iter {
+        if let Err(e) = result {
+            panic!("Loaded plog verification failed: {}", e);
+        }
+    }
+
+    // Verify that entries were stored in the blockstore during load
+    // Check first lock CID
+    let first_lock_cid = loaded_plog.vlad.cid();
+    let first_lock_cid_bytes: Vec<u8> = first_lock_cid.clone().into();
+    let cid = Cid::try_from(first_lock_cid_bytes).unwrap();
+    let has_first_lock = new_fixture.peer.blockstore().has(&cid).await.unwrap();
+    assert!(
+        has_first_lock,
+        "First lock should be in blockstore after load"
+    );
+
+    // Check entries
+    for (multi_cid, _) in loaded_plog.entries.iter() {
+        let multi_cid_bytes: Vec<u8> = multi_cid.clone().into();
+        let entry_cid = Cid::try_from(multi_cid_bytes).unwrap();
+        let has_entry = new_fixture.peer.blockstore().has(&entry_cid).await.unwrap();
+        assert!(has_entry, "Entry should be in blockstore after load");
+    }
+}

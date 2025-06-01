@@ -20,3 +20,13 @@ async fn in_memory_blockstore_test() {
 async fn test_store_entries() {
     test_utils::run_store_entries_test().await;
 }
+
+#[wasm_bindgen_test]
+async fn run_update_test() {
+    test_utils::run_update_test().await;
+}
+
+#[wasm_bindgen_test]
+async fn run_load_test() {
+    test_utils::run_load_test().await;
+}

@@ -276,19 +276,31 @@ mod tests {
 
     #[tokio::test]
     async fn basic_test() {
-        init_logger();
+        // init_logger();
         test_utils::run_basic_test().await;
     }
 
     #[tokio::test]
     async fn in_memory_blockstore_test() {
-        init_logger();
+        // init_logger();
         test_utils::run_in_memory_blockstore_test().await;
     }
 
     #[tokio::test]
     async fn test_store_entries() {
-        init_logger();
+        // init_logger();
         test_utils::run_store_entries_test().await;
+    }
+
+    #[tokio::test]
+    async fn run_update_test() {
+        // init_logger();
+        test_utils::run_update_test().await;
+    }
+
+    #[tokio::test]
+    async fn run_load_test() {
+        // init_logger();
+        test_utils::run_load_test().await;
     }
 }
