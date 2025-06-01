@@ -97,6 +97,7 @@ mod tests {
     use super::*;
     use crate::ops::update::OpParams;
     use multicodec::Codec;
+    use provenance_log::Key;
 
     #[test]
     fn test_pubkey_params() {
