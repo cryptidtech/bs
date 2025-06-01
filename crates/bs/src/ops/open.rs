@@ -302,6 +302,15 @@ mod tests {
     fn test_create_using_defaults() {
         // init_logger();
 
+        let pubkey_params = PubkeyParams::builder().codec(Codec::Ed25519Priv).build();
+
+        let pubkey_key_path = pubkey_params.key_path().as_str();
+        assert_eq!(pubkey_key_path, "/pubkey");
+
+        // or we could use the asoc const from which it is derived
+        let pubkey_ket_path = &*PubkeyParams::KEY_PATH;
+        assert_eq!(pubkey_ket_path, "/pubkey");
+
         let entry_key = Field::ENTRY;
         assert_eq!(entry_key, "/entry/");
 
@@ -318,6 +327,7 @@ mod tests {
           "#
         );
 
+        // If we have just Fields, we can use format_with_fields! macro
         let unlock = format_with_fields!(
             r#"
                // push the serialized Entry as the message
@@ -330,13 +340,14 @@ mod tests {
 
         assert_eq!(unlock_old_school, unlock);
 
-        let lock = format_with_fields!(
+        // for now, if we have a mix of Fields and Strings, we can use format! macro
+        let lock = format!(
             r#"
-                  // then check a possible threshold sig...
-                  check_signature("/recoverykey", "{Field::ENTRY}") ||
+                  // check a possible threshold sig...
+                  check_signature("/recoverykey", "{entry_key}") ||
 
                   // then check a possible pubkey sig...
-                  check_signature("/pubkey", "{Field::ENTRY}") ||
+                  check_signature("{pubkey_key_path}", "{entry_key}") ||
 
                   // then the pre-image proof...
                   check_preimage("/hash")
@@ -344,11 +355,8 @@ mod tests {
         );
 
         let config = Config {
-            vlad_params: VladParams::default().into(),
-            pubkey_params: PubkeyParams::builder()
-                .codec(Codec::Ed25519Priv)
-                .build()
-                .into(),
+            vlad_params: VladParams::builder().build().into(),
+            pubkey_params: pubkey_params.into(),
             entrykey_params: EntryKeyParams::builder()
                 .codec(Codec::Ed25519Priv)
                 .build()
@@ -383,7 +391,7 @@ mod tests {
 
         tracing::debug!("kvp: {:#?}", kvp);
 
-        let vlad_key_value = kvp.get(VladParams::KEY_PATH).unwrap();
+        let vlad_key_value = kvp.get(&VladParams::KEY_PATH).unwrap();
         let vlad_key: Multikey = try_extract(&vlad_key_value).unwrap();
 
         assert!(plog.vlad.verify(&vlad_key).is_ok());
