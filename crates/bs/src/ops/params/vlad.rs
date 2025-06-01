@@ -9,7 +9,7 @@ use provenance_log::{
 use std::num::NonZeroUsize;
 
 /// The First Entry Key parameters, associated with "/entrykey" key path.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FirstEntryKeyParams;
 
 impl ValidatedKeyParams for FirstEntryKeyParams {
@@ -37,7 +37,7 @@ impl ValidatedKeyParams for FirstEntryKeyParams {
 ///    .hash(Codec::Sha2256)
 ///    .build();
 /// ```
-#[derive(bon::Builder, Debug, Clone)]
+#[derive(bon::Builder, Debug, Clone, PartialEq, Eq)]
 pub struct VladParams<T: ValidatedKeyParams = FirstEntryKeyParams> {
     /// [Codec] used for the [multikey::Multikey] part of the [multicid::Vlad], defaults to [Codec::Ed25519Priv].
     #[builder(default = Codec::Ed25519Priv)]

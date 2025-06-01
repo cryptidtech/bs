@@ -242,7 +242,6 @@ mod tests {
     use bs_wallets::memory::InMemoryKeyManager;
     use multicodec::Codec;
     use provenance_log::entry::Field;
-    use provenance_log::format_with_fields;
     use provenance_log::key::key_paths::ValidatedKeyParams;
     use provenance_log::Script;
     use provenance_log::{Key, Pairs};
@@ -293,22 +292,18 @@ mod tests {
 
         let lock_script = Script::Code(Key::default(), lock);
 
-        let open_config = open::Config {
-            vlad: VladParams::<FirstEntryKeyParams>::default().into(),
-            pubkey: pubkey_params.clone().into(),
-            entrykey: FirstEntryKeyParams::builder()
-                .codec(Codec::Ed25519Priv)
-                .build()
-                .into(),
-            first_lock: Script::Code(
-                Key::default(),
-                VladParams::<FirstEntryKeyParams>::first_lock_script(),
-            ),
-            lock: lock_script.clone(),
-            unlock: Script::Code(Key::default(), unlock),
-            additional_ops: vec![],
-            _phantom: std::marker::PhantomData,
-        };
+        let open_config = open::Config::builder()
+            .vlad(VladParams::<FirstEntryKeyParams>::default())
+            .pubkey(pubkey_params.clone().into())
+            .entrykey(
+                FirstEntryKeyParams::builder()
+                    .codec(Codec::Ed25519Priv)
+                    .build()
+                    .into(),
+            )
+            .lock(lock_script.clone())
+            .unlock(unlock_script.clone())
+            .build();
 
         let key_manager = InMemoryKeyManager::<crate::Error>::default();
         let mut plog =

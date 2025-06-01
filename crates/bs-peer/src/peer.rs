@@ -150,25 +150,24 @@ where
             return Err(Error::PlogAlreadyExists);
         }
 
-        let config = bs::open::Config {
-            vlad: VladParams::<FirstEntryKeyParams>::default().into(),
-            pubkey: PubkeyParams::builder()
-                .codec(Codec::Ed25519Priv)
-                .build()
-                .into(),
-            entrykey: FirstEntryKeyParams::builder()
-                .codec(Codec::Ed25519Priv)
-                .build()
-                .into(),
-            first_lock: provenance_log::Script::Code(
-                Key::default(),
-                VladParams::<FirstEntryKeyParams>::first_lock_script(),
-            ),
-            lock: Script::Code(Key::default(), lock.as_ref().into()),
-            unlock: Script::Code(Key::default(), unlock.as_ref().into()),
-            additional_ops: vec![],
-            _phantom: std::marker::PhantomData::<FirstEntryKeyParams>,
-        };
+        let config = bs::open::Config::builder()
+            .vlad(VladParams::<FirstEntryKeyParams>::default())
+            .pubkey(
+                PubkeyParams::builder()
+                    .codec(Codec::Ed25519Priv)
+                    .build()
+                    .into(),
+            )
+            .entrykey(
+                FirstEntryKeyParams::builder()
+                    .codec(Codec::Ed25519Priv)
+                    .build()
+                    .into(),
+            )
+            .lock(Script::Code(Key::default(), lock.as_ref().into()))
+            .unlock(Script::Code(Key::default(), unlock.as_ref().into()))
+            .additional_ops(vec![])
+            .build();
 
         self.create_with_config(config).await
     }
@@ -406,35 +405,59 @@ mod tests {
         // This is a bit awkward:
         // We're stating the PubkeyParams here, yet
         // the actual key is in the wallet. Would be better if one came from the other, yeah?
-        let config = bs::open::Config {
-            vlad: VladParams::<FirstEntryKeyParams>::default().into(),
-            pubkey: PubkeyParams::builder()
-                .codec(Codec::Ed25519Priv)
-                .build()
-                .into(),
-            entrykey: FirstEntryKeyParams::builder()
-                .codec(Codec::Ed25519Priv)
-                .build()
-                .into(),
-            first_lock: provenance_log::Script::Code(
-                Key::default(),
-                VladParams::<FirstEntryKeyParams>::first_lock_script(),
-            ),
-            lock: Script::Code(Key::default(), fixture.lock_script.clone()),
-            unlock: Script::Code(Key::default(), fixture.unlock_script.clone()),
-            additional_ops: vec![
-                // Add a CidGen entry for testing
-                OpParams::CidGen {
-                    key: Key::try_from("/test/image/").unwrap(),
-                    version,
-                    target,
-                    hash,
-                    inline: true,
-                    data: test_data.clone(),
-                },
-            ],
-            _phantom: std::marker::PhantomData::<FirstEntryKeyParams>,
-        };
+        // let config = bs::open::Config {
+        //     vlad: VladParams::<FirstEntryKeyParams>::default().into(),
+        //     pubkey: PubkeyParams::builder()
+        //         .codec(Codec::Ed25519Priv)
+        //         .build()
+        //         .into(),
+        //     entrykey: FirstEntryKeyParams::builder()
+        //         .codec(Codec::Ed25519Priv)
+        //         .build()
+        //         .into(),
+        //     first_lock: Script::Code(
+        //         Key::default(),
+        //         VladParams::<FirstEntryKeyParams>::first_lock_script(),
+        //     ),
+        //     lock: Script::Code(Key::default(), fixture.lock_script.clone()),
+        //     unlock: Script::Code(Key::default(), fixture.unlock_script.clone()),
+        //     additional_ops: vec![
+        //         // Add a CidGen entry for testing
+        //         OpParams::CidGen {
+        //             key: Key::try_from("/test/image/").unwrap(),
+        //             version,
+        //             target,
+        //             hash,
+        //             inline: true,
+        //             data: test_data.clone(),
+        //         },
+        //     ],
+        // };
+        let config = bs::open::Config::builder()
+            .vlad(VladParams::<FirstEntryKeyParams>::default())
+            .pubkey(
+                PubkeyParams::builder()
+                    .codec(Codec::Ed25519Priv)
+                    .build()
+                    .into(),
+            )
+            .entrykey(
+                FirstEntryKeyParams::builder()
+                    .codec(Codec::Ed25519Priv)
+                    .build()
+                    .into(),
+            )
+            .lock(Script::Code(Key::default(), fixture.lock_script.clone()))
+            .unlock(Script::Code(Key::default(), fixture.unlock_script.clone()))
+            .additional_ops(vec![OpParams::CidGen {
+                key: Key::try_from("/test/image/").unwrap(),
+                version,
+                target,
+                hash,
+                inline: true,
+                data: test_data.clone(),
+            }])
+            .build();
 
         // Create peer with this config
         let res = fixture.peer.create_with_config(config).await;

@@ -37,7 +37,7 @@ pub fn open_plog<E: BsCompatibleError>(
 
     // Process initial operations
     config
-        .additional_ops
+        .additional_ops()
         .iter()
         .try_for_each(|params| -> Result<(), E> {
             match params {
@@ -53,13 +53,13 @@ pub fn open_plog<E: BsCompatibleError>(
         })?;
 
     // 1. Extract VLAD parameters and prepare signing
-    let (vlad_key_params, vlad_cid_params) = &config.vlad;
-    let (codec, threshold, limit) = extract_key_params::<E>(vlad_key_params)?;
+    let (vlad_key_params, vlad_cid_params): (OpParams, OpParams) = config.vlad().clone().into();
+    let (codec, threshold, limit) = extract_key_params::<E>(&vlad_key_params)?;
 
     // Use prepare_ephemeral_signing to get public key and signing function
     let (vlad_pubkey, sign_vlad) = signer.prepare_ephemeral_signing(&codec, threshold, limit)?;
 
-    let cid = load_cid::<E>(&mut op_params, vlad_cid_params)?;
+    let cid = load_cid::<E>(&mut op_params, &vlad_cid_params)?;
 
     // Add the VLAD public key operation to op_params
     if let OpParams::KeyGen { key, .. } = vlad_key_params {
@@ -83,7 +83,7 @@ pub fn open_plog<E: BsCompatibleError>(
         })?;
 
     // 2. Extract entry key parameters and prepare signing
-    let entrykey_params = &config.entrykey;
+    let entrykey_params = &config.entrykey();
     let (codec, threshold, limit) = extract_key_params::<E>(entrykey_params)?;
 
     // Get the public key and signing function
@@ -98,9 +98,9 @@ pub fn open_plog<E: BsCompatibleError>(
     }
 
     // 4. Continue with other preparations
-    let _ = load_key::<E>(&mut op_params, &config.pubkey, key_manager)?;
-    let lock_script = config.lock.clone();
-    let unlock_script = config.unlock.clone();
+    let _ = load_key::<E>(&mut op_params, config.pubkey(), key_manager)?;
+    let lock_script = config.lock_script().clone();
+    let unlock_script = config.unlock().clone();
 
     // 5. Create the builder and add operations
     let mut builder = entry::Builder::new();
@@ -160,7 +160,7 @@ pub fn open_plog<E: BsCompatibleError>(
     // 10. Construct the log
     let log = provenance_log::log::Builder::new()
         .with_vlad(&vlad)
-        .with_first_lock(&config.first_lock)
+        .with_first_lock(config.first_lock())
         .append_entry(&entry)
         .try_build()?;
 
@@ -370,13 +370,9 @@ mod tests {
             .build();
 
         let config = Config::builder() // Uses default type parameter FirstEntryKeyParams
-            .vlad(vlad_params.into())
+            .vlad(vlad_params)
             .pubkey(pubkey_params.into())
             .entrykey(entry_key_params.into())
-            .first_lock(Script::Code(
-                Key::default(),
-                VladParams::<FirstEntryKeyParams>::first_lock_script(),
-            ))
             .lock(Script::Code(Key::default(), lock))
             .unlock(Script::Code(Key::default(), unlock))
             .build();
@@ -386,7 +382,7 @@ mod tests {
         let plog = open_plog(&config, &key_manager, &key_manager).expect("Failed to open plog");
 
         // log.first_lock should match
-        assert_eq!(plog.first_lock, config.first_lock);
+        assert_eq!(&plog.first_lock, config.first_lock());
 
         // 1. Get vlad_key from plog first entry
         let verify_iter = &mut plog.verify();

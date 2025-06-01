@@ -2,6 +2,7 @@
 
 /// Plog command
 pub mod command;
+use bs::params::vlad::VladParams;
 use bs_traits::sync::{SyncGetKey, SyncPrepareEphemeralSigning, SyncSigner};
 use bs_traits::{EphemeralKey, GetKey, Signer};
 pub use command::Command;
@@ -148,6 +149,22 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
         } => {
             let (vlad_key, vlad_cid) = parse_vlad_params(&vlad_params)?;
 
+            let OpParams::KeyGen {
+                codec: vlad_key_codec,
+                ..
+            } = vlad_key
+            else {
+                return Err(PlogError::InvalidFileParams.into());
+            };
+
+            let OpParams::CidGen {
+                hash: vlad_cid_hash,
+                ..
+            } = vlad_cid
+            else {
+                return Err(PlogError::InvalidFileParams.into());
+            };
+
             let lock_script = Script::Code(
                 Key::default(),
                 std::fs::read_to_string(&lock_script_path).map_err(|_| PlogError::NoKeyPath)?,
@@ -164,11 +181,15 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
 
             let cfg = open::Config::builder()
                 .pubkey(parse_key_params(&pub_key_params, Some("/pubkey"))?)
-                .vlad((vlad_key, vlad_cid))
+                .vlad(
+                    VladParams::builder()
+                        .key(vlad_key_codec)
+                        .hash(vlad_cid_hash)
+                        .build(),
+                )
                 .entrykey(parse_key_params(&entry_key_codec, Some("/entrykey"))?)
                 .unlock(unlock_script)
                 .lock(lock_script.clone())
-                .first_lock(lock_script)
                 .additional_ops(additional_ops) // Add all operations at once
                 .build();
 
