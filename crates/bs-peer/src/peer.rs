@@ -36,6 +36,11 @@ where
     KP: KeyManager<Error> + MultiSigner<Error> + CondSync,
     BS: BlockstoreTrait + CondSync,
 {
+    /// Returns the p[p::Log] of the peer, if it exists.
+    pub fn plog(&self) -> Option<&p::Log> {
+        self.plog.as_ref()
+    }
+
     /// Create a BsPeer with a custom blockstore implementation
     pub fn with_blockstore(key_provider: KP, blockstore: BS) -> Self {
         Self {
@@ -117,7 +122,8 @@ where
         Ok(())
     }
 
-    pub async fn create_with_config(&mut self, config: bs::open::Config) -> Result<(), Error> {
+    /// Generate a new Plog with the given configuration.
+    pub async fn generate_with_config(&mut self, config: bs::open::Config) -> Result<(), Error> {
         if self.plog.is_some() {
             return Err(Error::PlogAlreadyExists);
         }
@@ -141,7 +147,8 @@ where
         Ok(())
     }
 
-    pub async fn create(
+    /// Generate a new Plog with the given lock and unlock scripts.
+    pub async fn generate(
         &mut self,
         lock: impl AsRef<str>,
         unlock: impl AsRef<str>,
@@ -169,7 +176,7 @@ where
             .additional_ops(vec![])
             .build();
 
-        self.create_with_config(config).await
+        self.generate_with_config(config).await
     }
 
     /// Update the BsPeer's Plog with new data.
@@ -197,6 +204,29 @@ where
         // After successful update, store CIDs
         self.store_ops(config.into()).await?;
 
+        Ok(())
+    }
+
+    /// Load a Plog into ths BsPeer.
+    pub async fn load(&mut self, plog: p::Log) -> Result<(), Error> {
+        if self.plog.is_some() {
+            return Err(Error::PlogAlreadyExists);
+        }
+
+        // Verify the plog
+        {
+            let verify_iter = &mut plog.verify();
+            for result in verify_iter {
+                if let Err(e) = result {
+                    tracing::error!("Plog verification failed: {}", e);
+                    return Err(Error::PlogVerificationFailed(e));
+                }
+            }
+        }
+
+        // Store the plog
+        self.plog = Some(plog);
+        self.store_entries().await?;
         Ok(())
     }
 }
@@ -233,22 +263,9 @@ where
 #[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use blockstore::InMemoryBlockstore;
-    use bs_wallets::memory::InMemoryKeyManager;
-    use multicodec::Codec;
-    use multikey::mk;
-    use provenance_log::entry::Field;
+    use crate::test_utils;
     use tracing_subscriber::fmt;
 
-    // Common test fixtures
-    struct TestFixture {
-        peer: BsPeer<InMemoryKeyManager<Error>, InMemoryBlockstore<64>>,
-        lock_script: String,
-        unlock_script: String,
-    }
-
-    // Setup utilities
     #[allow(dead_code)]
     fn init_logger() {
         let subscriber = fmt().with_env_filter("bs_peer=trace").finish();
@@ -256,302 +273,22 @@ mod tests {
             tracing::warn!("failed to set subscriber: {}", e);
         }
     }
-    impl<KP, BS> BsPeer<KP, BS>
-    where
-        KP: KeyManager<Error> + MultiSigner<Error> + CondSync,
-        BS: BlockstoreTrait + CondSync,
-    {
-        /// Helper to create CID from the same parameters for testing
-        async fn verify_cid_stored(
-            &self,
-            version: Codec,
-            target: Codec,
-            hash: Codec,
-            data: &[u8],
-        ) -> Result<bool, Error> {
-            // Create CID
-            let multi_cid = cid::Builder::new(version)
-                .with_target_codec(target)
-                .with_hash(&mh::Builder::new_from_bytes(hash, data)?.try_build()?)
-                .try_build()?;
-
-            // Convert to cid::Cid
-            let multi_cid_bytes: Vec<u8> = multi_cid.into();
-            let cid = Cid::try_from(multi_cid_bytes)?;
-
-            // Check if stored in blockstore
-            let result = self.blockstore.has(&cid).await?;
-            Ok(result)
-        }
-    }
-    async fn setup_test_peer() -> TestFixture {
-        // Set up key manager
-        let key_manager = InMemoryKeyManager::<Error>::default();
-
-        // Create an in-memory blockstore
-        let blockstore = InMemoryBlockstore::<64>::new();
-
-        // Create peer with the in-memory blockstore
-        let peer = BsPeer::with_blockstore(key_manager, blockstore);
-
-        let entry_key = Field::ENTRY;
-        let proof_key = Field::PROOF;
-        let pubkey = PubkeyParams::KEY_PATH;
-
-        let unlock_script = format!(
-            r#"
-             // push the serialized Entry as the message
-             push("{entry_key}");
-
-             // push the proof data
-             push("{proof_key}");
-        "#
-        );
-
-        let lock_script = format!(
-            r#"
-                // then check a possible threshold sig...
-                check_signature("/recoverykey", "{entry_key}") ||
-
-                // then check a possible pubkey sig...
-                check_signature("{pubkey}", "{entry_key}") ||
-                
-                // then the pre-image proof...
-                check_preimage("/hash")
-            "#
-        );
-
-        TestFixture {
-            peer,
-            lock_script,
-            unlock_script,
-        }
-    }
-
-    async fn setup_initialized_peer() -> TestFixture {
-        let mut fixture = setup_test_peer().await;
-
-        // Initialize the peer
-        let res = fixture
-            .peer
-            .create(&fixture.lock_script, &fixture.unlock_script)
-            .await;
-        assert!(res.is_ok(), "Expected successful creation of peer");
-
-        fixture
-    }
 
     #[tokio::test]
     async fn basic_test() {
-        // init_logger();
-        tracing::info!("Starting basic_test");
-        tracing::debug!("Initializing key manager and peer");
-
-        // Include the seed and multikey code from original test
-        let seed: [u8; 32] = [42; 32];
-        let codec = Codec::Ed25519Priv;
-        let _mk = mk::Builder::new_from_seed(codec, &seed)
-            .unwrap()
-            .try_build()
-            .unwrap();
-
-        let mut fixture = setup_test_peer().await;
-
-        // Now we create the peer with valid scripts
-        let res = fixture
-            .peer
-            .create(&fixture.lock_script, &fixture.unlock_script)
-            .await;
-
-        // Check if the creation was successful
-        assert!(res.is_ok(), "Expected successful creation of peer");
-        tracing::info!("Peer created successfully");
-        // Check if the plog is initialized
-        assert!(
-            fixture.peer.plog.is_some(),
-            "Expected plog to be initialized"
-        );
-        tracing::info!("Plog initialized successfully");
-
-        // Check if the plog can be verified
-        let plog = fixture.peer.plog.as_ref().unwrap();
-        let verify_iter = &mut plog.verify();
-        for result in verify_iter {
-            if let Err(e) = result {
-                tracing::error!("Plog verification failed: {}", e);
-                panic!("Plog verification failed: {}", e);
-            }
-        }
-
-        tracing::info!("Plog verification successful");
+        init_logger();
+        test_utils::run_basic_test().await;
     }
 
     #[tokio::test]
     async fn in_memory_blockstore_test() {
-        // init_logger();
-        tracing::info!("Starting in_memory_blockstore_test");
-
-        let mut fixture = setup_test_peer().await;
-
-        // Create test data
-        let test_data = b"test data".to_vec();
-
-        let hash = Codec::Sha2256;
-        let target = Codec::Raw;
-        let version = Codec::Cidv1;
-
-        // Create the peer with valid scripts and with CIDs to store
-        // Add some OpParams::CidGen entries to test blockstore storage
-        // This is a bit awkward:
-        // We're stating the PubkeyParams here, yet
-        // the actual key is in the wallet. Would be better if one came from the other, yeah?
-        // let config = bs::open::Config {
-        //     vlad: VladParams::<FirstEntryKeyParams>::default().into(),
-        //     pubkey: PubkeyParams::builder()
-        //         .codec(Codec::Ed25519Priv)
-        //         .build()
-        //         .into(),
-        //     entrykey: FirstEntryKeyParams::builder()
-        //         .codec(Codec::Ed25519Priv)
-        //         .build()
-        //         .into(),
-        //     first_lock: Script::Code(
-        //         Key::default(),
-        //         VladParams::<FirstEntryKeyParams>::first_lock_script(),
-        //     ),
-        //     lock: Script::Code(Key::default(), fixture.lock_script.clone()),
-        //     unlock: Script::Code(Key::default(), fixture.unlock_script.clone()),
-        //     additional_ops: vec![
-        //         // Add a CidGen entry for testing
-        //         OpParams::CidGen {
-        //             key: Key::try_from("/test/image/").unwrap(),
-        //             version,
-        //             target,
-        //             hash,
-        //             inline: true,
-        //             data: test_data.clone(),
-        //         },
-        //     ],
-        // };
-        let config = bs::open::Config::builder()
-            .vlad(VladParams::<FirstEntryKeyParams>::default())
-            .pubkey(
-                PubkeyParams::builder()
-                    .codec(Codec::Ed25519Priv)
-                    .build()
-                    .into(),
-            )
-            .entrykey(
-                FirstEntryKeyParams::builder()
-                    .codec(Codec::Ed25519Priv)
-                    .build()
-                    .into(),
-            )
-            .lock(Script::Code(Key::default(), fixture.lock_script.clone()))
-            .unlock(Script::Code(Key::default(), fixture.unlock_script.clone()))
-            .additional_ops(vec![OpParams::CidGen {
-                key: Key::try_from("/test/image/").unwrap(),
-                version,
-                target,
-                hash,
-                inline: true,
-                data: test_data.clone(),
-            }])
-            .build();
-
-        // Create peer with this config
-        let res = fixture.peer.create_with_config(config).await;
-
-        match &res {
-            Ok(_) => tracing::info!("create_with_config succeeded"),
-            Err(e) => tracing::error!("create_with_config failed: {:?}", e),
-        }
-
-        assert!(res.is_ok(), "Expected successful creation of peer");
-
-        // verify the plog
-        let plog = fixture.peer.plog.as_ref().unwrap();
-        let verify_iter = &mut plog.verify();
-        for result in verify_iter {
-            if let Err(e) = result {
-                tracing::error!("Plog verification failed: {}", e);
-                panic!("Plog verification failed: {}", e);
-            }
-        }
-
-        // Verify the CID was stored
-        let stored = fixture
-            .peer
-            .verify_cid_stored(version, target, hash, &test_data)
-            .await
-            .unwrap();
-
-        assert!(stored, "CID should be stored in blockstore");
-
-        // If you want to verify the actual data:
-        let multi_cid = cid::Builder::new(version)
-            .with_target_codec(target)
-            .with_hash(
-                &mh::Builder::new_from_bytes(hash, &test_data)
-                    .unwrap()
-                    .try_build()
-                    .unwrap(),
-            )
-            .try_build()
-            .unwrap();
-
-        let multi_cid_bytes: Vec<u8> = multi_cid.into();
-        let cid = Cid::try_from(multi_cid_bytes).unwrap();
-
-        let stored_data = fixture.peer.blockstore().get(&cid).await.unwrap();
-        assert!(stored_data.is_some(), "Data should be in blockstore");
-        assert_eq!(
-            stored_data.unwrap(),
-            test_data,
-            "Stored data should match original"
-        );
+        init_logger();
+        test_utils::run_in_memory_blockstore_test().await;
     }
 
     #[tokio::test]
     async fn test_store_entries() {
-        // init_logger();
-        tracing::info!("Starting test_store_entries");
-
-        let fixture = setup_initialized_peer().await;
-
-        // The peer is initialized, so store_entries has already been called
-        // Let's verify the stored entries
-
-        // Get the first lock CID from the plog for verification
-        let plog = fixture.peer.plog.as_ref().unwrap();
-        let first_lock_cid = plog.vlad.cid();
-        let first_lock_cid_bytes: Vec<u8> = first_lock_cid.clone().into();
-        let cid = Cid::try_from(first_lock_cid_bytes).unwrap();
-
-        // Verify first lock is in blockstore
-        let stored_first_lock = fixture.peer.blockstore().has(&cid).await.unwrap();
-        assert!(
-            stored_first_lock,
-            "First lock should be stored in blockstore"
-        );
-
-        // Verify we can retrieve the first lock data
-        let first_lock_data = fixture.peer.blockstore().get(&cid).await.unwrap();
-        assert!(
-            first_lock_data.is_some(),
-            "First lock data should be retrievable"
-        );
-
-        // Verify each entry is stored in the blockstore
-        for (multi_cid, _) in plog.entries.iter() {
-            let multi_cid_bytes: Vec<u8> = multi_cid.clone().into();
-            let entry_cid = Cid::try_from(multi_cid_bytes).unwrap();
-
-            let stored_entry = fixture.peer.blockstore().has(&entry_cid).await.unwrap();
-            assert!(stored_entry, "Entry should be stored in blockstore");
-
-            let entry_data = fixture.peer.blockstore().get(&entry_cid).await.unwrap();
-            assert!(entry_data.is_some(), "Entry data should be retrievable");
-        }
+        init_logger();
+        test_utils::run_store_entries_test().await;
     }
 }
