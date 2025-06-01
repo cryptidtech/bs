@@ -3,9 +3,18 @@ use crate::ops::update::OpParams;
 use multicodec::Codec;
 use provenance_log::{
     const_assert_valid_key,
+    entry::Field,
     key::key_paths::{ValidatedKeyParams, ValidatedKeyPath},
 };
 use std::num::NonZeroUsize;
+
+/// The First Entry Key parameters, associated with "/entrykey" key path.
+pub struct FirstEntryKeyParams;
+
+impl ValidatedKeyParams for FirstEntryKeyParams {
+    /// The path for the entry key parameters, "/entrykey"
+    const KEY_PATH: ValidatedKeyPath = const_assert_valid_key!("/entrykey");
+}
 
 /// Vlad parameters, made up of a Key and Vlad Cid fields.
 ///
@@ -39,15 +48,30 @@ impl Default for VladParams {
     }
 }
 
-impl ValidatedKeyParams for VladParams {
-    const KEY_PATH: ValidatedKeyPath = const_assert_valid_key!("/vlad/key");
-}
-
 impl VladParams {
+    /// Key path for Vlad key
+    pub const KEY_PATH: ValidatedKeyPath = const_assert_valid_key!("/vlad/key");
     /// CID key path for Vlad CID
     pub const CID_KEY: ValidatedKeyPath = const_assert_valid_key!("/vlad/"); // the trailing /cid is added in open_plog()
-    /// The first lock script
-    pub const FIRST_LOCK_SCRIPT: &str = r#"check_signature("/entrykey", "/entry/")"#;
+    /// The First Entry Key associated with Vlad, which is used to generate the first lock script.
+    pub const FIRST_ENTRY_KEY_PATH: ValidatedKeyPath = FirstEntryKeyParams::KEY_PATH;
+
+    /// Generate the first lock script for [multicid::Vlad].in a type-safe manner.
+    ///
+    /// Combines the first entry key path with the field path prefix.
+    ///
+    /// # Example
+    /// ```md
+    /// "check_signature("/entrykey", "/entry/")"
+    /// ```
+    pub fn first_lock_script() -> String {
+        format!(
+            "check_signature(\"{entrykey}\", \"{entry}\")",
+            // entrykey = &FirstEntryKeyParams::KEY_PATH,
+            entrykey = Self::FIRST_ENTRY_KEY_PATH,
+            entry = Field::ENTRY
+        )
+    }
 }
 
 impl From<VladParams> for (OpParams, OpParams) {
@@ -62,7 +86,7 @@ impl From<VladParams> for (OpParams, OpParams) {
 
         let cid_params = OpParams::CidGen {
             hash: params.hash,
-            data: VladParams::FIRST_LOCK_SCRIPT.as_bytes().to_vec(), // data is always the first lock script
+            data: VladParams::first_lock_script().as_bytes().to_vec(), // data is always the first lock script
             key: VladParams::CID_KEY.into(), // the cid key is always the vlad key
             version: Codec::Cidv1,           // v1 is the latest version right now
             target: Codec::Identity,         // vlad cid is always identity
@@ -120,7 +144,7 @@ mod tests {
             assert_eq!(target, Codec::Identity);
             assert_eq!(hash, Codec::Sha2256);
             assert!(inline);
-            assert_eq!(data, VladParams::FIRST_LOCK_SCRIPT.as_bytes().to_vec());
+            assert_eq!(data, VladParams::first_lock_script().as_bytes().to_vec());
         } else {
             panic!("Expected CidGen OpParams");
         }
@@ -166,9 +190,37 @@ mod tests {
             assert_eq!(target, Codec::Identity);
             assert_eq!(hash, Codec::Sha2256);
             assert!(inline);
-            assert_eq!(data, VladParams::FIRST_LOCK_SCRIPT.as_bytes().to_vec());
+            assert_eq!(data, VladParams::first_lock_script().as_bytes().to_vec());
         } else {
             panic!("Expected CidGen OpParams");
+        }
+    }
+
+    #[test]
+    fn test_entrykey_params() {
+        let params = FirstEntryKeyParams::builder()
+            .codec(Codec::Ed25519Priv)
+            .build();
+
+        let op_params: OpParams = params.into();
+
+        if let OpParams::KeyGen {
+            key,
+            codec,
+            threshold,
+            limit,
+            revoke,
+        } = op_params
+        {
+            assert_eq!(key, FirstEntryKeyParams::KEY_PATH.into());
+            // Or use the new helper method:
+            // assert_eq!(key, EntryKeyParams::key());
+            assert_eq!(codec, Codec::Ed25519Priv);
+            assert_eq!(threshold, NonZeroUsize::new(1).unwrap());
+            assert_eq!(limit, NonZeroUsize::new(1).unwrap());
+            assert!(!revoke);
+        } else {
+            panic!("Expected OpParams::KeyGen");
         }
     }
 }

@@ -277,8 +277,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::params::anykey::EntryKeyParams;
-    use crate::params::{anykey::PubkeyParams, vlad::VladParams};
+    use crate::params::{
+        anykey::{PubkeyParams, RecoveryKeyParams},
+        vlad::{FirstEntryKeyParams, VladParams},
+    };
 
     use bs_wallets::memory::InMemoryKeyManager;
     use multikey::Multikey;
@@ -301,6 +303,8 @@ mod tests {
     #[test]
     fn test_create_using_defaults() {
         // init_logger();
+
+        // Recovery Key: TODO
 
         let pubkey_params = PubkeyParams::builder().codec(Codec::Ed25519Priv).build();
 
@@ -340,6 +344,11 @@ mod tests {
 
         assert_eq!(unlock_old_school, unlock);
 
+        // Note: The First Lock script is embedded in VladParams,
+        // since it's tightly coupled to the first entry key,
+        // first entry key_path, and the Vlad Cid,
+        // so we don't need to define it here.
+
         // for now, if we have a mix of Fields and Strings, we can use format! macro
         let lock = format!(
             r#"
@@ -357,11 +366,11 @@ mod tests {
         let config = Config {
             vlad_params: VladParams::builder().build().into(),
             pubkey_params: pubkey_params.into(),
-            entrykey_params: EntryKeyParams::builder()
+            entrykey_params: FirstEntryKeyParams::builder()
                 .codec(Codec::Ed25519Priv)
                 .build()
                 .into(),
-            first_lock_script: Script::Code(Key::default(), VladParams::FIRST_LOCK_SCRIPT.into()),
+            first_lock_script: Script::Code(Key::default(), VladParams::first_lock_script()),
             entry_lock_script: Script::Code(Key::default(), lock),
             entry_unlock_script: Script::Code(Key::default(), unlock),
             additional_ops: vec![],

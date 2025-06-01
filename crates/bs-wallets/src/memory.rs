@@ -142,7 +142,7 @@ where
     ) -> Result<Self::Key, Self::Error> {
         tracing::trace!("Key request for {}", key_path);
 
-        // Return the existing public key if we have it
+        // Return the existing public key if we have it already
         if let Some(key) = self.get_public_key_by_path(key_path)? {
             tracing::debug!(
                 "Returning existing key for path {}: {:?}",
@@ -159,7 +159,7 @@ where
             return Ok(key);
         }
 
-        // Generate a new key
+        // Generate a new key since we don't have it yet
         let secret_key = Self::generate_key(codec)?;
         tracing::debug!(
             "Generated new key for path {}: {:?}",
@@ -279,7 +279,6 @@ mod tests {
     use super::*;
     use bs::config::sync::{KeyManager, MultiSigner};
     use bs_traits::sync::SyncSigner;
-    use provenance_log::key::key_paths::ValidatedKeyParams;
     use tracing_subscriber::fmt;
 
     fn init_logger() {

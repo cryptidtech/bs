@@ -102,7 +102,8 @@ macro_rules! const_assert_valid_key {
 #[derive(Builder, Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct KeyParams {
-    /// Path identifying the key
+    /// Path identifying the key.
+    /// Set by the `ValidatedKeyParams` trait implementation to keep it type-safe.
     key_path: Key,
 
     /// Codec used for the key

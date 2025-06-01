@@ -5,8 +5,8 @@ use blockstore::Blockstore as BlockstoreTrait;
 use bs::{
     config::sync::{KeyManager, MultiSigner},
     params::{
-        anykey::{EntryKeyParams, PubkeyParams},
-        vlad::VladParams,
+        anykey::PubkeyParams,
+        vlad::{FirstEntryKeyParams, VladParams},
     },
     update::OpParams,
 };
@@ -156,13 +156,13 @@ where
                 .codec(Codec::Ed25519Priv)
                 .build()
                 .into(),
-            entrykey_params: EntryKeyParams::builder()
+            entrykey_params: FirstEntryKeyParams::builder()
                 .codec(Codec::Ed25519Priv)
                 .build()
                 .into(),
             first_lock_script: provenance_log::Script::Code(
                 Key::default(),
-                VladParams::FIRST_LOCK_SCRIPT.into(),
+                VladParams::first_lock_script(),
             ),
             entry_lock_script: Script::Code(Key::default(), lock.as_ref().into()),
             entry_unlock_script: Script::Code(Key::default(), unlock.as_ref().into()),
@@ -249,6 +249,7 @@ mod tests {
     }
 
     // Setup utilities
+    #[allow(dead_code)]
     fn init_logger() {
         let subscriber = fmt().with_env_filter("bs_peer=trace").finish();
         if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
@@ -395,6 +396,10 @@ mod tests {
         // Create test data
         let test_data = b"test data".to_vec();
 
+        let hash = Codec::Sha2256;
+        let target = Codec::Raw;
+        let version = Codec::Cidv1;
+
         // Create the peer with valid scripts and with CIDs to store
         // Add some OpParams::CidGen entries to test blockstore storage
         // This is a bit awkward:
@@ -406,13 +411,13 @@ mod tests {
                 .codec(Codec::Ed25519Priv)
                 .build()
                 .into(),
-            entrykey_params: EntryKeyParams::builder()
+            entrykey_params: FirstEntryKeyParams::builder()
                 .codec(Codec::Ed25519Priv)
                 .build()
                 .into(),
             first_lock_script: provenance_log::Script::Code(
                 Key::default(),
-                VladParams::FIRST_LOCK_SCRIPT.into(),
+                VladParams::first_lock_script(),
             ),
             entry_lock_script: Script::Code(Key::default(), fixture.lock_script.clone()),
             entry_unlock_script: Script::Code(Key::default(), fixture.unlock_script.clone()),
@@ -420,9 +425,9 @@ mod tests {
                 // Add a CidGen entry for testing
                 OpParams::CidGen {
                     key: Key::try_from("/test/image/").unwrap(),
-                    version: Codec::Cidv1,
-                    target: Codec::Raw,
-                    hash: Codec::Sha2256,
+                    version,
+                    target,
+                    hash,
                     inline: true,
                     data: test_data.clone(),
                 },
@@ -452,17 +457,17 @@ mod tests {
         // Verify the CID was stored
         let stored = fixture
             .peer
-            .verify_cid_stored(Codec::Cidv1, Codec::Raw, Codec::Sha2256, &test_data)
+            .verify_cid_stored(version, target, hash, &test_data)
             .await
             .unwrap();
 
         assert!(stored, "CID should be stored in blockstore");
 
         // If you want to verify the actual data:
-        let multi_cid = cid::Builder::new(Codec::Cidv1)
-            .with_target_codec(Codec::Raw)
+        let multi_cid = cid::Builder::new(version)
+            .with_target_codec(target)
             .with_hash(
-                &mh::Builder::new_from_bytes(Codec::Sha2256, &test_data)
+                &mh::Builder::new_from_bytes(hash, &test_data)
                     .unwrap()
                     .try_build()
                     .unwrap(),

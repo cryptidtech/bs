@@ -2,16 +2,17 @@
 
 /// Plog command
 pub mod command;
+use bs::params::vlad::FirstEntryKeyParams;
 use bs_traits::sync::{SyncGetKey, SyncPrepareEphemeralSigning, SyncSigner};
 use bs_traits::{EphemeralKey, GetKey, Signer};
 pub use command::Command;
+use provenance_log::key::key_paths::ValidatedKeyParams as _;
 
 use crate::{error::PlogError, Config, Error};
 use best_practices::cli::io::{reader, writer, writer_name};
 use bs::{
     self,
     ops::{open, update},
-    params::anykey::EntryKeyParams,
     update::OpParams,
 };
 use comrade::Pairs;
@@ -22,7 +23,7 @@ use multihash::EncodedMultihash;
 use multikey::{mk, Multikey, Views};
 use multisig::Multisig;
 use multiutil::{BaseEncoded, CodecInfo, DetectedEncoder, EncodingInfo};
-use provenance_log::{key::key_paths::ValidatedKeyParams, Key, Log, Script};
+use provenance_log::{Key, Log, Script};
 use rng::StdRng;
 use std::num::{NonZero, NonZeroUsize};
 use std::{
@@ -212,7 +213,9 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
                 reader(&Some(unlock_script_path))?.read_to_end(&mut v)?;
                 Script::Code(Key::default(), String::from_utf8(v)?)
             };
-            let entry_params = EntryKeyParams::builder().codec(Codec::Ed25519Priv).build();
+            let entry_params = FirstEntryKeyParams::builder()
+                .codec(Codec::Ed25519Priv)
+                .build();
             let cfg = update::Config::new(unlock_script, entry_params.key_path().clone())
                 .with_ops(&build_delete_params(&delete_ops)?)
                 .with_ops(&build_key_params(&key_ops)?)

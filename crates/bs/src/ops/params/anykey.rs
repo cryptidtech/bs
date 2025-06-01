@@ -71,14 +71,15 @@ use provenance_log::{
 pub struct PubkeyParams;
 
 impl ValidatedKeyParams for PubkeyParams {
+    /// The path for the public key parameters, "/pubkey"
     const KEY_PATH: ValidatedKeyPath = const_assert_valid_key!("/pubkey");
 }
 
-/// Entry Key parameters type
-pub struct EntryKeyParams;
+/// Recovery key, "/recoverykey", parameters type
+pub struct RecoveryKeyParams;
 
-impl ValidatedKeyParams for EntryKeyParams {
-    const KEY_PATH: ValidatedKeyPath = const_assert_valid_key!("/entrykey");
+impl ValidatedKeyParams for RecoveryKeyParams {
+    const KEY_PATH: ValidatedKeyPath = const_assert_valid_key!("/recoverykey");
 }
 
 impl From<KeyParams> for OpParams {
@@ -118,32 +119,6 @@ mod tests {
             assert_eq!(key, Key::try_from(&PubkeyParams::KEY_PATH).unwrap());
             // Or use the new helper method:
             // assert_eq!(key, PubkeyParams::key());
-            assert_eq!(codec, Codec::Ed25519Priv);
-            assert_eq!(threshold, NonZeroUsize::new(1).unwrap());
-            assert_eq!(limit, NonZeroUsize::new(1).unwrap());
-            assert!(!revoke);
-        } else {
-            panic!("Expected OpParams::KeyGen");
-        }
-    }
-
-    #[test]
-    fn test_entrykey_params() {
-        let params = EntryKeyParams::builder().codec(Codec::Ed25519Priv).build();
-
-        let op_params: OpParams = params.into();
-
-        if let OpParams::KeyGen {
-            key,
-            codec,
-            threshold,
-            limit,
-            revoke,
-        } = op_params
-        {
-            assert_eq!(key, Key::try_from(&EntryKeyParams::KEY_PATH).unwrap());
-            // Or use the new helper method:
-            // assert_eq!(key, EntryKeyParams::key());
             assert_eq!(codec, Codec::Ed25519Priv);
             assert_eq!(threshold, NonZeroUsize::new(1).unwrap());
             assert_eq!(limit, NonZeroUsize::new(1).unwrap());
