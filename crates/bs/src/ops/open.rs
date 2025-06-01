@@ -2,6 +2,8 @@
 
 /// Config for the open operation
 pub mod config;
+use std::num::NonZeroUsize;
+
 use crate::{
     error::{BsCompatibleError, OpenError},
     update::{op, OpParams},
@@ -166,7 +168,9 @@ pub fn open_plog<E: BsCompatibleError>(
 }
 
 /// Helper function to extract parameters from OpParams
-fn extract_key_params<E: BsCompatibleError>(params: &OpParams) -> Result<(Codec, usize, usize), E> {
+fn extract_key_params<E: BsCompatibleError>(
+    params: &OpParams,
+) -> Result<(Codec, NonZeroUsize, NonZeroUsize), E> {
     match params {
         OpParams::KeyGen {
             codec,
@@ -274,13 +278,13 @@ where
 mod tests {
     use super::*;
     use crate::params::anykey::EntryKeyParams;
-    use crate::params::{pubkey::PubkeyParams, vlad::VladParams};
+    use crate::params::{anykey::PubkeyParams, vlad::VladParams};
 
     use bs_wallets::memory::InMemoryKeyManager;
     use multikey::Multikey;
     use provenance_log::entry::Field;
     use provenance_log::format_with_fields;
-    use provenance_log::key::key_paths::KeyParamsType;
+    use provenance_log::key::key_paths::ValidatedKeyParams;
     use provenance_log::value::try_extract;
     use provenance_log::Script;
     use provenance_log::{Key, Pairs};
@@ -341,12 +345,12 @@ mod tests {
 
         let config = Config {
             vlad_params: VladParams::default().into(),
-            pubkey_params: PubkeyParams::default().into(),
+            pubkey_params: PubkeyParams::builder()
+                .codec(Codec::Ed25519Priv)
+                .build()
+                .into(),
             entrykey_params: EntryKeyParams::builder()
                 .codec(Codec::Ed25519Priv)
-                .threshold(1)
-                .limit(1)
-                .revoke(false)
                 .build()
                 .into(),
             first_lock_script: Script::Code(Key::default(), VladParams::FIRST_LOCK_SCRIPT.into()),
@@ -384,7 +388,7 @@ mod tests {
 
         assert!(plog.vlad.verify(&vlad_key).is_ok());
 
-        let entry_key = kvp.get(PubkeyParams::KEY_PATH).unwrap();
+        let entry_key = kvp.get(&PubkeyParams::KEY_PATH).unwrap();
 
         assert!(try_extract::<Multikey>(&entry_key)
             .unwrap()

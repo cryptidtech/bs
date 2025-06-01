@@ -1,3 +1,5 @@
+use std::num::NonZeroUsize;
+
 // SPDX-License-Idnetifier: Apache-2.0
 use crate::{Error, Multikey};
 use multicodec::Codec;
@@ -64,9 +66,9 @@ pub trait KdfAttrView {
 /// trait for viewing the threshold key attributes in a Multikey
 pub trait ThresholdAttrView {
     /// get the threshold value for the multikey
-    fn threshold(&self) -> Result<usize, Error>;
+    fn threshold(&self) -> Result<NonZeroUsize, Error>;
     /// get the limit value for the multikey
-    fn limit(&self) -> Result<usize, Error>;
+    fn limit(&self) -> Result<NonZeroUsize, Error>;
     /// get the share identifier for the multikey
     fn identifier(&self) -> Result<u8, Error>;
     /// get the codec-specific threshold data
@@ -130,7 +132,7 @@ pub trait SignView {
 /// trait for doing threshold operations on multikeys
 pub trait ThresholdView {
     /// try to split the key into key shares given the threshold and limit
-    fn split(&self, threshold: usize, limit: usize) -> Result<Vec<Multikey>, Error>;
+    fn split(&self, threshold: NonZeroUsize, limit: NonZeroUsize) -> Result<Vec<Multikey>, Error>;
     /// add a new share and return the Multikey with the share added
     fn add_share(&self, share: &Multikey) -> Result<Multikey, Error>;
     /// reconstruct the key from teh shares

@@ -243,7 +243,7 @@ mod tests {
     use multicodec::Codec;
     use provenance_log::entry::Field;
     use provenance_log::format_with_fields;
-    use provenance_log::key::key_paths::KeyParamsType;
+    use provenance_log::key::key_paths::ValidatedKeyParams;
     use provenance_log::Script;
     use provenance_log::{Key, Pairs};
     use tracing_subscriber::fmt;
@@ -302,21 +302,13 @@ mod tests {
 
         let lock_script = Script::Code(Key::default(), lock);
 
-        let pubkey_params = PubkeyParams::builder()
-            .codec(Codec::Ed25519Priv)
-            .threshold(1)
-            .limit(1)
-            .revoke(false)
-            .build();
+        let pubkey_params = PubkeyParams::builder().codec(Codec::Ed25519Priv).build();
 
         let open_config = open::Config {
             vlad_params: VladParams::default().into(),
             pubkey_params: pubkey_params.clone().into(),
             entrykey_params: EntryKeyParams::builder()
                 .codec(Codec::Ed25519Priv)
-                .threshold(1)
-                .limit(1)
-                .revoke(false)
                 .build()
                 .into(),
             first_lock_script: Script::Code(Key::default(), VladParams::FIRST_LOCK_SCRIPT.into()),

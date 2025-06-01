@@ -4,12 +4,17 @@ use ::cid::Cid;
 use blockstore::Blockstore as BlockstoreTrait;
 use bs::{
     config::sync::{KeyManager, MultiSigner},
-    params::{entry_key::EntryKeyParams, pubkey::PubkeyParams, vlad::VladParams},
+    params::{
+        anykey::{EntryKeyParams, PubkeyParams},
+        vlad::VladParams,
+    },
     update::OpParams,
 };
 use bs_traits::CondSync;
 use multicid::cid;
+use multicodec::Codec;
 use multihash::mh;
+use provenance_log::key::key_paths::ValidatedKeyParams;
 use provenance_log::{self as p, Key, Script};
 
 /// A peer in the network that is generic over the blockstore type
@@ -147,8 +152,14 @@ where
 
         let config = bs::open::Config {
             vlad_params: VladParams::default().into(),
-            pubkey_params: PubkeyParams::default().into(),
-            entrykey_params: EntryKeyParams::default().into(),
+            pubkey_params: PubkeyParams::builder()
+                .codec(Codec::Ed25519Priv)
+                .build()
+                .into(),
+            entrykey_params: EntryKeyParams::builder()
+                .codec(Codec::Ed25519Priv)
+                .build()
+                .into(),
             first_lock_script: provenance_log::Script::Code(
                 Key::default(),
                 VladParams::FIRST_LOCK_SCRIPT.into(),
@@ -391,8 +402,14 @@ mod tests {
         // the actual key is in the wallet. Would be better if one came from the other, yeah?
         let config = bs::open::Config {
             vlad_params: VladParams::default().into(),
-            pubkey_params: PubkeyParams::default().into(),
-            entrykey_params: EntryKeyParams::default().into(),
+            pubkey_params: PubkeyParams::builder()
+                .codec(Codec::Ed25519Priv)
+                .build()
+                .into(),
+            entrykey_params: EntryKeyParams::builder()
+                .codec(Codec::Ed25519Priv)
+                .build()
+                .into(),
             first_lock_script: provenance_log::Script::Code(
                 Key::default(),
                 VladParams::FIRST_LOCK_SCRIPT.into(),

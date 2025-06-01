@@ -1,5 +1,5 @@
 //! Vlad Paramters for operations
-use std::ops::Deref;
+use std::{num::NonZeroUsize, ops::Deref};
 
 use crate::ops::update::OpParams;
 use multicodec::Codec;
@@ -18,22 +18,6 @@ pub struct HashCodec(pub Codec);
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct VladKey(pub OpParams);
-
-impl VladKey {
-    /// Sets the threshold for the VladKey OpParams.
-    pub fn set_threshold(&mut self, threshold: u32) {
-        if let OpParams::KeyGen { threshold: t, .. } = &mut self.0 {
-            *t = threshold as usize;
-        }
-    }
-
-    /// Sets the limit for the VladKey OpParams.
-    pub fn set_limit(&mut self, limit: u32) {
-        if let OpParams::KeyGen { limit: l, .. } = &mut self.0 {
-            *l = limit as usize;
-        }
-    }
-}
 
 /// NewType Wrapper around VladCid OpParams
 #[derive(Debug, Clone)]
@@ -100,8 +84,8 @@ impl VladParams {
         let key = VladKey(OpParams::KeyGen {
             key: Key::try_from(Self::KEY_PATH).unwrap(),
             codec: *key_codec,
-            threshold: 0,
-            limit: 0,
+            threshold: NonZeroUsize::new(1).unwrap(),
+            limit: NonZeroUsize::new(1).unwrap(),
             revoke: false,
         });
 
@@ -115,16 +99,6 @@ impl VladParams {
         });
 
         VladParams { key, cid }
-    }
-
-    /// Sets the threshold for the VladKey OpParams.
-    pub fn with_threshold(&mut self, threshold: u32) {
-        self.key.set_threshold(threshold);
-    }
-
-    /// Sets the limit for the VladKey OpParams.
-    pub fn with_limit(&mut self, limit: u32) {
-        self.key.set_limit(limit);
     }
 }
 
@@ -149,8 +123,8 @@ mod tests {
             OpParams::KeyGen {
                 key: Key::try_from(VladParams::KEY_PATH).unwrap(),
                 codec: Codec::Identity,
-                threshold: 0,
-                limit: 0,
+                threshold: NonZeroUsize::new(1).unwrap(),
+                limit: NonZeroUsize::new(1).unwrap(),
                 revoke: false,
             }
         );

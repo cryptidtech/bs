@@ -1,3 +1,5 @@
+use std::num::NonZeroUsize;
+
 // SPDX-License-Idnetifier: Apache-2.0
 /// Errors created by this library
 #[derive(Clone, Debug, thiserror::Error)]
@@ -257,7 +259,7 @@ pub enum ThresholdError {
     Bls(#[from] blsful::BlsError),
     /// Invalid threshold and limit
     #[error("Invalid threshold ({0}) and limit ({1}). Limit must be greater than threshold")]
-    InvalidThresholdLimit(usize, usize),
+    InvalidThresholdLimit(NonZeroUsize, NonZeroUsize),
     /// Not a secret key
     #[error("Not a secret key; only secret keys may be split and combined")]
     NotASecretKey,
@@ -270,6 +272,9 @@ pub enum ThresholdError {
     /// Share combine failed
     #[error("Combining secret key shares failed: {0}")]
     ShareCombineFailed(String),
+    /// Threshold must be non zero usize
+    #[error("Threshold must be non zero usize, found {0}")]
+    MustBeNonZero(usize),
 }
 
 /// Verify errors created by this library

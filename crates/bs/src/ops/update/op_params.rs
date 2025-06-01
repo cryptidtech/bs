@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1
 
+use std::num::NonZeroUsize;
+
 use multicid::Cid;
 use multicodec::Codec;
 use multikey::Multikey;
@@ -44,9 +46,9 @@ pub enum OpParams {
         /// the key codec
         codec: Codec,
         /// the threshold for threshold key splitting
-        threshold: usize,
+        threshold: NonZeroUsize,
         /// the limit for threshold key splitting
-        limit: usize,
+        limit: NonZeroUsize,
         /// the previous key should be explicitly deleted
         revoke: bool,
     },

@@ -5,26 +5,27 @@
 //!
 //! # Creating Custom Key Types
 //!
-//! You can easily create your own key parameter types by using the [KeyParamsType] trait:
+//! You can easily create your own key parameter types by using the [ValidatedKeyParams] trait:
 //!
 //! ```rust
-//! use provenance_log::key::key_paths::{KeyParamsType, KeyParams};
+//! use provenance_log::key::key_paths::{ValidatedKeyParams, KeyParams};
 //! use provenance_log::const_assert_valid_key;
 //! use provenance_log::key::key_paths::ValidatedKeyPath;
 //! use bs::ops::update::OpParams;
 //! use multicodec::Codec;
+//! use std::num::NonZero;
 //!
 //! pub struct MyCustomKeyParams;
 //!
-//! impl KeyParamsType for MyCustomKeyParams {
+//! impl ValidatedKeyParams for MyCustomKeyParams {
 //!     const KEY_PATH: ValidatedKeyPath = const_assert_valid_key!("/my/special/key");
 //! }
 //!
 //! // Create parameters with some details
 //! let custom_key_params = MyCustomKeyParams::builder()
 //!    .codec(Codec::Ed25519Priv)
-//!    .threshold(1)
-//!    .limit(1)
+//!    .threshold(NonZero::new(1).unwrap())
+//!    .limit(NonZero::new(1).unwrap())
 //!    .revoke(false)
 //!    .build();
 //!
@@ -43,14 +44,14 @@
 //!    };
 //! ```
 //!
-//! The blanket implementation to convert any type implementing `KeyParamsType` into a `Key`
+//! The blanket implementation to convert any type implementing `ValidatedKeyParams` into a `Key`
 //! can also be used on these concrete types.
 //!
 //! # Example
 //!
 //! ```rust
 //! use provenance_log::Key;
-//! use provenance_log::key::key_paths::{KeyParamsType};
+//! use provenance_log::key::key_paths::{ValidatedKeyParams};
 //! use bs::params::anykey::PubkeyParams;
 //!
 //! // Works with predefined types or your custom types
@@ -63,20 +64,20 @@
 use crate::ops::update::OpParams;
 use provenance_log::{
     const_assert_valid_key,
-    key::key_paths::{KeyParams, KeyParamsType, ValidatedKeyPath},
+    key::key_paths::{KeyParams, ValidatedKeyParams, ValidatedKeyPath},
 };
 
 /// Public Key parameters type
 pub struct PubkeyParams;
 
-impl KeyParamsType for PubkeyParams {
+impl ValidatedKeyParams for PubkeyParams {
     const KEY_PATH: ValidatedKeyPath = const_assert_valid_key!("/pubkey");
 }
 
 /// Entry Key parameters type
 pub struct EntryKeyParams;
 
-impl KeyParamsType for EntryKeyParams {
+impl ValidatedKeyParams for EntryKeyParams {
     const KEY_PATH: ValidatedKeyPath = const_assert_valid_key!("/entrykey");
 }
 
@@ -98,15 +99,11 @@ mod tests {
     use crate::ops::update::OpParams;
     use multicodec::Codec;
     use provenance_log::Key;
+    use std::num::NonZeroUsize;
 
     #[test]
     fn test_pubkey_params() {
-        let params = PubkeyParams::builder()
-            .codec(Codec::Ed25519Priv)
-            .threshold(2)
-            .limit(10)
-            .revoke(false)
-            .build();
+        let params = PubkeyParams::builder().codec(Codec::Ed25519Priv).build();
 
         let op_params: OpParams = params.into();
 
@@ -122,8 +119,8 @@ mod tests {
             // Or use the new helper method:
             // assert_eq!(key, PubkeyParams::key());
             assert_eq!(codec, Codec::Ed25519Priv);
-            assert_eq!(threshold, 2);
-            assert_eq!(limit, 10);
+            assert_eq!(threshold, NonZeroUsize::new(1).unwrap());
+            assert_eq!(limit, NonZeroUsize::new(1).unwrap());
             assert!(!revoke);
         } else {
             panic!("Expected OpParams::KeyGen");
@@ -132,12 +129,7 @@ mod tests {
 
     #[test]
     fn test_entrykey_params() {
-        let params = EntryKeyParams::builder()
-            .codec(Codec::Ed25519Priv)
-            .threshold(2)
-            .limit(10)
-            .revoke(false)
-            .build();
+        let params = EntryKeyParams::builder().codec(Codec::Ed25519Priv).build();
 
         let op_params: OpParams = params.into();
 
@@ -153,8 +145,8 @@ mod tests {
             // Or use the new helper method:
             // assert_eq!(key, EntryKeyParams::key());
             assert_eq!(codec, Codec::Ed25519Priv);
-            assert_eq!(threshold, 2);
-            assert_eq!(limit, 10);
+            assert_eq!(threshold, NonZeroUsize::new(1).unwrap());
+            assert_eq!(limit, NonZeroUsize::new(1).unwrap());
             assert!(!revoke);
         } else {
             panic!("Expected OpParams::KeyGen");
@@ -166,16 +158,11 @@ mod tests {
         // Example of how a user could create their own key type
         struct CustomKey;
 
-        impl KeyParamsType for CustomKey {
+        impl ValidatedKeyParams for CustomKey {
             const KEY_PATH: ValidatedKeyPath = const_assert_valid_key!("/mycustomkey");
         }
 
-        let params = CustomKey::builder()
-            .codec(Codec::Ed25519Priv)
-            .threshold(3)
-            .limit(5)
-            .revoke(false)
-            .build();
+        let params = CustomKey::builder().codec(Codec::Ed25519Priv).build();
 
         let op_params: OpParams = params.into();
         if let OpParams::KeyGen { key, .. } = op_params {
@@ -185,41 +172,5 @@ mod tests {
         } else {
             panic!("Expected OpParams::KeyGen");
         }
-    }
-}
-
-#[cfg(test)]
-mod invalid_path_tests {
-    use super::*;
-    use multicodec::Codec;
-
-    // This module tests compile-time validation - no actual test code is run
-
-    #[test]
-    fn test_key_params_validation_compiles() {
-        // This should compile fine
-        struct ValidKey;
-
-        impl KeyParamsType for ValidKey {
-            const KEY_PATH: ValidatedKeyPath = const_assert_valid_key!("/valid/path");
-        }
-
-        let _ = ValidKey::builder()
-            .codec(Codec::Ed25519Priv)
-            .threshold(1)
-            .limit(10)
-            .revoke(false)
-            .build();
-
-        // The following would fail to compile if uncommented:
-        /*
-        struct InvalidKey;
-
-        impl KeyParamsType for InvalidKey {
-            const KEY_PATH: ValidatedKeyPath = const_assert_valid_key!("invalid-no-leading-slash");
-        }
-
-        let _ = InvalidKey::default_params();
-        */
     }
 }

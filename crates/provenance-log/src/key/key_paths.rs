@@ -6,6 +6,7 @@ use bon::Builder;
 use key_params_builder::SetKeyPath;
 use multicodec::Codec;
 use std::convert::TryFrom;
+use std::num::NonZeroUsize;
 use std::ops::Deref;
 
 /// A validated key path that is guaranteed to be valid.
@@ -52,6 +53,13 @@ impl From<ValidatedKeyPath> for Key {
     }
 }
 
+// Display for ValidatedKeyPath
+impl fmt::Display for ValidatedKeyPath {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 /// Create a validated key path, ensuring it's valid at compile time.
 #[macro_export]
 macro_rules! const_assert_valid_key {
@@ -72,21 +80,22 @@ macro_rules! const_assert_valid_key {
 ///
 /// ```rust
 /// use multicodec::Codec;
-/// use provenance_log::key::key_paths::KeyParamsType;
+/// use provenance_log::key::key_paths::ValidatedKeyParams;
 /// use provenance_log::const_assert_valid_key;
 /// use provenance_log::key::key_paths::ValidatedKeyPath;
+/// use std::num::NonZero;
 ///
 /// // Define predefined types
 /// struct PubkeyParams;
-/// impl KeyParamsType for PubkeyParams {
+/// impl ValidatedKeyParams for PubkeyParams {
 ///     const KEY_PATH: ValidatedKeyPath = const_assert_valid_key!("/pubkey");
 /// }
 ///
 /// // Create parameters with explicit settings
 /// let pubkey_params = PubkeyParams::builder()
 ///     .codec(Codec::Ed25519Priv)
-///     .threshold(1)
-///     .limit(1)
+///     .threshold(NonZero::new(1).unwrap())
+///     .limit(NonZero::new(1).unwrap())
 ///     .revoke(false)
 ///     .build();
 /// ```
@@ -101,12 +110,12 @@ pub struct KeyParams {
     codec: Codec,
 
     /// Signature threshold
-    #[builder(default = 1)]
-    threshold: usize,
+    #[builder(default = NonZeroUsize::new(1).unwrap())]
+    threshold: NonZeroUsize,
 
     /// Key usage limit
-    #[builder(default = 1)]
-    limit: usize,
+    #[builder(default = NonZeroUsize::new(1).unwrap())]
+    limit: NonZeroUsize,
 
     /// Whether to revoke previous key
     #[builder(default = false)]
@@ -125,12 +134,12 @@ impl KeyParams {
     }
 
     /// Returns the threshold for the key.
-    pub fn threshold(&self) -> usize {
+    pub fn threshold(&self) -> NonZeroUsize {
         self.threshold
     }
 
     /// Returns the limit for the key.
-    pub fn limit(&self) -> usize {
+    pub fn limit(&self) -> NonZeroUsize {
         self.limit
     }
 
@@ -144,7 +153,7 @@ impl KeyParams {
 ///
 /// This trait is used to create specific key parameter types that
 /// have a predefined KEY_PATH constant.
-pub trait KeyParamsType {
+pub trait ValidatedKeyParams {
     /// The validated key path used for this type.
     const KEY_PATH: ValidatedKeyPath;
 
@@ -152,12 +161,12 @@ pub trait KeyParamsType {
     ///
     /// # Example
     /// ```rust
-    /// use provenance_log::key::key_paths::{KeyParamsType, ValidatedKeyPath};
+    /// use provenance_log::key::key_paths::{ValidatedKeyParams, ValidatedKeyPath};
     /// use provenance_log::const_assert_valid_key;
     /// use provenance_log::Key;
     ///
     /// pub struct MyKeyType;
-    /// impl KeyParamsType for MyKeyType {
+    /// impl ValidatedKeyParams for MyKeyType {
     ///    const KEY_PATH: ValidatedKeyPath = const_assert_valid_key!("/mykey");
     /// }
     ///
@@ -193,8 +202,8 @@ impl From<Pather> for KeyParamsBuilder<SetKeyPath> {
     }
 }
 
-/// Blanket implementation to convert any type implementing `KeyParamsType` into a `Key`.
-impl<T: KeyParamsType> From<T> for Key {
+/// Blanket implementation to convert any type implementing `ValidatedKeyParams` into a `Key`.
+impl<T: ValidatedKeyParams> From<T> for Key {
     fn from(_: T) -> Self {
         T::key()
     }
@@ -203,26 +212,27 @@ impl<T: KeyParamsType> From<T> for Key {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::num::NonZero;
 
     #[test]
     fn test_default_params() {
         pub struct PubkeyParams;
 
-        impl KeyParamsType for PubkeyParams {
+        impl ValidatedKeyParams for PubkeyParams {
             const KEY_PATH: ValidatedKeyPath = const_assert_valid_key!("/pubkey");
         }
 
         let params = PubkeyParams::builder()
             .codec(Codec::Ed25519Priv)
-            .threshold(1)
-            .limit(1)
+            .threshold(NonZero::new(1).unwrap())
+            .limit(NonZero::new(1).unwrap())
             .revoke(false)
             .build();
 
         assert_eq!(params.key_path().to_string(), "/pubkey");
         assert_eq!(params.codec(), Codec::Ed25519Priv);
-        assert_eq!(params.threshold(), 1);
-        assert_eq!(params.limit(), 1);
+        assert_eq!(params.threshold(), NonZeroUsize::new(1).unwrap());
+        assert_eq!(params.limit(), NonZeroUsize::new(1).unwrap());
         assert!(!params.revoke());
     }
 
@@ -231,16 +241,31 @@ mod tests {
         let params = KeyParams::builder()
             .key_path(Key::try_from("/test").unwrap())
             .codec(Codec::Ed25519Priv)
-            .threshold(3)
-            .limit(5)
+            .threshold(NonZero::new(1).unwrap())
+            .limit(NonZero::new(1).unwrap())
             .revoke(true)
             .build();
 
         assert_eq!(params.key_path(), &Key::try_from("/test").unwrap());
         assert_eq!(params.codec(), Codec::Ed25519Priv);
-        assert_eq!(params.threshold(), 3);
-        assert_eq!(params.limit(), 5);
+        assert_eq!(params.threshold(), NonZeroUsize::new(1).unwrap());
+        assert_eq!(params.limit(), NonZeroUsize::new(1).unwrap());
         assert!(params.revoke());
+    }
+
+    // test default threshold and limit
+    #[test]
+    fn test_default_threshold_and_limit() {
+        let params = KeyParams::builder()
+            .key_path(Key::try_from("/default").unwrap())
+            .codec(Codec::Ed25519Priv)
+            .build();
+
+        assert_eq!(params.key_path(), &Key::try_from("/default").unwrap());
+        assert_eq!(params.codec(), Codec::Ed25519Priv);
+        assert_eq!(params.threshold(), NonZeroUsize::new(1).unwrap());
+        assert_eq!(params.limit(), NonZeroUsize::new(1).unwrap());
+        assert!(!params.revoke());
     }
 }
 
@@ -255,22 +280,17 @@ mod invalid_path_tests {
         // This should compile fine
         struct ValidKey;
 
-        impl KeyParamsType for ValidKey {
+        impl ValidatedKeyParams for ValidKey {
             const KEY_PATH: ValidatedKeyPath = const_assert_valid_key!("/valid/path");
         }
 
-        let _ = ValidKey::builder()
-            .codec(Codec::Ed25519Priv)
-            .threshold(1)
-            .limit(10)
-            .revoke(false)
-            .build();
+        let _ = ValidKey::builder().codec(Codec::Ed25519Priv).build();
 
         // The following would fail to compile if uncommented:
         /*
         struct InvalidKey;
 
-        impl KeyParamsType for InvalidKey {
+        impl ValidatedKeyParams for InvalidKey {
             const KEY_PATH: ValidatedKeyPath = const_assert_valid_key!("invalid-no-leading-slash");
         }
 

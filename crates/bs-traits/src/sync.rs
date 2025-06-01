@@ -31,8 +31,8 @@ pub trait SyncPrepareEphemeralSigning: Signer + EphemeralKey {
     fn prepare_ephemeral_signing(
         &self,
         codec: &Self::Codec, // Use concrete type to avoid associated type dependency
-        threshold: usize,
-        limit: usize,
+        threshold: NonZeroUsize,
+        limit: NonZeroUsize,
     ) -> EphemeralSigningTuple<
         <Self as EphemeralKey>::PubKey,
         <Self as Signer>::Signature,
@@ -123,7 +123,7 @@ pub trait SyncGetKey: GetKey {
         &self,
         key_path: &Self::KeyPath,
         codec: &Self::Codec,
-        threshold: usize,
-        limit: usize,
+        threshold: NonZeroUsize,
+        limit: NonZeroUsize,
     ) -> Result<Self::Key, Self::Error>;
 }

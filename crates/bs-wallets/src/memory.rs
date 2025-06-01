@@ -11,6 +11,7 @@ use provenance_log::Key;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::marker::PhantomData;
+use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 /// In-memory key manager that provides key management and signing capabilities.
 ///
@@ -136,8 +137,8 @@ where
         &'a self,
         key_path: &'a Self::KeyPath,
         codec: &'a Self::Codec,
-        _threshold: usize,
-        _limit: usize,
+        _threshold: NonZeroUsize,
+        _limit: NonZeroUsize,
     ) -> Result<Self::Key, Self::Error> {
         tracing::trace!("Key request for {}", key_path);
 
@@ -241,8 +242,8 @@ where
     fn prepare_ephemeral_signing(
         &self,
         codec: &Self::Codec,
-        threshold: usize,
-        limit: usize,
+        threshold: NonZeroUsize,
+        limit: NonZeroUsize,
     ) -> EphemeralSigningTuple<
         <Self as EphemeralKey>::PubKey,
         <Self as Signer>::Signature,
@@ -273,9 +274,12 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::num::NonZero;
+
     use super::*;
     use bs::config::sync::{KeyManager, MultiSigner};
     use bs_traits::sync::SyncSigner;
+    use provenance_log::key::key_paths::ValidatedKeyParams;
     use tracing_subscriber::fmt;
 
     fn init_logger() {
@@ -335,7 +339,12 @@ mod tests {
         // First call to get_key generates a key pair and stores the secret key,
         // but returns the public key
         let public_key = key_manager
-            .get_key(&custom_path, &Codec::Ed25519Priv, 1, 1)
+            .get_key(
+                &custom_path,
+                &Codec::Ed25519Priv,
+                NonZero::new(1).unwrap(),
+                NonZero::new(1).unwrap(),
+            )
             .unwrap();
 
         // Verify we got a public key
@@ -343,7 +352,12 @@ mod tests {
 
         // Get the key again - should be the same public key
         let public_key2 = key_manager
-            .get_key(&custom_path, &Codec::Ed25519Priv, 1, 1)
+            .get_key(
+                &custom_path,
+                &Codec::Ed25519Priv,
+                NonZero::new(1).unwrap(),
+                NonZero::new(1).unwrap(),
+            )
             .unwrap();
 
         assert!(
@@ -378,7 +392,11 @@ mod tests {
 
         // Use prepare_ephemeral_signing to get a public key and a one-time signing function
         let (public_key, sign_once) = key_manager
-            .prepare_ephemeral_signing(&Codec::Ed25519Priv, 1, 1)
+            .prepare_ephemeral_signing(
+                &Codec::Ed25519Priv,
+                NonZero::new(1).unwrap(),
+                NonZero::new(1).unwrap(),
+            )
             .expect("Failed to prepare ephemeral signing");
 
         // Verify that we got a public key

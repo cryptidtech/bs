@@ -20,7 +20,11 @@ use multisig::{ms, views::bls12381::SchemeTypeId, Multisig, Views as SigViews};
 use multitrait::TryDecodeFrom;
 use multiutil::{Varbytes, Varuint};
 use ssh_encoding::{Decode, Encode};
-use std::{array::TryFromSliceError, collections::BTreeMap};
+use std::{
+    array::TryFromSliceError,
+    collections::BTreeMap,
+    num::{NonZero, NonZeroUsize},
+};
 use zeroize::Zeroizing;
 
 /// the RFC 4251 algorithm name for SSH compatibility
@@ -34,14 +38,15 @@ pub const G1_PUBLIC_KEY_BYTES: usize = 48;
 pub const G2_PUBLIC_KEY_BYTES: usize = 96;
 
 /// tuple of the key share data with threshold attributes
+// TODO: this should be a struct with the share identifier, threshold, limit, and key bytes
 #[derive(Clone)]
 pub struct KeyShare(
     /// identifier
     pub u8,
     /// threshold,
-    pub usize,
+    pub NonZeroUsize,
     /// limit
-    pub usize,
+    pub NonZeroUsize,
     /// key bytes
     pub Vec<u8>,
 );
@@ -52,9 +57,9 @@ impl From<KeyShare> for Vec<u8> {
         // add in the share identifier
         v.append(&mut Varuint(val.0).into());
         // add in the threshold
-        v.append(&mut Varuint(val.1).into());
+        v.append(&mut Varuint::<usize>(val.1.into()).into());
         // add in the limit
-        v.append(&mut Varuint(val.2).into());
+        v.append(&mut Varuint::<usize>(val.2.into()).into());
         // add in the key share data
         v.append(&mut Varbytes(val.3.clone()).into());
         v
@@ -85,8 +90,10 @@ impl<'a> TryDecodeFrom<'a> for KeyShare {
         Ok((
             Self(
                 id.to_inner(),
-                threshold.to_inner(),
-                limit.to_inner(),
+                NonZero::new(threshold.clone().to_inner())
+                    .ok_or(Error::Threshold(ThresholdError::MustBeNonZero(*threshold)))?,
+                NonZero::new(limit.clone().to_inner())
+                    .ok_or(Error::Threshold(ThresholdError::MustBeNonZero(*limit)))?,
                 key_data.to_inner(),
             ),
             ptr,
@@ -190,22 +197,23 @@ impl AttrView for View<'_> {
 
 impl ThresholdAttrView for View<'_> {
     /// get the threshold value for the multikey
-    fn threshold(&self) -> Result<usize, Error> {
+    fn threshold(&self) -> Result<NonZeroUsize, Error> {
         let v = self
             .mk
             .attributes
             .get(&AttrId::Threshold)
             .ok_or(AttributesError::MissingThreshold)?;
-        Ok(*Varuint::<usize>::try_from(v.as_slice())?)
+        Ok(NonZero::new(*Varuint::<usize>::try_from(v.as_slice())?).unwrap())
     }
     /// get the limit value for the multikey
-    fn limit(&self) -> Result<usize, Error> {
+    fn limit(&self) -> Result<NonZeroUsize, Error> {
         let v = self
             .mk
             .attributes
             .get(&AttrId::Limit)
             .ok_or(AttributesError::MissingLimit)?;
-        Ok(*Varuint::<usize>::try_from(v.as_slice())?)
+        // Ok(*Varuint::<usize>::try_from(v.as_slice())?)
+        Ok(NonZero::new(*Varuint::<usize>::try_from(v.as_slice())?).unwrap())
     }
     /// get the share identifier for the multikey
     fn identifier(&self) -> Result<u8, Error> {
@@ -468,8 +476,8 @@ impl ConvView for View<'_> {
                 let tav = pk.threshold_attr_view()?;
                 let key_share: Vec<u8> = KeyShare(
                     tav.identifier()?,
-                    tav.threshold()?,
-                    tav.limit()?,
+                    tav.threshold()?.into(),
+                    tav.limit()?.into(),
                     key_bytes.to_vec(),
                 )
                 .into();
@@ -488,7 +496,7 @@ impl ConvView for View<'_> {
                 let tav = pk.threshold_attr_view()?;
                 let key_share: Vec<u8> = KeyShare(
                     tav.identifier()?,
-                    tav.threshold()?,
+                    tav.threshold()?.into(),
                     tav.limit()?,
                     key_bytes.to_vec(),
                 )
@@ -548,7 +556,7 @@ impl ConvView for View<'_> {
                 let sav = self.mk.threshold_attr_view()?;
                 let secret_key_share: Vec<u8> = KeyShare(
                     sav.identifier()?,
-                    sav.threshold()?,
+                    sav.threshold()?.into(),
                     sav.limit()?,
                     secret_bytes.to_vec(),
                 )
@@ -556,7 +564,7 @@ impl ConvView for View<'_> {
                 let pav = pk.threshold_attr_view()?;
                 let public_key_share: Vec<u8> = KeyShare(
                     pav.identifier()?,
-                    pav.threshold()?,
+                    pav.threshold()?.into(),
                     pav.limit()?,
                     key_bytes.to_vec(),
                 )
@@ -582,7 +590,7 @@ impl ConvView for View<'_> {
                 let sav = self.mk.threshold_attr_view()?;
                 let secret_key_share: Vec<u8> = KeyShare(
                     sav.identifier()?,
-                    sav.threshold()?,
+                    sav.threshold()?.into(),
                     sav.limit()?,
                     secret_bytes.to_vec(),
                 )
@@ -590,7 +598,7 @@ impl ConvView for View<'_> {
                 let pav = pk.threshold_attr_view()?;
                 let public_key_share: Vec<u8> = KeyShare(
                     pav.identifier()?,
-                    pav.threshold()?,
+                    pav.threshold()?.into(),
                     pav.limit()?,
                     key_bytes.to_vec(),
                 )
@@ -752,7 +760,7 @@ impl SignView for View<'_> {
 
 impl ThresholdView for View<'_> {
     /// try to split a Multikey into shares
-    fn split(&self, threshold: usize, limit: usize) -> Result<Vec<Multikey>, Error> {
+    fn split(&self, threshold: NonZeroUsize, limit: NonZeroUsize) -> Result<Vec<Multikey>, Error> {
         if threshold > limit {
             return Err(ThresholdError::InvalidThresholdLimit(threshold, limit).into());
         }
@@ -785,7 +793,7 @@ impl ThresholdView for View<'_> {
                     ))?
                 };
                 let key_shares = secret_key
-                    .split(threshold, limit)
+                    .split(threshold.into(), limit.into())
                     .map_err(ThresholdError::Bls)?;
 
                 let mut shares = Vec::with_capacity(key_shares.len());
@@ -825,7 +833,7 @@ impl ThresholdView for View<'_> {
                 };
 
                 let key_shares = secret_key
-                    .split(threshold, limit)
+                    .split(threshold.into(), limit.into())
                     .map_err(ThresholdError::Bls)?;
 
                 let mut shares = Vec::with_capacity(key_shares.len());
@@ -932,7 +940,7 @@ impl ThresholdView for View<'_> {
 
         // check that we have enough shares to combine
         let num_shares = threshold_data.0.len();
-        if num_shares < threshold {
+        if num_shares < threshold.into() {
             return Err(ThresholdError::NotEnoughShares.into());
         }
 

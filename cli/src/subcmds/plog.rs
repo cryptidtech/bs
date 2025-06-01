@@ -22,8 +22,9 @@ use multihash::EncodedMultihash;
 use multikey::{mk, Multikey, Views};
 use multisig::Multisig;
 use multiutil::{BaseEncoded, CodecInfo, DetectedEncoder, EncodingInfo};
-use provenance_log::{key::key_paths::KeyParamsType, Key, Log, Script};
+use provenance_log::{key::key_paths::ValidatedKeyParams, Key, Log, Script};
 use rng::StdRng;
+use std::num::{NonZero, NonZeroUsize};
 use std::{
     collections::{HashMap, VecDeque},
     convert::TryFrom,
@@ -46,8 +47,8 @@ impl SyncGetKey for KeyManager {
         &self,
         key_path: &Self::KeyPath,
         codec: &Self::Codec,
-        threshold: usize,
-        limit: usize,
+        threshold: NonZeroUsize,
+        limit: NonZeroUsize,
     ) -> Result<Self::Key, Self::Error> {
         // Your implementation using crate::error::Error
         debug!("Generating {} key ({} of {})...", codec, threshold, limit);
@@ -75,8 +76,8 @@ impl SyncPrepareEphemeralSigning for KeyManager {
     fn prepare_ephemeral_signing(
         &self,
         codec: &Self::Codec,
-        threshold: usize,
-        limit: usize,
+        threshold: NonZeroUsize,
+        limit: NonZeroUsize,
     ) -> Result<
         (
             <Self as EphemeralKey>::PubKey,
@@ -211,12 +212,7 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
                 reader(&Some(unlock_script_path))?.read_to_end(&mut v)?;
                 Script::Code(Key::default(), String::from_utf8(v)?)
             };
-            let entry_params = EntryKeyParams::builder()
-                .codec(Codec::Ed25519Priv)
-                .threshold(1)
-                .limit(1)
-                .revoke(false)
-                .build();
+            let entry_params = EntryKeyParams::builder().codec(Codec::Ed25519Priv).build();
             let cfg = update::Config::new(unlock_script, entry_params.key_path().clone())
                 .with_ops(&build_delete_params(&delete_ops)?)
                 .with_ops(&build_key_params(&key_ops)?)
@@ -441,8 +437,8 @@ fn parse_key_params(s: &str, key_path: Option<&str>) -> Result<OpParams, Error> 
     Ok(OpParams::KeyGen {
         key,
         codec,
-        threshold,
-        limit,
+        threshold: NonZero::new(threshold).unwrap(),
+        limit: NonZero::new(limit).unwrap(),
         revoke,
     })
 }
@@ -516,8 +512,8 @@ fn parse_vlad_params(s: &str) -> Result<(OpParams, OpParams), Error> {
         OpParams::KeyGen {
             key: Key::try_from("/vlad/key")?,
             codec,
-            threshold: 0,
-            limit: 0,
+            threshold: NonZero::new(0).unwrap(),
+            limit: NonZero::new(0).unwrap(),
             revoke: false,
         },
         OpParams::CidGen {
