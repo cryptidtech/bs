@@ -260,49 +260,38 @@ mod tests {
     fn test_create_using_defaults() {
         // init_logger();
 
-        let entry_key = Field::ENTRY;
-        let proof_key = Field::PROOF;
+        let pubkey_params = PubkeyParams::builder().codec(Codec::Ed25519Priv).build();
 
-        let unlock_old_school = format!(
+        let unlock = format!(
             r#"
              // push the serialized Entry as the message
              push("{entry_key}");
 
              // push the proof data
              push("{proof_key}");
-        "#
+            "#,
+            entry_key = Field::ENTRY,
+            proof_key = Field::PROOF
         );
-
-        let unlock = format_with_fields!(
-            r#"
-             // push the serialized Entry as the message
-             push("{Field::ENTRY}");
-
-             // push the proof data
-             push("{Field::PROOF}");
-        "#
-        );
-
-        assert_eq!(unlock_old_school, unlock);
 
         let unlock_script = Script::Code(Key::default(), unlock.to_string());
 
-        let lock = format_with_fields!(
+        let lock = format!(
             r#"
-                // then check a possible threshold sig...
-                check_signature("/recoverykey", "{Field::ENTRY}") ||
+            // then check a possible threshold sig...
+            check_signature("/recoverykey", "{entry_key}") ||
 
-                // then check a possible pubkey sig...
-                check_signature("/pubkey", "{Field::ENTRY}") ||
+            // then check a possible pubkey sig...
+            check_signature("{pubkey}", "{entry_key}") ||
 
-                // then the pre-image proof...
-                check_preimage("/hash")
-            "#
+            // then the pre-image proof...
+            check_preimage("/hash")
+        "#,
+            entry_key = Field::ENTRY,
+            pubkey = PubkeyParams::KEY_PATH,
         );
 
         let lock_script = Script::Code(Key::default(), lock);
-
-        let pubkey_params = PubkeyParams::builder().codec(Codec::Ed25519Priv).build();
 
         let open_config = open::Config {
             vlad: VladParams::<FirstEntryKeyParams>::default().into(),
@@ -339,17 +328,21 @@ mod tests {
         // - add a lock Script
         // - remove the entrykey lock Script
         // - add an op
-        let update_cfg = Config::new(unlock_script.clone(), PubkeyParams::KEY_PATH.into())
-            .with_ops(&[OpParams::Delete {
+
+        // CHANGED: Now using the builder pattern
+        let update_cfg = Config::builder()
+            .entry_unlock_script(unlock_script.clone())
+            .entry_signing_key(PubkeyParams::KEY_PATH.into())
+            .build()
+            .add_op(OpParams::Delete {
                 key: VladParams::<FirstEntryKeyParams>::FIRST_ENTRY_KEY_PATH.into(),
-            }])
+            })
             // Entry lock scripts define conditions which must be met by the next entry in the plog for it to be valid.
-            .add_lock_script(Key::try_from("/delegated/").unwrap(), lock_script)
-            .build();
+            .add_lock_script(Key::try_from("/delegated/").unwrap(), lock_script);
 
         let prev = plog.head.clone();
 
-        // tak config and use update method with TestKeyManager to update the log
+        // take config and use update method with TestKeyManager to update the log
         update_plog(&mut plog, &update_cfg, &key_manager, &key_manager)
             .expect("Failed to update plog");
 

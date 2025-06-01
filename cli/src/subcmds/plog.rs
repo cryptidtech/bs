@@ -2,11 +2,9 @@
 
 /// Plog command
 pub mod command;
-use bs::params::vlad::FirstEntryKeyParams;
 use bs_traits::sync::{SyncGetKey, SyncPrepareEphemeralSigning, SyncSigner};
 use bs_traits::{EphemeralKey, GetKey, Signer};
 pub use command::Command;
-use provenance_log::key::key_paths::ValidatedKeyParams as _;
 
 use crate::{error::PlogError, Config, Error};
 use best_practices::cli::io::{reader, writer, writer_name};
@@ -159,6 +157,11 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
                 std::fs::read_to_string(&unlock_script_path).map_err(|_| PlogError::NoKeyPath)?,
             );
 
+            let mut additional_ops = Vec::new();
+            additional_ops.extend(build_key_params(&key_ops)?);
+            additional_ops.extend(build_string_params(&string_ops)?);
+            additional_ops.extend(build_file_params(&file_ops)?);
+
             let cfg = open::Config::builder()
                 .pubkey(parse_key_params(&pub_key_params, Some("/pubkey"))?)
                 .vlad((vlad_key, vlad_cid))
@@ -166,12 +169,8 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
                 .unlock(unlock_script)
                 .lock(lock_script.clone())
                 .first_lock(lock_script)
+                .additional_ops(additional_ops) // Add all operations at once
                 .build();
-
-            cfg.clone()
-                .add_ops(build_key_params(&key_ops)?)
-                .add_ops(build_string_params(&string_ops)?)
-                .add_ops(build_file_params(&file_ops)?);
 
             let key_manager = KeyManager::default();
 
@@ -197,9 +196,9 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
             key_ops,
             string_ops,
             file_ops,
-            lock_script_path: _,
+            lock_script_path,
             unlock_script_path,
-            entry_signing_key: _, // This parameter appears unused
+            entry_signing_key,
             output,
             input,
         } => {
@@ -211,19 +210,36 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
             };
             debug!("read p.log");
 
+            let lock_script = Script::Code(
+                Key::default(),
+                std::fs::read_to_string(&lock_script_path).map_err(|_| PlogError::NoKeyPath)?,
+            );
+
             let unlock_script = {
                 let mut v = Vec::default();
                 reader(&Some(unlock_script_path))?.read_to_end(&mut v)?;
                 Script::Code(Key::default(), String::from_utf8(v)?)
             };
-            let entry_params = FirstEntryKeyParams::builder()
-                .codec(Codec::Ed25519Priv)
-                .build();
-            let cfg = update::Config::new(unlock_script, entry_params.key_path().clone())
-                .with_ops(&build_delete_params(&delete_ops)?)
-                .with_ops(&build_key_params(&key_ops)?)
-                .with_ops(&build_string_params(&string_ops)?)
-                .with_ops(&build_file_params(&file_ops)?)
+
+            // Collect all operations first
+            let mut entry_ops = Vec::new();
+            entry_ops.extend(build_delete_params(&delete_ops)?);
+            entry_ops.extend(build_key_params(&key_ops)?);
+            entry_ops.extend(build_string_params(&string_ops)?);
+            entry_ops.extend(build_file_params(&file_ops)?);
+
+            // read the entry signing key from the path
+            // on Ok, try into Key, and fail Plog::Error::NoKeyPath
+            let entry_signing_key = match std::fs::read_to_string(&entry_signing_key) {
+                Ok(s) => Key::try_from(s.trim())?,
+                Err(_) => return Err(PlogError::NoKeyPath.into()),
+            };
+
+            let cfg = update::Config::builder()
+                .add_entry_lock_scripts(vec![(Key::default(), lock_script.clone())])
+                .entry_unlock_script(unlock_script)
+                .entry_signing_key(entry_signing_key)
+                .entry_ops(entry_ops)
                 .build();
 
             let key_manager = KeyManager::default();
