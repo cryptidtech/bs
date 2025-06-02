@@ -5,3 +5,8 @@ pub mod swarm;
 
 mod error;
 pub use error::Error;
+
+mod behaviour;
+pub use behaviour::BehaviourBuilder;
+
+pub mod events;

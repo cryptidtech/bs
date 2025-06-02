@@ -47,7 +47,7 @@ ssh-key = { version = "0.6.2", features = ["crypto", "ed25519"] }
 ssh-agent-client-rs = "1.0.0"
 structopt = "0.3.26"
 thiserror.workspace = true
-tokio = { version = "1.44.2", features = ["full"] }
+tokio = { workspace = true, features = ["full"] }
 toml = "0.8.20"
 tracing.workspace = true
 tracing-subscriber.workspace = true

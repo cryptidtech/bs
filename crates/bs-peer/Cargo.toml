@@ -24,20 +24,20 @@ multikey.workspace = true
 multisig.workspace = true
 multicid.workspace = true
 multihash.workspace = true
+blockstore.workspace = true
 serde = { workspace = true, optional = true }
 anyhow = "1.0"
-blockstore = "0.7.1"
-cid = "0.11.0"
+cid.workspace = true
 futures = "0.3"
-multihash-codetable = { version = "0.1.4", features = [
+multihash-codetable = { workspace = true, features = [
   "sha2",
   "sha3",
   "blake3",
 ] }
+tokio = { workspace = true, features = ["sync"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 directories = "6.0.0"
-tokio = { version = "1.44" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 send_wrapper = { version = "0.6.0", features = ["futures"] }

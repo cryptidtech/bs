@@ -1,155 +1,96 @@
 //! Native specific code
-//! The native platform impl of [blockstore::Blockstore]
-use std::path::PathBuf;
+mod native_blockstore;
+use bs_p2p::{
+    events::{
+        api::{self, Client},
+        PublicEvent,
+    },
+    swarm, BehaviourBuilder,
+};
+pub use native_blockstore::NativeBlockstore;
 
-//use bytes::Bytes;
-//use tokio::io::AsyncReadExt as _;
-//use wnfs_unixfs_file::builder::FileBuilder;
-//use wnfs_unixfs_file::unixfs::UnixFsFile;
+mod error;
+pub use error::NativeError;
 
 use blockstore::Blockstore;
+use futures::channel::{mpsc, oneshot};
+use libp2p::multiaddr::{Multiaddr, Protocol};
+use std::net::{Ipv4Addr, Ipv6Addr};
+use tokio::spawn;
 
-#[derive(thiserror::Error, Debug)]
-pub enum Error {
-    /// From core::Error
-    #[error("Core error {0}")]
-    P2p(#[from] bs_p2p::Error),
+use crate::Error;
 
-    /// From<libp2p::multiaddr::Error>
-    #[error("Multiaddr error")]
-    Multiaddr(#[from] libp2p::multiaddr::Error),
-
-    /// From<libp2p::libp2p_identity::ParseError>
-    #[error("Identity error")]
-    Identity(#[from] libp2p::identity::ParseError),
-
-    /// No data directory
-    #[error("No data directory")]
-    NoDataDir,
-
-    /// Input output error
-    #[error("IO error")]
-    Io(#[from] std::io::Error),
-    // /// from anyhow
-    // #[error("error")]
-    // Anyhow(#[from] anyhow::Error),
+/// Config for starting the network.
+/// - libp2p_endpoints: List of libp2p endpoints to connect to.
+/// - base_path: Path to the base directory for the blockstore and other data.
+#[derive(Clone, Default)]
+pub struct StartConfig {
+    // TODO: This native node can dial other native nodes, like BOOTNODES
+    pub libp2p_endpoints: Vec<String>,
+    pub base_path: Option<std::path::PathBuf>,
 }
 
-#[derive(Clone, Debug)]
-pub struct NativeBlockstore {
-    directory: PathBuf,
-}
+/// Create the swarm, and get handles to control it.
+/// Any protocols that are passed will be updated with the incoming streams.
+pub async fn start<B: Blockstore + 'static>(
+    tx: mpsc::Sender<PublicEvent>,
+    blockstore: B,
+    config: StartConfig,
+) -> Result<Client, NativeError> {
+    let StartConfig {
+        libp2p_endpoints: _,
+        base_path,
+    } = config;
 
-impl NativeBlockstore {
-    /// Creates a new [NativeBlockstore]
-    /// with the given directory path.
-    pub async fn new(directory: PathBuf) -> Result<Self, Error> {
-        // us tokio to create the directory if it does not exist
-        if !directory.exists() {
-            tokio::fs::create_dir_all(&directory).await?;
-        }
-        Ok(Self { directory })
-    }
-}
+    let behaviour_builder = BehaviourBuilder::new(blockstore);
 
-impl Blockstore for NativeBlockstore {
-    async fn get<const S: usize>(
-        &self,
-        cid: &cid::CidGeneric<S>,
-    ) -> blockstore::Result<Option<Vec<u8>>> {
-        let path = self.directory.join(cid.to_string());
+    let mut swarm = swarm::create(
+        |key, relay_behaviour| behaviour_builder.build(key, relay_behaviour),
+        base_path,
+    )
+    .await?;
 
-        if !path.exists() {
-            return Ok(None);
-        }
+    swarm
+        .behaviour_mut()
+        .kad
+        .set_mode(Some(libp2p::kad::Mode::Server));
 
-        let bytes =
-            std::fs::read(&path).map_err(|e| blockstore::Error::StoredDataError(e.to_string()))?;
+    let peer_id = *swarm.local_peer_id();
+    tracing::info!("Local peer id: {:?}", peer_id);
 
-        Ok(Some(bytes))
-    }
+    let (mut network_client, network_events, network_event_loop) = api::new(swarm).await;
 
-    async fn put_keyed<const S: usize>(
-        &self,
-        cid: &cid::CidGeneric<S>,
-        data: &[u8],
-    ) -> blockstore::Result<()> {
-        let path = self.directory.join(cid.to_string());
+    // We need to start the network event loop first in order to listen for our address
+    tokio::spawn(async move { network_event_loop.run().await });
 
-        std::fs::write(&path, data)
-            .map_err(|e| blockstore::Error::StoredDataError(e.to_string()))?;
+    let address_webrtc = Multiaddr::from(Ipv6Addr::UNSPECIFIED)
+        .with(Protocol::Udp(0))
+        .with(Protocol::WebRTCDirect);
 
-        Ok(())
-    }
+    let addr_webrtc_ipv4 = Multiaddr::from(Ipv4Addr::UNSPECIFIED)
+        .with(Protocol::Udp(0))
+        .with(Protocol::WebRTCDirect);
 
-    async fn remove<const S: usize>(&self, cid: &cid::CidGeneric<S>) -> blockstore::Result<()> {
-        let path = self.directory.join(cid.to_string());
-
-        std::fs::remove_file(&path)
-            .map_err(|e| blockstore::Error::StoredDataError(e.to_string()))?;
-
-        Ok(())
+    for addr in [
+        address_webrtc,
+        addr_webrtc_ipv4,
+        // address_quic, address_tcp
+    ] {
+        tracing::info!("Listening on {:?}", addr.clone());
+        network_client.start_listening(addr).await?;
     }
 
-    async fn close(self) -> blockstore::Result<()> {
-        Ok(())
-    }
-}
+    // for peer in &BOOTNODES {
+    //     let addr = Multiaddr::from_str("/dnsaddr/bootstrap.libp2p.io")?
+    //         .with(Protocol::P2p(libp2p::PeerId::from_str(peer)?));
+    //     network_client.dial(addr).await?;
+    // }
 
-///// A Chunker that takes bytes and chunks them
-//pub async fn put_chunks<B: Blockstore + Clone>(
-//    blockstore: B,
-//    data: Vec<u8>,
-//) -> Result<Cid, NativeError> {
-//    let root_cid = FileBuilder::new()
-//        .content_bytes(data.clone())
-//        .fixed_chunker(256 * 1024)
-//        .build()?
-//        .store(&blockstore)
-//        .await?;
-//
-//    Ok(root_cid)
-//}
+    let mut client_clone = network_client.clone();
 
-#[cfg(test)]
-mod tests {
-    use crate::platform::common::RawBlakeBlock;
+    tokio::spawn(async move {
+        client_clone.run(network_events, tx).await;
+    });
 
-    use super::*;
-    use blockstore::block::Block;
-    use tempfile::tempdir;
-
-    #[tokio::test]
-    async fn test_native_blockstore() {
-        let tempdir = tempdir().unwrap().path().to_path_buf();
-        let blockstore = NativeBlockstore::new(tempdir).await.unwrap();
-
-        let data = b"hello world".to_vec();
-
-        let block = RawBlakeBlock(data.clone());
-        let cid = block.cid().unwrap();
-
-        blockstore.put(block).await.unwrap();
-        let retrieved_data = blockstore.get(&cid).await.unwrap();
-
-        assert_eq!(data, retrieved_data.unwrap());
-    }
-
-    #[tokio::test]
-    async fn test_put_large_bytes() {
-        let tempdir = tempdir().unwrap().path().to_path_buf();
-        let blockstore = NativeBlockstore::new(tempdir).await.unwrap();
-
-        let len = 1 << 19; // 512KB, 2^19 bytes
-        let data = vec![42; len];
-
-        let block = RawBlakeBlock(data.clone());
-        let root_cid = block.cid().unwrap();
-
-        blockstore.put(block).await.unwrap();
-
-        let retrieved_data = blockstore.get(&root_cid).await.unwrap();
-
-        assert_eq!(data, retrieved_data.unwrap());
-    }
+    Ok(network_client)
 }

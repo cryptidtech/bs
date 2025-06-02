@@ -30,3 +30,9 @@ async fn run_update_test() {
 async fn run_load_test() {
     test_utils::run_load_test().await;
 }
+
+#[wasm_bindgen_test]
+async fn test_peer_initialization() {
+    // init_logger();
+    test_utils::run_peer_initialization_test().await;
+}

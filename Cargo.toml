@@ -21,7 +21,6 @@ members = [
   "crates/multiutil",
   "crates/provenance-log",
   "crates/rng",
-  "crates/wacc",
   "crates/bs-peer",
   "crates/interop-tests",
   "crates/bs-wallets",
@@ -30,7 +29,10 @@ members = [
 [workspace.package]
 version = "1.0.0"
 edition = "2021"
-authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
+authors = [
+  "Dave Grantham <dwg@linuxprogrammer.org>",
+  "Doug Anderson <doug@peerpiper.io>",
+]
 description = "The BetterSign Provenance-Based Identity Solution"
 readme = "README.md"
 license = "FSL-1.1 OR Apache-2.0"
@@ -60,14 +62,16 @@ multitrait = { path = "crates/multitrait" }
 multiutil = { path = "crates/multiutil" }
 provenance-log = { path = "crates/provenance-log" }
 rng = { path = "crates/rng" }
-wacc = { path = "crates/wacc" }
 
 # Core dependencies
 best-practices = { version = "0.1.0", git = "https://github.com/cryptidtech/best-practices.git" }
+blockstore = "0.7.1"
+cid = "0.11.0"
 criterion = "0.5.1"
 elliptic-curve = "0.13.8"
 hex = "0.4.3"
 libp2p = { version = "0.54.1" }
+multihash-codetable = { version = "0.1.4" }
 rand = { version = "0.9.0", features = ["os_rng"] }
 rand_core = "0.9.3"
 rand_6 = { version = "0.6.4", package = "rand" }
@@ -82,13 +86,7 @@ serde_test = { version = "1.0.104" }
 sha3 = "0.10.8"
 test-log = { version = "0.2.17", features = ["trace", "color"] }
 thiserror = "2.0.12"
-tokio = { version = "1.44.2", features = [
-  "fs",
-  "io-util",
-  "macros",
-  "rt",
-  "test-util",
-] }
+tokio = { version = "1.44.2" }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 unsigned-varint = { version = "0.8.0", features = ["std"] }

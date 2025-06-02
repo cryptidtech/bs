@@ -10,10 +10,17 @@ license = "Apache 2.0"
 [dependencies]
 serde.workspace = true
 thiserror.workspace = true
+blockstore.workspace = true
 rand = "0.8"
 tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3", features = ["fmt"] }
 web-time = "1.1.0"
+beetswap = "0.4.1"
+tokio = { version = "1.0", features = ["sync", "macros"] }
+futures = "0.3"
+futures-timer = "3.0.2"
+multicid.workspace = true
+cid.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 libp2p = { workspace = true, features = [
@@ -32,6 +39,10 @@ libp2p = { workspace = true, features = [
   "websocket-websys",
   "dcutr",
 ] }
+# until 0.4.0-alpha.2 patch get released on crates.io, see: https://github.com/libp2p/rust-libp2p/pull/5569#issuecomment-2552317044 
+libp2p-webrtc-websys = { git = "https://github.com/DougAnderson444/rust-libp2p", branch = "webrtc-websys-deps" }
+# Needed for: https://github.com/rustwasm/wasm-pack/issues/743#issuecomment-2383907212
+instant = { version = "0.1.12", features = ["wasm-bindgen", "inaccurate"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 libp2p = { workspace = true, features = [
@@ -57,6 +68,16 @@ libp2p = { workspace = true, features = [
 libp2p-webrtc = { version = "0.8.0-alpha", features = ["tokio", "pem"] }
 zeroize = "1.8.1"
 serde_json = "1.0"
+
+[dev-dependencies]
+sha3.workspace = true
+tokio = { workspace = true, features = ["full"] }
+multihash = "0.19.3"
+multihash-codetable = { workspace = true, features = [
+  "sha2",
+  "sha3",
+  "blake3",
+] }
 
 [lints]
 workspace = true

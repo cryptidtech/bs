@@ -1,5 +1,5 @@
 //! Create a swarm for your target.
-#![cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_arch = "wasm32"))]
 mod config;
 #[cfg(not(target_arch = "wasm32"))]
 use config::Config;

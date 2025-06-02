@@ -1,7 +1,7 @@
 check:
   cargo check
-  cargo check --all-targets
-  cargo check --all-targets --target wasm32-unknown-unknown
+  cargo check --all --all-targets
+  cargo check --all --all-targets --target wasm32-unknown-unknown
 
 # Install required targets
 install-targets:

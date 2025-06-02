@@ -1,5 +1,6 @@
 //! Common tests between web and native
 
+use crate::peer::DefaultBsPeer;
 use crate::{peer::BsPeer, Error};
 use ::cid::Cid;
 use blockstore::Blockstore as BlockstoreTrait;
@@ -405,4 +406,61 @@ pub async fn run_load_test() {
         let has_entry = new_fixture.peer.blockstore().has(&entry_cid).await.unwrap();
         assert!(has_entry, "Entry should be in blockstore after load");
     }
+}
+
+pub async fn run_peer_initialization_test() {
+    tracing::info!("Starting peer initialization test");
+
+    // Initialize key manager for the peer
+    let key_manager = InMemoryKeyManager::<Error>::default();
+
+    // Create a new peer with the default platform blockstore
+    let peer_result = DefaultBsPeer::new(key_manager).await;
+
+    match &peer_result {
+        Ok(_) => tracing::info!("Peer initialization succeeded"),
+        Err(e) => tracing::error!("Peer initialization failed: {:?}", e),
+    }
+
+    // Check that peer creation succeeded
+    assert!(peer_result.is_ok(), "Peer should initialize successfully");
+
+    let peer = peer_result.unwrap();
+
+    // Check if network client was established
+    let network_client_exists = {
+        let client_guard = peer.network_client.lock().await;
+        client_guard.is_some()
+    };
+
+    assert!(
+        network_client_exists,
+        "Network client should be initialized"
+    );
+    assert!(peer.events.is_some(), "Event channel should be initialized");
+
+    // Verify we have a working blockstore
+    let blockstore = peer.blockstore();
+
+    // Try to store and retrieve some data to verify blockstore works
+    let test_cid =
+        Cid::try_from("bafkreihwsnuregceqh263vgdathcprnbvatyat6h6mu7ipjhhodcdbyhg4").unwrap();
+    let test_data = b"test network initialization".to_vec();
+
+    let put_result = blockstore.put_keyed(&test_cid, &test_data).await;
+    assert!(
+        put_result.is_ok(),
+        "Should be able to store data in blockstore"
+    );
+
+    let get_result = blockstore.get(&test_cid).await;
+    assert!(
+        get_result.is_ok(),
+        "Should be able to retrieve data from blockstore"
+    );
+    assert_eq!(
+        get_result.unwrap().unwrap(),
+        test_data,
+        "Retrieved data should match stored data"
+    );
 }

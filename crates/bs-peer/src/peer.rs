@@ -1,4 +1,6 @@
 //! BetterSign Peer: BetterSign core + libp2p networking + Blockstore
+use std::sync::Arc;
+
 use crate::{platform, Error};
 use ::cid::Cid;
 use blockstore::Blockstore as BlockstoreTrait;
@@ -10,7 +12,12 @@ use bs::{
     },
     update::OpParams,
 };
+use bs_p2p::events::api::Client;
 use bs_traits::CondSync;
+use futures::channel::{
+    mpsc::{self},
+    oneshot,
+};
 use multicid::cid;
 use multicodec::Codec;
 use multihash::mh;
@@ -23,13 +30,62 @@ where
     KP: KeyManager<Error> + MultiSigner<Error>,
     BS: BlockstoreTrait + CondSync,
 {
+    /// The Provenance Log of the peer, which contains the history of operations
     plog: Option<p::Log>,
+    /// Key provider for the peer, used for signing and key management
     key_provider: KP,
+    /// [Blockstore] to save data
     blockstore: BS,
+    /// Client handle to send commands to the network
+    pub network_client: Option<Client>,
+    /// Events emitted from the network
+    pub events: Option<mpsc::Receiver<bs_p2p::events::PublicEvent>>,
 }
 
 // Default platform-specific version of BsPeer
 pub type DefaultBsPeer<KP> = BsPeer<KP, platform::Blockstore>;
+
+#[cfg(target_arch = "wasm32")]
+fn directories() -> String {
+    // For wasm, we use a default directory
+    "bs-peer".into()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn directories() -> std::path::PathBuf {
+    // For non-wasm, we use the platform-specific directories
+    directories::ProjectDirs::from("tech", "cryptid", "BetterSignPeer")
+        .map(|dirs| dirs.data_dir().to_path_buf())
+        .unwrap_or_else(|| "bs-peer".into())
+}
+
+impl<KP> DefaultBsPeer<KP>
+where
+    KP: KeyManager<Error> + MultiSigner<Error> + CondSync,
+{
+    /// Create a new [BsPeer] with the given key provider [KeyManager] and [MultiSigner],
+    /// open a new platform-specific Blockstore,
+    /// start a [bs_p2p] network node,
+    /// set a network access [Client] to send commands,
+    /// link an event receiver for network [bs_p2p::events::PublicEvent]s.
+    pub async fn new(key_provider: KP) -> Result<Self, Error> {
+        let blockstore = platform::Blockstore::new(directories()).await.unwrap();
+
+        let (tx_evts, rx_evts) = mpsc::channel(16);
+        let config = platform::StartConfig::default();
+        let blockstore_clone = blockstore.clone();
+
+        let network_client = platform::start(tx_evts, blockstore_clone, config).await?;
+
+        Ok(Self {
+            network_client: Some(network_client),
+            plog: None,
+            key_provider,
+            blockstore,
+            events: Some(rx_evts),
+        })
+    }
+}
 
 impl<KP, BS> BsPeer<KP, BS>
 where
@@ -47,6 +103,8 @@ where
             key_provider,
             plog: None,
             blockstore,
+            network_client: Default::default(),
+            events: None,
         }
     }
 
@@ -231,35 +289,6 @@ where
     }
 }
 
-// directories for the platform-specific blockstore
-#[cfg(target_arch = "wasm32")]
-fn directories() -> String {
-    // For wasm, we use a default directory
-    "bs-peer".into()
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn directories() -> std::path::PathBuf {
-    // For non-wasm, we use the platform-specific directories
-    directories::ProjectDirs::from("tech", "cryptid", "BetterSignPeer")
-        .map(|dirs| dirs.data_dir().to_path_buf())
-        .unwrap_or_else(|| "bs-peer".into())
-}
-
-// Default implementation for platform-specific blockstore
-impl<KP> DefaultBsPeer<KP>
-where
-    KP: KeyManager<Error> + MultiSigner<Error> + CondSync,
-{
-    /// Create a new Peer with the given key provider, opens
-    /// a new platform-specific Blockstore for the Peer.
-    pub async fn new(key_provider: KP) -> Result<Self, Error> {
-        let directory = directories();
-        let blockstore = platform::Blockstore::new(directory).await?;
-        Ok(Self::with_blockstore(key_provider, blockstore))
-    }
-}
-
 #[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 mod tests {
@@ -302,5 +331,11 @@ mod tests {
     async fn run_load_test() {
         // init_logger();
         test_utils::run_load_test().await;
+    }
+
+    #[tokio::test]
+    async fn test_peer_initialization() {
+        // init_logger();
+        test_utils::run_peer_initialization_test().await;
     }
 }

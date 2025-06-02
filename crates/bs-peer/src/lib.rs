@@ -12,8 +12,6 @@ pub use peer::BsPeer;
 
 mod platform;
 
-pub mod bindgen;
-
 pub mod error;
 pub use error::Error;
 
