@@ -156,6 +156,13 @@ impl fmt::Debug for Cid {
     }
 }
 
+impl fmt::Display for Cid {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let encoded = EncodedCid::new(self.encoding(), self.clone());
+        write!(f, "{}", encoded)
+    }
+}
+
 /// Hash builder that takes the codec and the data and produces a Multihash
 #[derive(Clone, Debug, Default)]
 pub struct Builder {

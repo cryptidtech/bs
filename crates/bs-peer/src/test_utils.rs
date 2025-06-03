@@ -56,6 +56,7 @@ where
         Ok(result)
     }
 }
+
 pub async fn setup_test_peer() -> TestFixture {
     // Set up key manager
     let key_manager = InMemoryKeyManager::<Error>::default();
@@ -428,13 +429,8 @@ pub async fn run_peer_initialization_test() {
     let peer = peer_result.unwrap();
 
     // Check if network client was established
-    let network_client_exists = {
-        let client_guard = peer.network_client.lock().await;
-        client_guard.is_some()
-    };
-
     assert!(
-        network_client_exists,
+        peer.network_client.as_ref().is_some(),
         "Network client should be initialized"
     );
     assert!(peer.events.is_some(), "Event channel should be initialized");

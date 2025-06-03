@@ -14,6 +14,7 @@ use bs_p2p::{
 };
 use futures::channel::{mpsc, oneshot};
 use libp2p::multiaddr::{Multiaddr, Protocol};
+use libp2p::PeerId;
 pub use opfs::OPFSWrapped;
 
 /// Config for starting
@@ -30,7 +31,7 @@ pub async fn start<B: Blockstore + 'static>(
     tx: mpsc::Sender<PublicEvent>,
     blockstore: B,
     config: StartConfig,
-) -> Result<Client, Error> {
+) -> Result<(Client, PeerId), Error> {
     let StartConfig {
         libp2p_endpoints,
         base_path,
@@ -46,7 +47,7 @@ pub async fn start<B: Blockstore + 'static>(
     )
     .await?;
 
-    let _peer_id = *swarm.local_peer_id();
+    let peer_id = *swarm.local_peer_id();
 
     let (mut network_client, network_events, network_event_loop) = api::new(swarm).await;
 
@@ -80,5 +81,5 @@ pub async fn start<B: Blockstore + 'static>(
         client_clone.run(network_events, tx).await;
     });
 
-    Ok(network_client)
+    Ok((network_client, peer_id))
 }

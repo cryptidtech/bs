@@ -14,7 +14,10 @@ pub use error::NativeError;
 
 use blockstore::Blockstore;
 use futures::channel::{mpsc, oneshot};
-use libp2p::multiaddr::{Multiaddr, Protocol};
+use libp2p::{
+    multiaddr::{Multiaddr, Protocol},
+    PeerId,
+};
 use std::net::{Ipv4Addr, Ipv6Addr};
 use tokio::spawn;
 
@@ -36,7 +39,7 @@ pub async fn start<B: Blockstore + 'static>(
     tx: mpsc::Sender<PublicEvent>,
     blockstore: B,
     config: StartConfig,
-) -> Result<Client, NativeError> {
+) -> Result<(Client, PeerId), NativeError> {
     let StartConfig {
         libp2p_endpoints: _,
         base_path,
@@ -49,6 +52,8 @@ pub async fn start<B: Blockstore + 'static>(
         base_path,
     )
     .await?;
+
+    let peer_id = *swarm.local_peer_id();
 
     swarm
         .behaviour_mut()
@@ -92,5 +97,5 @@ pub async fn start<B: Blockstore + 'static>(
         client_clone.run(network_events, tx).await;
     });
 
-    Ok(network_client)
+    Ok((network_client, peer_id))
 }

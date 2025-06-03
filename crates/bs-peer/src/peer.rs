@@ -1,5 +1,5 @@
 //! BetterSign Peer: BetterSign core + libp2p networking + Blockstore
-use std::sync::Arc;
+use std::{future::Future, pin::Pin};
 
 use crate::{platform, Error};
 use ::cid::Cid;
@@ -14,14 +14,13 @@ use bs::{
 };
 use bs_p2p::events::api::Client;
 use bs_traits::CondSync;
-use futures::channel::{
-    mpsc::{self},
-    oneshot,
-};
+use futures::channel::mpsc::{self};
+use libp2p::PeerId;
 use multicid::cid;
 use multicodec::Codec;
 use multihash::mh;
 use provenance_log::key::key_paths::ValidatedKeyParams;
+pub use provenance_log::resolver::{get_entry_chain, resolve_plog, ResolvedPlog, Resolver};
 use provenance_log::{self as p, Key, Script};
 
 /// A peer in the network that is generic over the blockstore type
@@ -40,6 +39,8 @@ where
     pub network_client: Option<Client>,
     /// Events emitted from the network
     pub events: Option<mpsc::Receiver<bs_p2p::events::PublicEvent>>,
+    /// The peer ID of this peer in the network
+    pub peer_id: Option<PeerId>,
 }
 
 // Default platform-specific version of BsPeer
@@ -75,7 +76,7 @@ where
         let config = platform::StartConfig::default();
         let blockstore_clone = blockstore.clone();
 
-        let network_client = platform::start(tx_evts, blockstore_clone, config).await?;
+        let (network_client, peer_id) = platform::start(tx_evts, blockstore_clone, config).await?;
 
         Ok(Self {
             network_client: Some(network_client),
@@ -83,6 +84,7 @@ where
             key_provider,
             blockstore,
             events: Some(rx_evts),
+            peer_id: Some(peer_id),
         })
     }
 }
@@ -105,6 +107,7 @@ where
             blockstore,
             network_client: Default::default(),
             events: None,
+            peer_id: None,
         }
     }
 
@@ -287,6 +290,34 @@ where
         self.store_entries().await?;
         Ok(())
     }
+}
+
+impl<KP: KeyManager<Error> + MultiSigner<Error>> Resolver for &DefaultBsPeer<KP> {
+    type Error = TestError;
+
+    fn resolve(
+        &self,
+        cid: &multicid::Cid,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Self::Error>> + Send>> {
+        let cid_bytes: Vec<u8> = cid.clone().into();
+        let client = self.network_client.clone();
+        Box::pin(async move {
+            let Some(client) = client else {
+                return Err(TestError::NotConnected);
+            };
+
+            Ok(client.get_bits(cid_bytes).await?)
+        })
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum TestError {
+    #[error("Provenance Log not initialized")]
+    NotConnected,
+    // from bs_p2p
+    #[error("Plog already exists")]
+    P2p(#[from] bs_p2p::Error),
 }
 
 #[cfg(not(target_arch = "wasm32"))]

@@ -122,7 +122,7 @@ impl Client {
     }
 
     /// Gets a record from the DHT
-    pub(crate) async fn get_record(&self, key: Vec<u8>) -> Result<Vec<u8>, Error> {
+    pub async fn get_record(&self, key: Vec<u8>) -> Result<Vec<u8>, Error> {
         let (sender, receiver) = oneshot::channel();
         self.command_sender
             .send(NetworkCommand::GetRecord { key, sender })
@@ -137,6 +137,8 @@ impl Client {
             .send(NetworkCommand::AddPeer { peer_id })
             .await?)
     }
+
+    /// Publish to a gossipsub topic
     pub async fn publish(&mut self, message: impl AsRef<[u8]>, topic: String) -> Result<(), Error> {
         Ok(self
             .command_sender

@@ -94,3 +94,7 @@ unsigned-varint = { version = "0.8.0", features = ["std"] }
 [profile.bench]
 opt-level = 3
 debug = false
+
+# until lands: https://github.com/libp2p/rust-libp2p/issues/5877
+[patch.crates-io]
+libp2p-webrtc-utils = { git = "https://github.com/DougAnderson444/rust-libp2p.git", branch = "core-v0.42-webrtc-utils-0.3.0" }

@@ -56,3 +56,6 @@ pub mod prelude {
     pub use multicodec::Codec;
     pub use multiutil::BaseEncoded;
 }
+
+/// Resolve [Entry]s from head to foot
+pub mod resolver;
