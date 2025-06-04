@@ -121,9 +121,18 @@ impl Client {
         receiver.await.map_err(Error::OneshotCanceled)
     }
 
+    /// Put a record on the DHT 
+    pub async fn put_record(&self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Error> {
+        self.command_sender
+            .send(NetworkCommand::PutRecord { key, value })
+            .await?;
+        Ok(())
+    }
+
     /// Gets a record from the DHT
     pub async fn get_record(&self, key: Vec<u8>) -> Result<Vec<u8>, Error> {
         let (sender, receiver) = oneshot::channel();
+        tracing::debug!("Requesting record for key: {:?}", key);
         self.command_sender
             .send(NetworkCommand::GetRecord { key, sender })
             .await?;
@@ -251,57 +260,22 @@ pub enum NetworkCommand {
 }
 
 /// Inner Libp2p Events which cannot be serialized
+#[derive(Debug, Clone)]
 pub enum Libp2pEvent {
-    /// The unique Event to this api file that never leaves; all other events propagate out
-    InboundRequest {
-        request: PeerRequest,
-        channel: ResponseChannel<PeerResponse>,
-    },
-    /// DHT Provider Request for when someone asks for a record
-    DhtProviderRequest {
-        key: Vec<u8>,
-        channel: ResponseChannel<Vec<u8>>,
-    },
+    // /// The unique Event to this api file that never leaves; all other events propagate out
+    // InboundRequest {
+    //     request: PeerRequest,
+    //     channel: ResponseChannel<PeerResponse>,
+    // },
+    // /// DHT Provider Request for when someone asks for a record
+    // DhtProviderRequest {
+    //     key: Vec<u8>,
+    //     channel: ResponseChannel<Vec<u8>>,
+    // },
     /// An inbound request to Put a Record into the DHT from a source PeerId
-    PutRecordRequest { source: PeerId, record: Record },
-    /// A Stream we wanted opened is now open
-    StreamOpened {
-        stream_protocol: StreamProtocol,
-        stream: libp2p::Stream,
-        peer_id: PeerId,
-    },
+    PutRecordRequest { source: PeerId },
 }
 
-impl std::fmt::Debug for Libp2pEvent {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Libp2pEvent::InboundRequest { request, channel } => f
-                .debug_struct("InboundRequest")
-                .field("request", request)
-                .field("channel", channel)
-                .finish(),
-            Libp2pEvent::DhtProviderRequest { key, channel } => f
-                .debug_struct("DhtProviderRequest")
-                .field("key", key)
-                .field("channel", channel)
-                .finish(),
-            Libp2pEvent::PutRecordRequest { source, record } => f
-                .debug_struct("PutRecordRequest")
-                .field("source", source)
-                .field("record", record)
-                .finish(),
-            Libp2pEvent::StreamOpened {
-                stream_protocol,
-                peer_id,
-                ..
-            } => f
-                .debug_struct("StreamOpened")
-                .field("protocol", stream_protocol)
-                .field("peer_id", peer_id)
-                .finish(),
-        }
-    }
-}
 
 /// The network event loop.
 /// Handles all the network logic for us.
@@ -628,7 +602,7 @@ impl<B: Blockstore> EventLoop<B> {
                 request_response::Message::Request {
                     request, channel: _, ..
                 } => {
-                    tracing::trace!("Received request: {:?}", &request);
+                    tracing::debug!("Received request: {:?}", &request);
 
                 }
                 request_response::Message::Response {
@@ -755,6 +729,8 @@ impl<B: Blockstore> EventLoop<B> {
                 result,
                 ..
             })) => {
+
+                tracing::debug!("Got Kad QueryProgressed: {:?}", result);
                 match result {
                     kad::QueryResult::GetProviders(Ok(kad::GetProvidersOk::FoundProviders {
                         providers,
@@ -775,6 +751,7 @@ impl<B: Blockstore> EventLoop<B> {
                     kad::QueryResult::GetRecord(Ok(kad::GetRecordOk::FoundRecord(
                         PeerRecord { record, .. },
                     ))) => {
+                        tracing::debug!("Got QueryResult Record: {:?}", record);
                         if let Some(sender) = self.pending_get_records.remove(&id) {
                             sender
                                 .send(record.value.clone())
@@ -806,22 +783,35 @@ impl<B: Blockstore> EventLoop<B> {
                 tracing::debug!("Kademlia Inbound Request: {:?}", request);
                 match request {
                     InboundRequest::PutRecord {
-                        record: Some(record),
                         source,
+                        record,
                         ..
                     } => {
                         tracing::info!("Received PutRecordRequest from: {:?}", source);
 
                         // TODO: Filter Providers based on criteria?
                         // for now, add the provider to the DHT as is
+                        if let Some(rec) = record {
+                            if let Err(e) = self
+                                .swarm
+                                .behaviour_mut()
+                                .kad
+                                .store_mut()
+                                .put(rec.clone())
+                            {
+                                tracing::error!("Failed to add provider to DHT: {e}");
+                            }
+                        }
+
+                        // send evt to external handler plugins to decide whether to include record or not:
                         if let Err(e) = self
-                            .swarm
-                            .behaviour_mut()
-                            .kad
-                            .store_mut()
-                            .put(record.clone())
+                            .event_sender
+                            .send(PublicEvent::Swarm(Libp2pEvent::PutRecordRequest {
+                                source,
+                            }))
+                            .await
                         {
-                            tracing::error!("Failed to add provider to DHT: {e}");
+                            tracing::error!("Failed to send PutRecordRequest event: {e}");
                         }
                     }
                     InboundRequest::AddProvider {
@@ -867,38 +857,27 @@ impl<B: Blockstore> EventLoop<B> {
             SwarmEvent::NewExternalAddrCandidate { address } => {
                 tracing::debug!("New external address candidate: {address}");
             }
-            SwarmEvent::Behaviour(BehaviourEvent::Bitswap(bitswap)) => match bitswap {
-                beetswap::Event::GetQueryResponse { query_id, data } => {
-                    tracing::info!("Bitswap: received response for {query_id:?}: {data:?}");
-                    match self.pending_queries.get(&query_id) {
-                        Some(sendr) => {
-                            tracing::info!("received response for {sendr:?}: {data:?}");
-                            self.pending_queries
-                                .remove(&query_id)
-                                .ok_or(Error::StaticStr("Remove failed"))?
-                                .send(data)
-                                .map_err(|_| {
-                                    tracing::error!("Failed to send response for Bitswap result");
-                                    Error::StaticStr("Failed to send response")
-                                })?;
-                        }
-                        None => {
+            SwarmEvent::Behaviour(BehaviourEvent::Bitswap(bitswap)) => {
+                tracing::info!("BITWAP Incoming event!!!");
+                match bitswap {
+                    beetswap::Event::GetQueryResponse { query_id, data } => {
+                        tracing::info!("Bitswap: received response for {query_id:?}: {data:?}");
+                        if let Some(sender) = self.pending_queries.remove(&query_id) {
+                            sender.send(data).map_err(|_| {
+                                tracing::error!("Failed to send response for Bitswap result");
+                                Error::StaticStr("Failed to send response")
+                            })?;
+                        } else {
                             tracing::info!("received response for unknown cid");
                         }
                     }
-                }
-                beetswap::Event::GetQueryError { query_id, error } => {
-                    tracing::info!("Bitswap: received error for {query_id:?}: {error}");
-                    match self.pending_queries.get(&query_id) {
-                        Some(cid) => {
-                            tracing::info!("received error for {cid:?}: {error}");
-                            let sendr = self
-                                .pending_queries
-                                .remove(&query_id)
-                                .ok_or(Error::StaticStr("Remove failed"))?;
-                            drop(sendr);
-                        }
-                        None => {
+                    beetswap::Event::GetQueryError { query_id, error } => {
+                        tracing::info!("Bitswap: received error for {query_id:?}: {error}");
+                        if let Some(sender) = self.pending_queries.remove(&query_id) {
+                            tracing::info!("received error for sender: {error}");
+                            // Dropping the sender will cause the receiver to get an error
+                            drop(sender);
+                        } else {
                             tracing::info!("received error for unknown cid: {error}");
                         }
                     }
@@ -1030,15 +1009,13 @@ impl<B: Blockstore> EventLoop<B> {
             }
             // NetworkCommand for Bitwap: TODO here.
             NetworkCommand::BitswapQuery { cid, sender } => {
-                tracing::info!("API: Handling BitswapQuery command");
                 let Ok(cid) = cid::Cid::try_from(cid) else {
                     tracing::error!("Failed to parse CID");
                     return;
                 };
                 let query_id = self.swarm.behaviour_mut().bitswap.get(&cid);
-                tracing::info!("Bitswap query id: {query_id:?}");
+                tracing::info!("API Bitswap query id: {query_id:?} for CID: {cid}");
                 self.pending_queries.insert(query_id, sender);
-                tracing::info!("API: BitswapQuery command sent");
             }
             NetworkCommand::RespondJeeves {
                 bytes: file,

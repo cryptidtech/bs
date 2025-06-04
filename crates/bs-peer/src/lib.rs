@@ -10,7 +10,7 @@ pub struct ReadmeDoctests;
 pub mod peer;
 pub use peer::BsPeer;
 
-mod platform;
+pub mod platform;
 
 pub mod error;
 pub use error::Error;

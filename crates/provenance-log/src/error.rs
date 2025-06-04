@@ -186,8 +186,8 @@ pub enum OpError {
 #[non_exhaustive]
 pub enum ScriptError {
     /// Missing sigil
-    #[error("missing provenance entry sigil")]
-    MissingSigil,
+    #[error("missing provenance script sigil")]
+    MissingScriptSigil,
     /// Invalid script type id
     #[error("invalid script type id {0}")]
     InvalidScriptId(u8),

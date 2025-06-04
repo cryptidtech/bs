@@ -1,7 +1,8 @@
 //! Event types, and loop handlers for the P2P network.
 pub mod api;
 
-mod delay;
+pub mod delay;
+use api::Libp2pEvent;
 pub(crate) use delay::Delay;
 
 use libp2p::Multiaddr;
@@ -37,6 +38,7 @@ pub enum PublicEvent {
         cause: String,
     },
     Connected,
+    Swarm(Libp2pEvent),
 }
 
 #[derive(Debug, Clone)]

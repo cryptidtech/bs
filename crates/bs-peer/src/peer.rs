@@ -24,6 +24,7 @@ pub use provenance_log::resolver::{get_entry_chain, resolve_plog, ResolvedPlog, 
 use provenance_log::{self as p, Key, Script};
 
 /// A peer in the network that is generic over the blockstore type
+#[derive(Debug)]
 pub struct BsPeer<KP, BS>
 where
     KP: KeyManager<Error> + MultiSigner<Error>,
@@ -143,6 +144,17 @@ where
                 self.blockstore.put_keyed(&cid, &data).await?;
 
                 tracing::debug!("Stored CID in blockstore: {:?}", cid);
+
+                // get bytes back to verify
+                let stored_data = self.blockstore.get(&cid).await?;
+                if let Some(ref stored_data) = stored_data {
+                    tracing::debug!("Stored data: {:?}", stored_data);
+                } else {
+                    tracing::error!("No data found for CID: {:?}", cid);
+                }
+
+                debug_assert!(stored_data.is_some(), "Data should be stored in blockstore");
+                debug_assert_eq!(stored_data.unwrap(), data);
             }
         }
         Ok(())
@@ -179,6 +191,8 @@ where
 
             self.blockstore.put_keyed(&cid, &entry_bytes).await?;
         }
+
+        tracing::debug!("Stored all Plog entries in blockstore");
 
         Ok(())
     }
@@ -299,6 +313,7 @@ impl<KP: KeyManager<Error> + MultiSigner<Error>> Resolver for &DefaultBsPeer<KP>
         &self,
         cid: &multicid::Cid,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Self::Error>> + Send>> {
+        tracing::debug!("DefaultBsPeer Resolving CID over bitswap: {}", cid);
         let cid_bytes: Vec<u8> = cid.clone().into();
         let client = self.network_client.clone();
         Box::pin(async move {
@@ -318,6 +333,17 @@ pub enum TestError {
     // from bs_p2p
     #[error("Plog already exists")]
     P2p(#[from] bs_p2p::Error),
+}
+
+impl From<TestError> for provenance_log::resolver::ResolveError {
+    fn from(err: TestError) -> Self {
+        match err {
+            TestError::NotConnected => provenance_log::resolver::ResolveError::Other(
+                "Peer is not connected to the network".into(),
+            ),
+            TestError::P2p(e) => provenance_log::resolver::ResolveError::Other(e.to_string()),
+        }
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]

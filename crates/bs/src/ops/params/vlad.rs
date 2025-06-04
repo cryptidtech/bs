@@ -5,6 +5,7 @@ use provenance_log::{
     const_assert_valid_key,
     entry::Field,
     key::key_paths::{ValidatedKeyParams, ValidatedKeyPath},
+    Key, Script,
 };
 use std::num::NonZeroUsize;
 
@@ -92,9 +93,19 @@ impl<T: ValidatedKeyParams> From<VladParams<T>> for (OpParams, OpParams) {
             revoke: false,                            // vlad does not support revoking keys
         };
 
+        let first_lock_script = Script::Code(
+            const_assert_valid_key!("/vlad/cid").into(),
+            VladParams::<T>::first_lock_script(),
+        );
+        let first_lock_bytes: Vec<u8> = first_lock_script.clone().into();
+        tracing::debug!("Vlad First lock bytes: {:?}", first_lock_bytes);
+        debug_assert_eq!(
+            Script::try_from(first_lock_bytes.as_slice()).unwrap(),
+            first_lock_script
+        );
         let cid_params = OpParams::CidGen {
             hash: params.hash,
-            data: VladParams::<T>::first_lock_script().as_bytes().to_vec(), // data is always the first lock script
+            data: first_lock_bytes,
             key: VladParams::<T>::CID_KEY.into(), // the cid key is always the vlad key
             version: Codec::Cidv1,                // v1 is the latest version right now
             target: Codec::Identity,              // vlad cid is always identity
@@ -106,11 +117,21 @@ impl<T: ValidatedKeyParams> From<VladParams<T>> for (OpParams, OpParams) {
 
 #[cfg(test)]
 mod tests {
+    use tracing_subscriber::fmt;
+
     use super::*;
 
+    #[allow(unused)]
+    fn init_logger() {
+        let subscriber = fmt().with_env_filter("debug,provenance_log=off").finish();
+        if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
+            tracing::warn!("failed to set subscriber: {}", e);
+        }
+    }
     // test builder
     #[test]
     fn test_vlad_params_builder() {
+        init_logger();
         let vlad_params = VladParams::<FirstEntryKeyParams>::builder()
             .key(Codec::Ed25519Priv)
             .hash(Codec::Sha2256)
@@ -152,12 +173,12 @@ mod tests {
             assert_eq!(target, Codec::Identity);
             assert_eq!(hash, Codec::Sha2256);
             assert!(inline);
-            assert_eq!(
-                data,
-                VladParams::<FirstEntryKeyParams>::first_lock_script()
-                    .as_bytes()
-                    .to_vec()
-            );
+            let script_bytes: Vec<u8> = Script::Code(
+                const_assert_valid_key!("/vlad/cid").into(),
+                VladParams::<FirstEntryKeyParams>::first_lock_script(),
+            )
+            .into();
+            assert_eq!(data, script_bytes);
         } else {
             panic!("Expected CidGen OpParams");
         }
@@ -203,12 +224,13 @@ mod tests {
             assert_eq!(target, Codec::Identity);
             assert_eq!(hash, Codec::Sha2256);
             assert!(inline);
-            assert_eq!(
-                data,
-                VladParams::<FirstEntryKeyParams>::first_lock_script()
-                    .as_bytes()
-                    .to_vec()
-            );
+
+            let script_bytes: Vec<u8> = Script::Code(
+                const_assert_valid_key!("/vlad/cid").into(),
+                VladParams::<FirstEntryKeyParams>::first_lock_script(),
+            )
+            .into();
+            assert_eq!(data, script_bytes);
         } else {
             panic!("Expected CidGen OpParams");
         }

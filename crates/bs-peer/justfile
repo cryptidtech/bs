@@ -6,4 +6,4 @@ test: test-web
 
 test-web:
   RUSTFLAGS='--cfg getrandom_backend="wasm_js"' wasm-pack build --target web
-  RUSTFLAGS='--cfg getrandom_backend="wasm_js"' wasm-pack test --chrome --all-features
+  RUSTFLAGS='--cfg getrandom_backend="wasm_js"' wasm-pack test --headless --chrome --all-features

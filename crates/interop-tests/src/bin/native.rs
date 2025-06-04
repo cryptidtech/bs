@@ -1,14 +1,5 @@
 #![cfg(not(target_arch = "wasm32"))]
 
-use bs::config::sync::{KeyManager, MultiSigner};
-use bs_p2p::events::{api::NetworkCommand, delay::Delay, PublicEvent};
-use bs_peer::peer::{get_entry_chain, resolve_plog, DefaultBsPeer, Resolver};
-use bs_wallets::memory::InMemoryKeyManager;
-use provenance_log::{Entry, Script};
-
-use std::str::FromStr;
-use std::sync::Arc;
-
 use anyhow::Result;
 use axum::extract::{Path, State};
 use axum::http::header::CONTENT_TYPE;
@@ -16,13 +7,21 @@ use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse};
 use axum::Router;
 use axum::{http::Method, routing::get};
+use bs::config::sync::{KeyManager, MultiSigner};
+use bs_p2p::events::api::Libp2pEvent;
+use bs_p2p::events::PublicEvent;
+use bs_peer::peer::{get_entry_chain, resolve_plog, DefaultBsPeer, Resolver};
+use bs_wallets::memory::InMemoryKeyManager;
 use futures::StreamExt;
 use libp2p::multiaddr::{Multiaddr, Protocol};
 use libp2p::PeerId;
+use provenance_log::{Entry, Script};
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::channel;
+use tokio::sync::mpsc::Sender;
 use tokio::sync::Mutex;
 use tower_http::cors::{Any, CorsLayer};
 
@@ -30,7 +29,7 @@ use tower_http::cors::{Any, CorsLayer};
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = tracing_subscriber::fmt()
         .with_env_filter(
-            "interop_tests_native=debug,libp2p_webrtc=info,libp2p_ping=debug,beetswap=trace",
+            "interop_tests_native=debug,libp2p_webrtc=info,libp2p_ping=debug,beetswap=trace,bs_p2p=debug,bs_peer=debug,bs=debug",
         )
         .try_init();
 
@@ -39,13 +38,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let key_manager = InMemoryKeyManager::<bs_peer::Error>::default();
 
     // Create a new peer with the default platform blockstore
-    let bs_peer = DefaultBsPeer::new(key_manager).await?;
+    let bs_peer = DefaultBsPeer::new(key_manager).await.unwrap();
 
     // Wrap the peer in Arc<Mutex<>> to safely share between tasks
     let bs_peer = Arc::new(Mutex::new(bs_peer));
 
     // Create a channel to signal test completion
-    let (completion_tx, mut completion_rx) = channel::<(bool, String)>(1);
+    let (completion_tx, _completion_rx) = channel::<(bool, String)>(1);
 
     // Clone the peer for the address waiting task
     let bs_peer_clone = Arc::clone(&bs_peer);
@@ -55,11 +54,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         addr = async {
             let mut peer = bs_peer_clone.lock().await;
             loop {
-                if let Some(event) = peer.events.as_mut().unwrap().next().await {
-                    if let PublicEvent::ListenAddr { address, .. } = event {
-                        tracing::info!(%address, "RXD Address");
-                        break address;
-                    }
+                if let Some(PublicEvent::ListenAddr { address, .. }) = peer.events.as_mut().unwrap().next().await {
+                    tracing::info!(%address, "RXD Address");
+                    break address;
                 }
             }
         } => addr,
@@ -72,141 +69,161 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Serve .wasm, .js and server multiaddress over HTTP on this address.
     tokio::spawn(serve(address.clone()));
 
-    // Subscribe to test-status topic to receive ready signal from browser
-    {
-        let mut peer = bs_peer.lock().await;
-        if let Some(client) = peer.network_client.as_mut() {
-            client
-                .command(NetworkCommand::Subscribe {
-                    topic: "test-status".to_string(),
-                })
-                .await?;
-        }
-
-        // Also subscribe to test-results to publish verification results
-        if let Some(client) = peer.network_client.as_mut() {
-            client
-                .command(NetworkCommand::Subscribe {
-                    topic: "test-results".to_string(),
-                })
-                .await?;
-        }
-    }
-
-    let mut test_completed = false;
-    let tick = Delay::new(Duration::from_secs(120)); // 2 minute total test timeout
-    tokio::pin!(tick);
-
     loop {
         tokio::select! {
-            _ = &mut tick, if !test_completed => {
-                test_completed = true;
-                tracing::error!("Test timed out after 120 seconds");
-
-                // Publish timeout message
+            evt = async {
                 let mut peer = bs_peer.lock().await;
-                if let Some(client) = peer.network_client.as_mut() {
-                    let timeout_msg = "TEST_RESULT:false:Test timed out after 120 seconds";
-                    let _ = client.command(NetworkCommand::Publish {
-                        topic: "test-results".to_string(),
-                        data: timeout_msg.as_bytes().to_vec(),
-                    }).await;
-                }
-
-                return Err("Test timed out".into());
-            }
-
-            event_opt = async {
-                let mut peer = bs_peer.lock().await;
-                peer.events.as_mut().unwrap().next().await
-            }, if !test_completed => {
-                if let Some(event) = event_opt {
-                    tracing::debug!("Received event: {:?}", event);
-
-                    match event {
-                        PublicEvent::NewConnection { peer: connected_peer } => {
-                            // Once connection establish, process verification
-                            tracing::info!("New connection from {}", connected_peer);
-
-                            let p = PeerId::from_str(&connected_peer).unwrap();
-
-                            // Clone Arc to move into the verification task
-                            let bs_peer_clone = Arc::clone(&bs_peer);
-                            let completion_tx_clone = completion_tx.clone();
-                            let completion_tx_clone_clone = completion_tx.clone();
-
-                            tokio::spawn(async move {
-                                // Use a timeout for the verification process
-                                match tokio::time::timeout(
-                                    Duration::from_secs(60),
-                                    verify_remote_plog(bs_peer_clone, p, completion_tx_clone)
-                                ).await {
-                                    Ok(result) => {
-                                        result.unwrap();
-                                    },
-                                    Err(_) => {
-                                        tracing::error!("Verification timed out");
-                                        let _ = completion_tx_clone_clone.send((
-                                            false,
-                                            "Verification process timed out".to_string()
-                                        )).await;
-                                    }
-                                }
-                            });
-                        }
-                        PublicEvent::Message { peer, topic, data } => {
-                            tracing::info!("Received message from {} on topic {}: {:?}", peer, topic, data);
-
-                            // Check if this is the "WASM_READY" message
-                            if topic == "test-status" && String::from_utf8_lossy(&data) == "WASM_READY" {
-                                tracing::info!("Browser reported ready, awaiting verification completion");
+                peer.events.as_mut().unwrap().select_next_some().await
+            } => {
+            match evt {
+                PublicEvent::Swarm(Libp2pEvent::PutRecordRequest { source }) => {
+                    // Handle incoming DHT record requests
+                    tracing::info!("*** *** Received DHT record request from {}", source);
+                    let completion_tx_clone = completion_tx.clone();
+                    let bs_peer_clone = Arc::clone(&bs_peer);
+                    tokio::spawn(async move {
+                        let completion_tx = completion_tx_clone.clone();
+                        let completion_tx_clone_clone = completion_tx_clone.clone();
+                        match verify_remote_plog(bs_peer_clone, source, completion_tx).await {
+                            Ok(_) => {
+                                tracing::info!("Verification completed successfully for peer {}", source);
                             }
-
-                            // Check if this is a test result message (should be from us, but check anyway)
-                            if topic == "test-results" {
-                                let message = String::from_utf8_lossy(&data);
-                                if message.starts_with("TEST_RESULT:") {
-                                    test_completed = true;
-                                }
+                            Err(e) => {
+                                tracing::error!("Verification failed for peer {}: {}", source, e);
+                                let _ = completion_tx_clone_clone.send((false, e.to_string())).await;
                             }
                         }
-                        _ => {}
-                    }
+                    });
                 }
+                _ => {}
             }
-
-            completion = completion_rx.recv(), if !test_completed => {
-                if let Some((success, message)) = completion {
-                    test_completed = true;
-
-                    // Publish test result
-                    let mut peer = bs_peer.lock().await;
-                    if let Some(mut client) = peer.network_client.as_mut() {
-                        let result_msg = format!("TEST_RESULT:{}:{}", success, message);
-                        if let Err(e) = client.command(NetworkCommand::Publish {
-                            topic: "test-results".to_string(),
-                            data: result_msg.as_bytes().to_vec(),
-                        }).await {
-                            tracing::error!("Failed to publish test result: {}", e);
-                        }
-                    }
-
-                    // Exit with appropriate status
-                    if success {
-                        tracing::info!("Test PASSED: {}", message);
-                        // Allow some time for the message to be sent before exiting
-                        tokio::time::sleep(Duration::from_secs(2)).await;
-                        return Ok(());
-                    } else {
-                        tracing::error!("Test FAILED: {}", message);
-                        // Allow some time for the message to be sent before exiting
-                        tokio::time::sleep(Duration::from_secs(2)).await;
-                        return Err(message.into());
-                    }
-                }
             }
         }
     }
+
+    // let mut test_completed = false;
+    // let tick = Delay::new(Duration::from_secs(120)); // 2 minute total test timeout
+    // tokio::pin!(tick);
+    //
+    // loop {
+    //     tokio::select! {
+    //         _ = &mut tick, if !test_completed => {
+    //             test_completed = true;
+    //             tracing::error!("Test timed out after 120 seconds");
+    //
+    //             // Publish timeout message
+    //             let mut peer = bs_peer.lock().await;
+    //             if let Some(client) = peer.network_client.as_mut() {
+    //                 let timeout_msg = "TEST_RESULT:false:Test timed out after 120 seconds";
+    //                 let _ = client.command(NetworkCommand::Publish {
+    //                     topic: "test-results".to_string(),
+    //                     data: timeout_msg.as_bytes().to_vec(),
+    //                 }).await;
+    //             }
+    //
+    //             return Err("Test timed out".into());
+    //         }
+    //
+    //         event_opt = async {
+    //             let mut peer = bs_peer.lock().await;
+    //             peer.events.as_mut().unwrap().next().await
+    //         }, if !test_completed => {
+    //             if let Some(event) = event_opt {
+    //                 tracing::debug!("Received event: {:?}", event);
+    //
+    //                 match event {
+    //                     PublicEvent::NewConnection { peer: connected_peer } => {
+    //                         // Once connection establish, process verification
+    //                         tracing::info!("New connection from {}", connected_peer);
+    //
+    //                         let p = PeerId::from_str(&connected_peer).unwrap();
+    //
+    //                         // Clone Arc to move into the verification task
+    //                         let bs_peer_clone = Arc::clone(&bs_peer);
+    //                         let completion_tx_clone = completion_tx.clone();
+    //                         let completion_tx_clone_clone = completion_tx.clone();
+    //
+    //                         tokio::spawn(async move {
+    //                             tracing::info!("Waiting briefly before starting verification");
+    //                             tokio::time::sleep(Duration::from_secs(1)).await;
+    //
+    //                             // Use a timeout for the verification process
+    //                             match tokio::time::timeout(
+    //                                 Duration::from_secs(60),
+    //                                 verify_remote_plog(bs_peer_clone, p, completion_tx_clone)
+    //                             ).await {
+    //                                 Ok(result) => {
+    //                                     result.unwrap_or_else(|e| {
+    //                                         tracing::error!("Verification failed: {}", e);
+    //                                     });
+    //                                 },
+    //                                 Err(_) => {
+    //                                     tracing::error!("Verification timed out");
+    //                                     let _ = completion_tx_clone_clone.send((
+    //                                         false,
+    //                                         "Verification process timed out".to_string()
+    //                                     )).await;
+    //                                 }
+    //                             }
+    //                         });
+    //                     }
+    //                     PublicEvent::Swarm(Libp2pEvent::PutRecordRequest {
+    //                             source,
+    //                             record,
+    //                     }) => {
+    //                         // Handle incoming DHT record requests
+    //                         tracing::info!("Received DHT record request from {}", source);
+    //                         tracing::debug!("Record key: {:?}, value: {:?}", record.key, record.value);
+    //                     }
+    //                     _ => {}
+    //                 }
+    //             }
+    //         }
+    //
+    //         completion = completion_rx.recv(), if !test_completed => {
+    //             if let Some((success, message)) = completion {
+    //                 test_completed = true;
+    //
+    //                 // Publish test result
+    //                 let mut peer = bs_peer.lock().await;
+    //                 if let Some(mut client) = peer.network_client.as_mut() {
+    //                     let result_msg = format!("TEST_RESULT:{}:{}", success, message);
+    //                     if let Err(e) = client.command(NetworkCommand::Publish {
+    //                         topic: "test-results".to_string(),
+    //                         data: result_msg.as_bytes().to_vec(),
+    //                     }).await {
+    //                         tracing::error!("Failed to publish test result: {}", e);
+    //                     }
+    //                 }
+    //
+    //                 // Exit with appropriate status
+    //                 if success {
+    //                     tracing::info!("Test PASSED: {}", message);
+    //                     // Allow some time for the message to be sent before exiting
+    //                     tokio::time::sleep(Duration::from_secs(2)).await;
+    //                     return Ok(());
+    //                 } else {
+    //                     tracing::error!("Test FAILED: {}", message);
+    //                     // Allow some time for the message to be sent before exiting
+    //                     tokio::time::sleep(Duration::from_secs(2)).await;
+    //                     return Err(message.into());
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+}
+
+// Helper function to handle errors uniformly
+async fn handle_error<E: std::fmt::Display>(
+    error: E,
+    message_prefix: &str,
+    completion_tx: &Sender<(bool, String)>,
+) -> Result<(), String> {
+    let msg = format!("{}: {}", message_prefix, error);
+    tracing::error!("{}", msg);
+    completion_tx.send((false, msg.clone())).await.unwrap();
+    Err(msg)
 }
 
 // Helper function to verify a remote peer's plog
@@ -215,75 +232,50 @@ async fn verify_remote_plog<KP: KeyManager<bs_peer::Error> + MultiSigner<bs_peer
     peer_id: PeerId,
     completion_tx: tokio::sync::mpsc::Sender<(bool, String)>,
 ) -> Result<(), String> {
-    // Simplified error type
-    // Implement retry logic for getting the record from DHT
-    let mut attempts = 0;
-    let max_attempts = 5;
-    let mut delay = Duration::from_millis(500);
-    let mut cid_bytes = None;
+    tracing::info!("1/ Starting verification for peer: {}", peer_id);
 
-    // Get the Cid from the DHT with retries
-    while attempts < max_attempts {
-        let peer = bs_peer.lock().await;
-        let client = peer
-            .network_client
-            .as_ref()
-            .expect("No network client available");
+    tokio::time::sleep(Duration::from_secs(4)).await;
 
-        match client.get_record(peer_id.to_bytes()).await {
-            Ok(bytes) => {
-                cid_bytes = Some(bytes);
-                break;
-            }
-            Err(e) => {
-                attempts += 1;
-                if attempts >= max_attempts {
-                    let msg = format!(
-                        "Failed to retrieve DHT record after {} attempts: {}",
-                        max_attempts, e
-                    );
-                    tracing::error!("{}", msg);
+    // get bytes from KAd DHT record
+    let cid_bytes = {
+        let mut lock = bs_peer.lock().await;
+        let network_client = lock.network_client.as_mut().ok_or_else(|| {
+            tracing::error!("Network client is not initialized");
+            "Network client is not initialized".to_string()
+        })?;
+        network_client
+            .get_record(peer_id.into())
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to get DHT record: {}", e);
+                format!("Failed to get DHT record: {}", e)
+            })?
+    };
 
-                    // Simplified error handling for tests
-                    completion_tx
-                        .send((false, msg.clone()))
-                        .await
-                        .expect("Failed to send completion");
-                    return Err(msg);
-                }
+    tracing::info!("Retrieved plog head bytes: {:?}", cid_bytes);
 
-                tracing::warn!(
-                    "DHT lookup failed (attempt {}/{}): {}",
-                    attempts,
-                    max_attempts,
-                    e
-                );
-                drop(peer); // Release the lock before sleep
-                tokio::time::sleep(delay).await;
-                delay *= 2; // Exponential backoff
-            }
+    let head = match multicid::Cid::try_from(cid_bytes.as_slice()) {
+        Ok(cid) => cid,
+        Err(e) => {
+            return handle_error(
+                format!("Failed to parse CID from bytes: {}", e),
+                "CID parse error",
+                &completion_tx,
+            )
+            .await;
         }
-    }
+    };
 
-    // Unwrap the cid_bytes - for tests this is fine
-    let cid_bytes = cid_bytes.expect("Failed to retrieve head CID from DHT");
-
-    tracing::info!("Retrieved head CID bytes from DHT: {:?}", cid_bytes);
-
-    let head = multicid::Cid::try_from(cid_bytes.as_slice()).unwrap();
-
-    tracing::info!("Retrieved head CID from DHT: {}", head);
+    tracing::info!("Retrieved plog head: {}", head);
 
     // Now fetch and verify the entry chain
     let peer = bs_peer.lock().await;
 
-    let entry_chain = match get_entry_chain(&head, &*peer).await {
+    let entry_chain = match get_entry_chain(&head, &&*peer).await {
         Ok(chain) => chain,
         Err(e) => {
-            let msg = format!("Failed to get entry chain: {}", e);
-            tracing::error!("{}", msg);
-            completion_tx.send((false, msg.clone())).await.unwrap();
-            return Err(msg);
+            tracing::error!("Failed to get entry chain: {}", e);
+            return handle_error(e, "Failed to get entry chain", &completion_tx).await;
         }
     };
 
@@ -292,56 +284,79 @@ async fn verify_remote_plog<KP: KeyManager<bs_peer::Error> + MultiSigner<bs_peer
         entry_chain.entries.len()
     );
 
-    // Get the vlad from a plog Entry
-    let entry_bytes = match (&*peer).resolve(&entry_chain.foot_cid).await {
-        Ok(bytes) => bytes,
-        Err(e) => {
-            let msg = format!("Failed to resolve foot CID: {}", e);
-            tracing::error!("{}", msg);
-            completion_tx.send((false, msg.clone())).await.unwrap();
-            return Err(msg);
-        }
-    };
+    let entry = if entry_chain.entries.len() == 1 {
+        // For a single entry chain, head and foot are the same, so we can use
+        // the head bytes we already fetched when building the entry_chain
+        tracing::info!("Single entry chain - head and foot are the same");
+        entry_chain.foot().cloned().unwrap()
+    } else {
+        // For multiple entries, resolve the foot separately
+        tracing::info!("Multiple entries - resolving foot CID");
+        let entry_bytes = match (&*peer).resolve(&entry_chain.foot_cid).await {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                return handle_error(e, "Failed to resolve foot CID", &completion_tx).await;
+            }
+        };
 
-    let entry = match Entry::try_from(entry_bytes.as_slice()) {
-        Ok(entry) => entry,
-        Err(e) => {
-            let msg = format!("Failed to parse entry: {}", e);
-            tracing::error!("{}", msg);
-            completion_tx.send((false, msg.clone())).await.unwrap();
-            return Err(msg);
+        tracing::info!("Foot resolved. Converting to Entry...");
+        match Entry::try_from(entry_bytes.as_slice()) {
+            Ok(entry) => entry,
+            Err(e) => {
+                tracing::error!("Failed to parse entry: {}", e);
+                return handle_error(e, "Failed to parse entry", &completion_tx).await;
+            }
         }
     };
 
     let vlad = entry.vlad();
 
     let first_lock_cid = vlad.cid();
-    let entry_bytes = match (&*peer).resolve(first_lock_cid).await {
-        Ok(bytes) => bytes,
+
+    tracing::info!("First lock CID: {}", first_lock_cid);
+
+    // We store the first lock bytes under /vlad/cid key in the Entry kvp
+    // iter ove rentry.ops() until match on Update(Key, Value) where Key is /vlad/cid
+    let provenance_log::Value::Data(first_lock_bytes) = entry
+        .ops()
+        .find_map(|op| {
+            if let provenance_log::Op::Update(key, value) = op {
+                if key.as_str() == "/vlad/data" {
+                    return Some(value);
+                }
+            }
+            None
+        })
+        .ok_or_else(|| {
+            tracing::error!("No first lock CID found in entry");
+            "No first lock CID found in entry".to_string()
+        })?
+    else {
+        return handle_error(
+            "First lock CID not found in entry",
+            "Entry parsing error",
+            &completion_tx,
+        )
+        .await;
+    };
+
+    tracing::debug!("First lock bytes: {:?}", first_lock_bytes);
+
+    let first_lock_script = match Script::try_from(first_lock_bytes.as_slice()) {
+        Ok(script) => script,
         Err(e) => {
-            let msg = format!("Failed to resolve first lock CID: {}", e);
-            tracing::error!("{}", msg);
-            completion_tx.send((false, msg.clone())).await.unwrap();
-            return Err(msg);
+            return handle_error(e, "Failed to parse lock script", &completion_tx).await;
         }
     };
 
-    let maybe_first_lock_script = match Script::try_from(entry_bytes.as_slice()) {
-        Ok(script) => script,
-        Err(e) => {
-            let msg = format!("Failed to parse lock script: {}", e);
-            tracing::error!("{}", msg);
-            completion_tx.send((false, msg.clone())).await.unwrap();
-            return Err(msg);
-        }
-    };
+    tracing::debug!("First lock script built Rebuilt plog");
 
     // Build the plog from our fetched components
     let rebuilt_plog = match provenance_log::log::Builder::new()
         // we'll get this from the DHT record key
         .with_vlad(&vlad)
         // First lock script CID is the second half of the vlad
-        .with_first_lock(&maybe_first_lock_script)
+        .with_first_lock(&first_lock_script)
         // we get these entries from the network
         .with_entries(&entry_chain.entries)
         // We will have the head from the DHT record value
@@ -352,12 +367,11 @@ async fn verify_remote_plog<KP: KeyManager<bs_peer::Error> + MultiSigner<bs_peer
     {
         Ok(plog) => plog,
         Err(e) => {
-            let msg = format!("Failed to build plog: {}", e);
-            tracing::error!("{}", msg);
-            completion_tx.send((false, msg.clone())).await.unwrap();
-            return Err(msg);
+            return handle_error(e, "Failed to build plog", &completion_tx).await;
         }
     };
+
+    tracing::info!("Rebuilt plog successfully");
 
     // Verify the rebuilt plog
     let mut verification_success = true;
@@ -373,31 +387,27 @@ async fn verify_remote_plog<KP: KeyManager<bs_peer::Error> + MultiSigner<bs_peer
             }
             Err(e) => {
                 verification_success = false;
-                let msg = format!("Plog verification failed: {:#?}", e);
-                tracing::error!("{}", msg);
-                completion_tx.send((false, msg.clone())).await.unwrap();
-                return Err(msg);
+                return handle_error(e, "Plog verification failed", &completion_tx).await;
             }
         }
     }
 
     // running resolve_plog should return the same plog
-    match resolve_plog(&vlad, &head, &*peer).await {
+    match resolve_plog(&head, &&*peer).await {
         Ok(resolved) => {
             if rebuilt_plog != resolved.log {
                 verification_success = false;
-                let msg = "Resolved plog does not match rebuilt plog";
-                tracing::error!("{}", msg);
-                completion_tx.send((false, msg.to_string())).await.unwrap();
-                return Err(msg.to_string());
+                return handle_error(
+                    "Resolved plog does not match rebuilt plog",
+                    "",
+                    &completion_tx,
+                )
+                .await;
             }
         }
         Err(e) => {
             verification_success = false;
-            let msg = format!("Failed to resolve plog: {}", e);
-            tracing::error!("{}", msg);
-            completion_tx.send((false, msg.clone())).await.unwrap();
-            return Err(msg);
+            return handle_error(e, "Failed to resolve plog", &completion_tx).await;
         }
     }
 
@@ -498,4 +508,52 @@ pub struct Report {
     handshake_plus_one_rtt_millis: f32,
     #[serde(rename = "pingRTTMilllis")]
     ping_rtt_millis: f32,
+}
+
+async fn retry_with_timeout<F, Fut, T, E>(
+    mut operation: F,
+    max_attempts: usize,
+    timeout_duration: Duration,
+    retry_delay: Duration,
+) -> Result<T, RetryError<E>>
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<T, E>>,
+    E: std::fmt::Debug,
+{
+    let mut attempts = 0;
+
+    loop {
+        attempts += 1;
+
+        // Try the operation with timeout
+        let result = tokio::time::timeout(timeout_duration, operation()).await;
+
+        match result {
+            Ok(Ok(value)) => return Ok(value), // Success
+            Ok(Err(e)) => {
+                if attempts >= max_attempts {
+                    return Err(RetryError::MaxAttemptsReached(e));
+                }
+                println!("Attempt {} failed: {:?}, retrying...", attempts, e);
+            }
+            Err(_) => {
+                if attempts >= max_attempts {
+                    return Err(RetryError::Timeout);
+                }
+                println!("Attempt {} timed out, retrying...", attempts);
+            }
+        }
+
+        // Wait before retrying (except on last attempt)
+        if attempts < max_attempts {
+            tokio::time::sleep(retry_delay).await;
+        }
+    }
+}
+
+#[derive(Debug)]
+enum RetryError<E> {
+    MaxAttemptsReached(E),
+    Timeout,
 }

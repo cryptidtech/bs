@@ -11,7 +11,7 @@
 //! Users can implement the [Resolver] trait to define how to resolve the data
 //! from a CID chain. Then, the [get_entry_chain] function can be used to get
 //! the entries from the head CID down to the foot CID.
-use crate::{log, Entry, Log, Script};
+use crate::{log, Entry, Log, Op, Script, Value};
 
 use multicid::{Cid, Vlad};
 use multitrait::Null;
@@ -34,12 +34,12 @@ pub enum ResolveError {
     NoLastEntry,
 
     #[error("Other error: {0}")]
-    Other(#[from] Box<dyn std::error::Error>),
+    Other(String),
 }
 
 /// Helper function to simplify error conversion
 fn to_resolve_err<E: std::error::Error + 'static>(err: E) -> ResolveError {
-    ResolveError::Other(Box::new(err))
+    ResolveError::Other(err.to_string())
 }
 
 /// A trait for resolving data from a Cid.
@@ -89,7 +89,7 @@ fn to_resolve_err<E: std::error::Error + 'static>(err: E) -> ResolveError {
 ///```
 #[allow(clippy::type_complexity)]
 pub trait Resolver {
-    type Error: std::error::Error + 'static;
+    type Error: std::error::Error + Into<ResolveError> + 'static;
 
     fn resolve(
         &self,
@@ -130,13 +130,20 @@ pub struct EntriesFootprint {
     pub foot_cid: Cid,
 }
 
+impl EntriesFootprint {
+    /// Get the last entry in the chain (the foot)
+    pub fn foot(&self) -> Option<&Entry> {
+        self.entries.get(&self.foot_cid)
+    }
+}
+
 /// Recursively get the resolved data from a head [Cid] down to the foot [Cid],
 /// returning the entries and foot CID.
 ///
 /// Returns an [EntriesFootprint] containing [BTreeMap] of both [Entry]s and the foot [Cid].
 pub async fn get_entry_chain(
     head_cid: &Cid,
-    get_data: impl Resolver,
+    get_data: &impl Resolver,
 ) -> Result<EntriesFootprint, ResolveError> {
     let mut entries = BTreeMap::new();
     let mut current_cid = head_cid.clone();
@@ -223,25 +230,73 @@ impl ResolvedPlog {
 
 /// Given the vlad and the head Cid, resolve the Plog entries,
 /// rebuild the Plog, and verify it.
-pub async fn resolve_plog(
-    vlad: &Vlad,
+pub async fn resolve_plog<R: Resolver>(
     head_cid: &Cid,
-    resolver: impl Resolver + Clone,
-) -> Result<ResolvedPlog, ResolveError> {
-    let entry_chain = get_entry_chain(head_cid, resolver.clone()).await?;
+    resolver: &R,
+) -> Result<ResolvedPlog, ResolveError>
+where
+    R::Error: std::error::Error + 'static,
+{
+    let entry_chain = get_entry_chain(head_cid, resolver).await?;
 
-    // Reconstruct the plog from the fetched entries
+    tracing::info!(
+        "Retrieved entry chain with {} entries",
+        entry_chain.entries.len()
+    );
+
+    let entry = if entry_chain.entries.len() == 1 {
+        // For a single entry chain, head and foot are the same, so we can use
+        // the head bytes we already fetched when building the entry_chain
+        tracing::debug!("Single entry chain - head and foot are the same");
+        entry_chain.foot().cloned().unwrap()
+    } else {
+        // For multiple entries, resolve the foot separately
+        tracing::debug!("Multiple entries - resolving foot CID");
+        let entry_bytes = resolver
+            .resolve(&entry_chain.foot_cid)
+            .await
+            .map_err(Into::into)?;
+
+        tracing::debug!("Foot resolved. Converting to Entry...");
+        Entry::try_from(entry_bytes.as_slice()).map_err(to_resolve_err)?
+    };
+
+    let vlad = entry.vlad();
+
     let first_lock_cid = vlad.cid();
 
-    let entry_bytes = resolver
-        .resolve(first_lock_cid)
-        .await
-        .map_err(to_resolve_err)?;
+    tracing::info!("First lock CID: {}", first_lock_cid);
 
-    let first_lock_script = Script::try_from(entry_bytes.as_slice()).map_err(to_resolve_err)?;
+    // We store the first lock bytes under /vlad/cid key in the Entry kvp
+    // iter ove rentry.ops() until match on Update(Key, Value) where Key is /vlad/cid
+    let Value::Data(first_lock_bytes) = entry
+        .ops()
+        .find_map(|op| {
+            if let Op::Update(key, value) = op {
+                if key.as_str() == "/vlad/data" {
+                    return Some(value);
+                }
+            }
+            None
+        })
+        .ok_or(ResolveError::Other(
+            "First lock CID not found in entry".to_string(),
+        ))?
+    else {
+        return Err(ResolveError::Other(
+            "First lock CID is not a Data value".to_string(),
+        ));
+    };
+
+    tracing::debug!("First lock bytes: {:?}", first_lock_bytes);
+
+    let first_lock_script =
+        Script::try_from(first_lock_bytes.as_slice()).map_err(to_resolve_err)?;
+
+    tracing::debug!("First lock script built Rebuilt plog");
 
     let rebuilt_plog = log::Builder::new()
-        .with_vlad(vlad)
+        .with_vlad(&vlad)
         .with_first_lock(&first_lock_script)
         .with_entries(&entry_chain.entries)
         .with_head(head_cid)
@@ -281,4 +336,24 @@ pub async fn resolve_plog(
         log: rebuilt_plog,
         verification_counts,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    // use super::*;
+    // use crate::test_util::TestResolver;
+    // use bestsign_core::test_util::TestVlad;
+    //
+    // #[tokio::test]
+    // async fn test_resolve_plog() {
+    //     let vlad = TestVlad::new();
+    //     let head_cid = vlad.cid().clone();
+    //     let resolver = TestResolver::new();
+    //
+    //     let resolved_plog = resolve_plog(&vlad, &head_cid, resolver).await;
+    //
+    //     assert!(resolved_plog.is_ok());
+    //     let resolved_plog = resolved_plog.unwrap();
+    //     assert_eq!(resolved_plog.log.vlad(), &vlad);
+    // }
 }

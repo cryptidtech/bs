@@ -302,7 +302,7 @@ mod tests {
 
     #[test]
     fn test_create_using_defaults() {
-        // init_logger();
+        init_logger();
 
         let pubkey_params = PubkeyParams::builder().codec(Codec::Ed25519Priv).build();
 
@@ -385,7 +385,8 @@ mod tests {
         assert_eq!(&plog.first_lock, config.first_lock());
 
         // 1. Get vlad_key from plog first entry
-        let verify_iter = &mut plog.verify();
+        let binding = plog.clone();
+        let verify_iter = &mut binding.verify();
 
         // the log should also verify
         for ret in verify_iter {
@@ -415,6 +416,15 @@ mod tests {
             .attr_view()
             .unwrap()
             .is_public_key());
+
+        // log the ops
+        tracing::debug!("Ops in the log:");
+        for (cid, entry) in plog.entries {
+            tracing::debug!("Entry");
+            for op in entry.ops() {
+                tracing::debug!("  Op: {:?}", op);
+            }
+        }
 
         // should match thhe one we've got?
     }
