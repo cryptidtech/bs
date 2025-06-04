@@ -20,7 +20,7 @@ use multicid::cid;
 use multicodec::Codec;
 use multihash::mh;
 use provenance_log::key::key_paths::ValidatedKeyParams;
-pub use provenance_log::resolver::{get_entry_chain, resolve_plog, ResolvedPlog, Resolver};
+pub use provenance_log::resolver::{ResolvedPlog, Resolver};
 use provenance_log::{self as p, Key, Script};
 
 /// A peer in the network that is generic over the blockstore type
@@ -333,17 +333,18 @@ pub enum TestError {
     // from bs_p2p
     #[error("Plog already exists")]
     P2p(#[from] bs_p2p::Error),
-}
-
-impl From<TestError> for provenance_log::resolver::ResolveError {
-    fn from(err: TestError) -> Self {
-        match err {
-            TestError::NotConnected => provenance_log::resolver::ResolveError::Other(
-                "Peer is not connected to the network".into(),
-            ),
-            TestError::P2p(e) => provenance_log::resolver::ResolveError::Other(e.to_string()),
-        }
-    }
+    // From<provenance_log::resolver::ResolveError>
+    #[error("Resolve error")]
+    ResolveError(#[from] provenance_log::resolver::ResolveError),
+    /// From<multicid::Error>
+    #[error("Multicid error")]
+    MulticidError(#[from] multicid::Error),
+    /// From<multihash::Error>
+    #[error("Multihash error")]
+    MultihashError(#[from] multihash::Error),
+    /// From<provenance_log::Error>
+    #[error("Provenance Log error")]
+    PlogError(#[from] provenance_log::Error),
 }
 
 #[cfg(not(target_arch = "wasm32"))]

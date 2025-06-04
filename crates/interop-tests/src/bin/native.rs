@@ -10,7 +10,7 @@ use axum::{http::Method, routing::get};
 use bs::config::sync::{KeyManager, MultiSigner};
 use bs_p2p::events::api::Libp2pEvent;
 use bs_p2p::events::PublicEvent;
-use bs_peer::peer::{get_entry_chain, resolve_plog, DefaultBsPeer, Resolver};
+use bs_peer::peer::{DefaultBsPeer, Resolver};
 use bs_wallets::memory::InMemoryKeyManager;
 use futures::StreamExt;
 use libp2p::multiaddr::{Multiaddr, Protocol};
@@ -227,7 +227,7 @@ async fn handle_error<E: std::fmt::Display>(
 }
 
 // Helper function to verify a remote peer's plog
-async fn verify_remote_plog<KP: KeyManager<bs_peer::Error> + MultiSigner<bs_peer::Error>>(
+async fn verify_remote_plog<KP: KeyManager<bs_peer::Error> + MultiSigner<bs_peer::Error> + Sync>(
     bs_peer: Arc<Mutex<DefaultBsPeer<KP>>>,
     peer_id: PeerId,
     completion_tx: tokio::sync::mpsc::Sender<(bool, String)>,
@@ -271,7 +271,7 @@ async fn verify_remote_plog<KP: KeyManager<bs_peer::Error> + MultiSigner<bs_peer
     // Now fetch and verify the entry chain
     let peer = bs_peer.lock().await;
 
-    let entry_chain = match get_entry_chain(&head, &&*peer).await {
+    let entry_chain = match (&&*peer).get_entry_chain(&head).await {
         Ok(chain) => chain,
         Err(e) => {
             tracing::error!("Failed to get entry chain: {}", e);
@@ -393,7 +393,7 @@ async fn verify_remote_plog<KP: KeyManager<bs_peer::Error> + MultiSigner<bs_peer
     }
 
     // running resolve_plog should return the same plog
-    match resolve_plog(&head, &&*peer).await {
+    match (&&*peer).resolve_plog(&head).await {
         Ok(resolved) => {
             if rebuilt_plog != resolved.log {
                 verification_success = false;
