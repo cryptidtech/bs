@@ -8,6 +8,7 @@ use axum::response::{Html, IntoResponse};
 use axum::Router;
 use axum::{http::Method, routing::get};
 use bs::config::sync::{KeyManager, MultiSigner};
+use bs::resolver_ext::ResolverExt as _;
 use bs_p2p::events::api::Libp2pEvent;
 use bs_p2p::events::PublicEvent;
 use bs_peer::peer::{DefaultBsPeer, Resolver};
@@ -269,14 +270,12 @@ async fn verify_remote_plog<KP: KeyManager<bs_peer::Error> + MultiSigner<bs_peer
     tracing::info!("Retrieved plog head: {}", head);
 
     // Now fetch and verify the entry chain
-    let peer = bs_peer.lock().await;
-
-    let entry_chain = match (&&*peer).get_entry_chain(&head).await {
-        Ok(chain) => chain,
-        Err(e) => {
+    let entry_chain = {
+        let peer = bs_peer.lock().await;
+        (&*peer).get_entry_chain(&head).await.map_err(|e| {
             tracing::error!("Failed to get entry chain: {}", e);
-            return handle_error(e, "Failed to get entry chain", &completion_tx).await;
-        }
+            e.to_string()
+        })?
     };
 
     tracing::info!(
@@ -292,11 +291,12 @@ async fn verify_remote_plog<KP: KeyManager<bs_peer::Error> + MultiSigner<bs_peer
     } else {
         // For multiple entries, resolve the foot separately
         tracing::info!("Multiple entries - resolving foot CID");
-        let entry_bytes = match (&*peer).resolve(&entry_chain.foot_cid).await {
-            Ok(bytes) => bytes,
-            Err(e) => {
-                return handle_error(e, "Failed to resolve foot CID", &completion_tx).await;
-            }
+        let entry_bytes = {
+            let peer = bs_peer.lock().await;
+            (&*peer).resolve(&entry_chain.foot_cid).await.map_err(|e| {
+                tracing::error!("Failed to resolve foot CID: {}", e);
+                e.to_string()
+            })?
         };
 
         tracing::info!("Foot resolved. Converting to Entry...");
@@ -393,22 +393,22 @@ async fn verify_remote_plog<KP: KeyManager<bs_peer::Error> + MultiSigner<bs_peer
     }
 
     // running resolve_plog should return the same plog
-    match (&&*peer).resolve_plog(&head).await {
-        Ok(resolved) => {
-            if rebuilt_plog != resolved.log {
-                verification_success = false;
-                return handle_error(
-                    "Resolved plog does not match rebuilt plog",
-                    "",
-                    &completion_tx,
-                )
-                .await;
-            }
-        }
-        Err(e) => {
+    let resolved_plog = {
+        let peer = bs_peer.lock().await;
+        (&*peer).resolve_plog(&head).await.map_err(|e| {
             verification_success = false;
-            return handle_error(e, "Failed to resolve plog", &completion_tx).await;
-        }
+            format!("Failed to resolve plog: {}", e)
+        })?
+    };
+
+    if rebuilt_plog != resolved_plog.log {
+        verification_success = false;
+        return handle_error(
+            "Resolved plog does not match rebuilt plog",
+            "",
+            &completion_tx,
+        )
+        .await;
     }
 
     assert!(verification_success, "Plog verification failed");

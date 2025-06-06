@@ -96,7 +96,6 @@ impl ResolvedPlog {
 /// use std::pin::Pin;
 /// use std::future::Future;
 /// use std::sync::Arc;
-/// use tokio::sync::Mutex;
 /// use multicid::Cid;
 /// use provenance_log::Entry;
 /// use provenance_log::resolver::Resolver;
@@ -200,125 +199,6 @@ pub trait Resolver {
             }
 
             Ok(EntriesFootprint { entries, foot_cid })
-        }
-    }
-
-    /// Given the head Cid, resolve the Plog entries,
-    /// rebuild the Plog, and verify it.
-    fn resolve_plog(
-        &self,
-        head_cid: &Cid,
-    ) -> impl Future<Output = Result<ResolvedPlog, Self::Error>> + Send
-    where
-        Self: Sync,
-    {
-        async {
-            let entry_chain = self.get_entry_chain(head_cid).await?;
-
-            tracing::info!(
-                "Retrieved entry chain with {} entries",
-                entry_chain.entries.len()
-            );
-
-            let entry = if entry_chain.entries.len() == 1 {
-                // For a single entry chain, head and foot are the same, so we can use
-                // the head bytes we already fetched when building the entry_chain
-                tracing::debug!("Single entry chain - head and foot are the same");
-                entry_chain.foot().cloned().unwrap()
-            } else {
-                // For multiple entries, resolve the foot separately
-                tracing::debug!("Multiple entries - resolving foot CID");
-                let entry_bytes = self.resolve(&entry_chain.foot_cid).await?;
-
-                tracing::debug!("Foot resolved. Converting to Entry...");
-                Entry::try_from(entry_bytes.as_slice())?
-            };
-
-            let vlad = entry.vlad();
-
-            let first_lock_cid = vlad.cid();
-
-            tracing::info!("First lock CID: {}", first_lock_cid);
-
-            // We store the first lock bytes under /vlad/data key in the Entry kvp
-            // TODO: Type the vlad.data key properly
-            let Value::Data(first_lock_bytes) = entry
-                // TODO: Should be able to do this:
-                // entry.get_value(&Key::try_from("/vlad/data")?)
-                // .ok_or(ResolveError::ResolveCidError(format!(
-                //     "First lock CID not found in entry: {}",
-                //     first_lock_cid
-                // )))?
-                .ops()
-                .find_map(|op| {
-                    if let Op::Update(key, value) = op {
-                        if key.as_str() == "/vlad/data" {
-                            return Some(value);
-                        }
-                    }
-                    None
-                })
-                .ok_or(ResolveError::ResolveCidError(format!(
-                    "First lock CID not found in entry: {}",
-                    first_lock_cid
-                )))?
-            else {
-                return Err(ResolveError::ParseEntryError(format!(
-                    "First lock CID value is not of type Data in entry: {}",
-                    first_lock_cid
-                ))
-                .into());
-            };
-
-            tracing::debug!("First lock bytes: {:?}", first_lock_bytes);
-
-            let first_lock_script = Script::try_from(first_lock_bytes.as_slice())?;
-
-            tracing::debug!("First lock script built Rebuilt plog");
-
-            let rebuilt_plog = log::Builder::new()
-                .with_vlad(&vlad)
-                .with_first_lock(&first_lock_script)
-                .with_entries(&entry_chain.entries)
-                .with_head(head_cid)
-                .with_foot(&entry_chain.foot_cid)
-                .try_build()?;
-
-            let plog_clone = rebuilt_plog.clone();
-
-            let verify_iter = &mut plog_clone.verify();
-
-            // Check that first entry matches (using debug_assert for development checks)
-            if let Some(head_entry) = entry_chain.entries.get(head_cid) {
-                debug_assert_eq!(rebuilt_plog.entries[head_cid], head_entry.clone());
-            }
-
-            // Collect individual verification counts
-            let mut verification_counts = Vec::new();
-
-            // the log should also verify
-            for ret in verify_iter {
-                match ret {
-                    Ok((count, entry, kvp)) => {
-                        verification_counts.push(count);
-                        tracing::trace!("Verified entry: {:#?}", entry);
-                        tracing::trace!("Verified count: {:#?}", count);
-                        tracing::trace!("Verified kvp: {:#?}", kvp);
-                    }
-                    Err(e) => {
-                        tracing::error!("Error: {:#?}", e);
-                        return Err(PlogError::Log(crate::error::LogError::VerifyFailed(
-                            e.to_string(),
-                        ))
-                        .into());
-                    }
-                }
-            }
-
-            Ok(ResolvedPlog {
-                log: rebuilt_plog,
-                verification_counts,
-            })
         }
     }
 }

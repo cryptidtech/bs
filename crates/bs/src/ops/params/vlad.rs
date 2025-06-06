@@ -62,6 +62,8 @@ impl<T: ValidatedKeyParams> VladParams<T> {
     pub const KEY_PATH: ValidatedKeyPath = const_assert_valid_key!("/vlad/key");
     /// CID key path for Vlad CID
     pub const CID_KEY: ValidatedKeyPath = const_assert_valid_key!("/vlad/"); // the trailing /cid is added in open_plog()
+    /// Data key path for Vlad data (first lock script)
+    pub const DATA_KEY: ValidatedKeyPath = const_assert_valid_key!("/vlad/data");
     /// The First Entry Key associated with Vlad, which is used to generate the first lock script.
     pub const FIRST_ENTRY_KEY_PATH: ValidatedKeyPath = T::KEY_PATH;
 

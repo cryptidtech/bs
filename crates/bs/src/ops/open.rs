@@ -6,6 +6,7 @@ use std::num::NonZeroUsize;
 
 use crate::{
     error::{BsCompatibleError, OpenError},
+    params::vlad::{FirstEntryKeyParams, VladParams},
     update::{op, OpParams},
 };
 pub use config::Config;
@@ -13,7 +14,7 @@ use multicid::{cid, vlad, Cid};
 use multicodec::Codec;
 use multihash::mh;
 use multikey::{Multikey, Views};
-use provenance_log::{entry, error::EntryError, Error as PlogError, Log, OpId};
+use provenance_log::{entry, error::EntryError, Error as PlogError, Key, Log, OpId};
 use tracing::debug;
 
 /// open a new provenance log based on the config
@@ -258,14 +259,21 @@ where
             // add the file directly to p.log if inline
             if *inline {
                 // create the cid key-path
-                let mut data_key = key.clone();
-                data_key.push("/data")?;
+                if key.as_str() == VladParams::<FirstEntryKeyParams>::CID_KEY.as_str() {
+                    ops.push(OpParams::UseBin {
+                        key: Key::try_from(VladParams::<FirstEntryKeyParams>::DATA_KEY.as_str())?,
+                        data: data.to_vec(),
+                    });
+                } else {
+                    let mut data_key = key.clone();
+                    data_key.push("/data")?;
 
-                // add the op param to add the file data
-                ops.push(OpParams::UseBin {
-                    key: data_key,
-                    data: data.to_vec(),
-                });
+                    // add the op param to add the file data
+                    ops.push(OpParams::UseBin {
+                        key: data_key,
+                        data: data.to_vec(),
+                    });
+                }
             }
 
             Ok(cid)
@@ -302,7 +310,7 @@ mod tests {
 
     #[test]
     fn test_create_using_defaults() {
-        init_logger();
+        // init_logger();
 
         let pubkey_params = PubkeyParams::builder().codec(Codec::Ed25519Priv).build();
 

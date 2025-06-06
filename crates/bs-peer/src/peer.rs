@@ -1,9 +1,8 @@
 //! BetterSign Peer: BetterSign core + libp2p networking + Blockstore
-use std::{future::Future, pin::Pin};
-
 use crate::{platform, Error};
 use ::cid::Cid;
 use blockstore::Blockstore as BlockstoreTrait;
+use bs::resolver_ext::ResolverExt as _;
 use bs::{
     config::sync::{KeyManager, MultiSigner},
     params::{
@@ -22,6 +21,7 @@ use multihash::mh;
 use provenance_log::key::key_paths::ValidatedKeyParams;
 pub use provenance_log::resolver::{ResolvedPlog, Resolver};
 use provenance_log::{self as p, Key, Script};
+use std::{future::Future, pin::Pin};
 
 /// A peer in the network that is generic over the blockstore type
 #[derive(Debug)]
