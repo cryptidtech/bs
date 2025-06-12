@@ -27,7 +27,7 @@ use tracing::debug;
 // - Finalize the Entry with the signature
 //
 // When the script runtime checks the first entry data (the Entry without the proof), against the
-//
+// first lock script, it will use the first entry key's public key to verify the signature.
 pub fn open_plog<E: BsCompatibleError>(
     config: &Config,
     key_manager: &dyn crate::config::sync::KeyManager<E>,
