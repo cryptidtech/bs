@@ -292,9 +292,10 @@ impl Entry {
         }
     }
 
-    /// Get the Entry's values by Key
-    pub fn get_value(&self, key: &Key) -> Option<Value> {
-        match key.as_str() {
+    /// Get an [Entry]'s [Value] by [Key], either from
+    /// a [Field] or from the [Op]s.
+    pub fn get_value(&self, k: &Key) -> Option<Value> {
+        match k.as_str() {
             Field::ENTRY => {
                 let mut e = self.clone();
                 e.proof = Vec::default();
@@ -315,7 +316,17 @@ impl Entry {
             }
             Field::UNLOCK => Some(Value::Data(self.unlock.clone().into())),
             Field::PROOF => Some(Value::Data(self.proof.clone())),
-            _ => None,
+            _ => self
+                .ops()
+                .find_map(|op| {
+                    if let Op::Update(key, value) = op {
+                        if key == k {
+                            return Some(value);
+                        }
+                    }
+                    None
+                })
+                .cloned(),
         }
     }
 
