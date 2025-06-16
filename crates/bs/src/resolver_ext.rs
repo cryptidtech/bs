@@ -31,8 +31,8 @@ pub trait ResolverExt: Resolver {
                 .get_value(&Key::try_from(vlad_data_key.as_str())?)
                 .ok_or_else(|| {
                     ResolveError::ResolveCidError(format!(
-                        "First lock CID not found in entry: {}",
-                        first_lock_cid
+                        "First lock CID not found in entry: {} \n {:?}",
+                        first_lock_cid, entry
                     ))
                 })?;
 
