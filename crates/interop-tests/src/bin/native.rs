@@ -69,6 +69,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Serve .wasm, .js and server multiaddress over HTTP on this address.
     tokio::spawn(serve(address.clone()));
+    let mut verification_result = None;
 
     loop {
         tokio::select! {
@@ -76,143 +77,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let mut peer = bs_peer.lock().await;
                 peer.events.as_mut().unwrap().select_next_some().await
             } => {
-            match evt {
-                PublicEvent::Swarm(Libp2pEvent::PutRecordRequest { source }) => {
+                if let PublicEvent::Swarm(Libp2pEvent::PutRecordRequest { source }) = evt {
                     // Handle incoming DHT record requests
-                    tracing::info!("*** *** Received DHT record request from {}", source);
                     let completion_tx_clone = completion_tx.clone();
                     let bs_peer_clone = Arc::clone(&bs_peer);
-                    tokio::spawn(async move {
-                        let completion_tx = completion_tx_clone.clone();
-                        let completion_tx_clone_clone = completion_tx_clone.clone();
-                        match verify_remote_plog(bs_peer_clone, source, completion_tx).await {
-                            Ok(_) => {
-                                tracing::info!("Verification completed successfully for peer {}", source);
-                            }
-                            Err(e) => {
-                                tracing::error!("Verification failed for peer {}: {}", source, e);
-                                let _ = completion_tx_clone_clone.send((false, e.to_string())).await;
-                            }
+
+                    match verify_remote_plog(bs_peer_clone, source, completion_tx_clone).await {
+                        Ok(_) => {
+                            tracing::info!("Verification completed successfully for peer {}", source);
+                            verification_result = Some(true);
+                            break; // Break the loop on successful verification
                         }
-                    });
+                        Err(e) => {
+                            tracing::error!("Verification failed for peer {}: {}", source, e);
+                            let _ = completion_tx.send((false, e.to_string())).await;
+                            verification_result = Some(false);
+                            break; // Also break on failure
+                        }
+                    }
+                } else {
+                    tracing::debug!("Received event: {:?}", evt);
                 }
-                _ => {}
-            }
             }
         }
     }
 
-    // let mut test_completed = false;
-    // let tick = Delay::new(Duration::from_secs(120)); // 2 minute total test timeout
-    // tokio::pin!(tick);
-    //
-    // loop {
-    //     tokio::select! {
-    //         _ = &mut tick, if !test_completed => {
-    //             test_completed = true;
-    //             tracing::error!("Test timed out after 120 seconds");
-    //
-    //             // Publish timeout message
-    //             let mut peer = bs_peer.lock().await;
-    //             if let Some(client) = peer.network_client.as_mut() {
-    //                 let timeout_msg = "TEST_RESULT:false:Test timed out after 120 seconds";
-    //                 let _ = client.command(NetworkCommand::Publish {
-    //                     topic: "test-results".to_string(),
-    //                     data: timeout_msg.as_bytes().to_vec(),
-    //                 }).await;
-    //             }
-    //
-    //             return Err("Test timed out".into());
-    //         }
-    //
-    //         event_opt = async {
-    //             let mut peer = bs_peer.lock().await;
-    //             peer.events.as_mut().unwrap().next().await
-    //         }, if !test_completed => {
-    //             if let Some(event) = event_opt {
-    //                 tracing::debug!("Received event: {:?}", event);
-    //
-    //                 match event {
-    //                     PublicEvent::NewConnection { peer: connected_peer } => {
-    //                         // Once connection establish, process verification
-    //                         tracing::info!("New connection from {}", connected_peer);
-    //
-    //                         let p = PeerId::from_str(&connected_peer).unwrap();
-    //
-    //                         // Clone Arc to move into the verification task
-    //                         let bs_peer_clone = Arc::clone(&bs_peer);
-    //                         let completion_tx_clone = completion_tx.clone();
-    //                         let completion_tx_clone_clone = completion_tx.clone();
-    //
-    //                         tokio::spawn(async move {
-    //                             tracing::info!("Waiting briefly before starting verification");
-    //                             tokio::time::sleep(Duration::from_secs(1)).await;
-    //
-    //                             // Use a timeout for the verification process
-    //                             match tokio::time::timeout(
-    //                                 Duration::from_secs(60),
-    //                                 verify_remote_plog(bs_peer_clone, p, completion_tx_clone)
-    //                             ).await {
-    //                                 Ok(result) => {
-    //                                     result.unwrap_or_else(|e| {
-    //                                         tracing::error!("Verification failed: {}", e);
-    //                                     });
-    //                                 },
-    //                                 Err(_) => {
-    //                                     tracing::error!("Verification timed out");
-    //                                     let _ = completion_tx_clone_clone.send((
-    //                                         false,
-    //                                         "Verification process timed out".to_string()
-    //                                     )).await;
-    //                                 }
-    //                             }
-    //                         });
-    //                     }
-    //                     PublicEvent::Swarm(Libp2pEvent::PutRecordRequest {
-    //                             source,
-    //                             record,
-    //                     }) => {
-    //                         // Handle incoming DHT record requests
-    //                         tracing::info!("Received DHT record request from {}", source);
-    //                         tracing::debug!("Record key: {:?}, value: {:?}", record.key, record.value);
-    //                     }
-    //                     _ => {}
-    //                 }
-    //             }
-    //         }
-    //
-    //         completion = completion_rx.recv(), if !test_completed => {
-    //             if let Some((success, message)) = completion {
-    //                 test_completed = true;
-    //
-    //                 // Publish test result
-    //                 let mut peer = bs_peer.lock().await;
-    //                 if let Some(mut client) = peer.network_client.as_mut() {
-    //                     let result_msg = format!("TEST_RESULT:{}:{}", success, message);
-    //                     if let Err(e) = client.command(NetworkCommand::Publish {
-    //                         topic: "test-results".to_string(),
-    //                         data: result_msg.as_bytes().to_vec(),
-    //                     }).await {
-    //                         tracing::error!("Failed to publish test result: {}", e);
-    //                     }
-    //                 }
-    //
-    //                 // Exit with appropriate status
-    //                 if success {
-    //                     tracing::info!("Test PASSED: {}", message);
-    //                     // Allow some time for the message to be sent before exiting
-    //                     tokio::time::sleep(Duration::from_secs(2)).await;
-    //                     return Ok(());
-    //                 } else {
-    //                     tracing::error!("Test FAILED: {}", message);
-    //                     // Allow some time for the message to be sent before exiting
-    //                     tokio::time::sleep(Duration::from_secs(2)).await;
-    //                     return Err(message.into());
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
+    // Add assertion after the loop
+    assert!(
+        verification_result.unwrap_or(false),
+        "Verification should have succeeded"
+    );
+    Ok(())
 }
 
 // Helper function to handle errors uniformly
@@ -253,7 +148,7 @@ async fn verify_remote_plog<KP: KeyManager<bs_peer::Error> + MultiSigner<bs_peer
             })?
     };
 
-    tracing::info!("Retrieved plog head bytes: {:?}", cid_bytes);
+    tracing::info!("2/ Retrieved plog head bytes: {:?}", cid_bytes);
 
     let head = match multicid::Cid::try_from(cid_bytes.as_slice()) {
         Ok(cid) => cid,
@@ -267,7 +162,7 @@ async fn verify_remote_plog<KP: KeyManager<bs_peer::Error> + MultiSigner<bs_peer
         }
     };
 
-    tracing::info!("Retrieved plog head: {}", head);
+    tracing::info!("3/ Retrieved plog head: {}", head);
 
     // Now fetch and verify the entry chain
     let entry_chain = {
@@ -279,7 +174,7 @@ async fn verify_remote_plog<KP: KeyManager<bs_peer::Error> + MultiSigner<bs_peer
     };
 
     tracing::info!(
-        "Retrieved entry chain with {} entries",
+        "4/ Retrieved entry chain with {} entries",
         entry_chain.entries.len()
     );
 
@@ -313,7 +208,7 @@ async fn verify_remote_plog<KP: KeyManager<bs_peer::Error> + MultiSigner<bs_peer
 
     let first_lock_cid = vlad.cid();
 
-    tracing::info!("First lock CID: {}", first_lock_cid);
+    tracing::info!("5/ First lock CID: {}", first_lock_cid);
 
     // We store the first lock bytes under /vlad/cid key in the Entry kvp
     // iter ove rentry.ops() until match on Update(Key, Value) where Key is /vlad/cid
@@ -340,7 +235,7 @@ async fn verify_remote_plog<KP: KeyManager<bs_peer::Error> + MultiSigner<bs_peer
         .await;
     };
 
-    tracing::debug!("First lock bytes: {:?}", first_lock_bytes);
+    tracing::debug!("6/ First lock bytes: {:?}", first_lock_bytes);
 
     let first_lock_script = match Script::try_from(first_lock_bytes.as_slice()) {
         Ok(script) => script,
@@ -349,7 +244,7 @@ async fn verify_remote_plog<KP: KeyManager<bs_peer::Error> + MultiSigner<bs_peer
         }
     };
 
-    tracing::debug!("First lock script built Rebuilt plog");
+    tracing::debug!("7/ First lock script built Rebuilt plog");
 
     // Build the plog from our fetched components
     let rebuilt_plog = match provenance_log::log::Builder::new()
@@ -371,7 +266,7 @@ async fn verify_remote_plog<KP: KeyManager<bs_peer::Error> + MultiSigner<bs_peer
         }
     };
 
-    tracing::info!("Rebuilt plog successfully");
+    tracing::info!("8/ Rebuilt plog successfully");
 
     // Verify the rebuilt plog
     let mut verification_success = true;
