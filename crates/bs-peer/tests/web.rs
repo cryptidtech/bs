@@ -1,6 +1,6 @@
 #![cfg(target_arch = "wasm32")]
 #![cfg(test)]
-use bs_peer::test_utils;
+use bs_peer::utils;
 use wasm_bindgen_test::wasm_bindgen_test_configure;
 use wasm_bindgen_test::*;
 

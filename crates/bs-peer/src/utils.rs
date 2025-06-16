@@ -66,7 +66,7 @@ where
 }
 
 /// Creates test scripts to be used in test fixtures
-fn create_test_scripts() -> (String, String) {
+pub fn create_default_scripts() -> (String, String) {
     let entry_key = Field::ENTRY;
     let proof_key = Field::PROOF;
     let pubkey = PubkeyParams::KEY_PATH;
@@ -107,7 +107,7 @@ pub async fn setup_test_peer() -> TestFixture {
     // Create peer with the in-memory blockstore
     let peer = BsPeer::with_blockstore(key_manager, blockstore);
 
-    let (lock_script, unlock_script) = create_test_scripts();
+    let (lock_script, unlock_script) = create_default_scripts();
 
     TestFixture {
         peer,
@@ -124,7 +124,7 @@ pub async fn setup_network_test_peer() -> Result<NetworkTestFixture, Error> {
     // Create a network-enabled peer
     let peer = DefaultBsPeer::new(key_manager).await?;
 
-    let (lock_script, unlock_script) = create_test_scripts();
+    let (lock_script, unlock_script) = create_default_scripts();
 
     Ok(NetworkTestFixture {
         peer,

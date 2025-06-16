@@ -350,7 +350,7 @@ pub enum TestError {
 #[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 mod tests {
-    use crate::test_utils;
+    use crate::utils;
     use tracing_subscriber::fmt;
 
     #[allow(dead_code)]
@@ -364,36 +364,36 @@ mod tests {
     #[tokio::test]
     async fn basic_test() {
         // init_logger();
-        test_utils::run_basic_test().await;
+        utils::run_basic_test().await;
     }
 
     #[tokio::test]
     async fn in_memory_blockstore_test() {
         // init_logger();
-        test_utils::run_in_memory_blockstore_test().await;
+        utils::run_in_memory_blockstore_test().await;
     }
 
     #[tokio::test]
     async fn test_store_entries() {
         // init_logger();
-        test_utils::run_store_entries_test().await;
+        utils::run_store_entries_test().await;
     }
 
     #[tokio::test]
     async fn run_update_test() {
         // init_logger();
-        test_utils::run_update_test().await;
+        utils::run_update_test().await;
     }
 
     #[tokio::test]
     async fn run_load_test() {
         // init_logger();
-        test_utils::run_load_test().await;
+        utils::run_load_test().await;
     }
 
     #[tokio::test]
     async fn test_peer_initialization() {
         // init_logger();
-        test_utils::run_peer_initialization_test().await;
+        utils::run_peer_initialization_test().await;
     }
 }

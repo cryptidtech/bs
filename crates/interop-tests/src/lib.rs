@@ -1,7 +1,7 @@
 #![cfg(target_arch = "wasm32")]
 use bs_p2p::events::api::NetworkCommand;
 use bs_p2p::events::PublicEvent;
-use bs_peer::test_utils::setup_initialized_network_peer;
+use bs_peer::utils::setup_initialized_network_peer;
 use futures::channel::oneshot;
 use futures::StreamExt;
 use gloo_timers::future::sleep;

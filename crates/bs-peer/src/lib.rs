@@ -17,5 +17,5 @@ pub use error::Error;
 
 mod config;
 
-// #[cfg(any(test, target_arch = "wasm32"))]
-pub mod test_utils;
+pub mod utils;
+pub use utils::create_default_scripts;
