@@ -331,19 +331,19 @@ pub enum TestError {
     #[error("Provenance Log not initialized")]
     NotConnected,
     // from bs_p2p
-    #[error("Plog already exists")]
+    #[error("Plog already exists {0}")]
     P2p(#[from] bs_p2p::Error),
     // From<provenance_log::resolver::ResolveError>
-    #[error("Resolve error")]
+    #[error("Resolve error {0}")]
     ResolveError(#[from] provenance_log::resolver::ResolveError),
     /// From<multicid::Error>
-    #[error("Multicid error")]
+    #[error("Multicid error {0}")]
     MulticidError(#[from] multicid::Error),
     /// From<multihash::Error>
-    #[error("Multihash error")]
+    #[error("Multihash error {0}")]
     MultihashError(#[from] multihash::Error),
     /// From<provenance_log::Error>
-    #[error("Provenance Log error")]
+    #[error("Provenance Log error {0}")]
     PlogError(#[from] provenance_log::Error),
 }
 
