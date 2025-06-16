@@ -858,10 +858,9 @@ impl<B: Blockstore> EventLoop<B> {
                 tracing::debug!("New external address candidate: {address}");
             }
             SwarmEvent::Behaviour(BehaviourEvent::Bitswap(bitswap)) => {
-                tracing::info!("BITWAP Incoming event!!!");
                 match bitswap {
                     beetswap::Event::GetQueryResponse { query_id, data } => {
-                        tracing::info!("Bitswap: received response for {query_id:?}: {data:?}");
+                        tracing::trace!("Bitswap: received response for {query_id:?}: {data:?}");
                         if let Some(sender) = self.pending_queries.remove(&query_id) {
                             sender.send(data).map_err(|_| {
                                 tracing::error!("Failed to send response for Bitswap result");
@@ -872,7 +871,7 @@ impl<B: Blockstore> EventLoop<B> {
                         }
                     }
                     beetswap::Event::GetQueryError { query_id, error } => {
-                        tracing::info!("Bitswap: received error for {query_id:?}: {error}");
+                        tracing::debug!("Bitswap: received error for {query_id:?}: {error}");
                         if let Some(sender) = self.pending_queries.remove(&query_id) {
                             tracing::info!("received error for sender: {error}");
                             // Dropping the sender will cause the receiver to get an error
