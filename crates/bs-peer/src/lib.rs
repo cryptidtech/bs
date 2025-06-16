@@ -8,7 +8,7 @@
 pub struct ReadmeDoctests;
 
 pub mod peer;
-pub use peer::BsPeer;
+pub use peer::{BsPeer, DefaultBsPeer};
 
 pub mod platform;
 
