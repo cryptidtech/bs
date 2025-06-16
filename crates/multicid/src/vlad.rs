@@ -138,6 +138,13 @@ impl fmt::Debug for Vlad {
     }
 }
 
+impl fmt::Display for Vlad {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let encoded = EncodedVlad::new(self.encoding(), self.clone());
+        write!(f, "{}", encoded)
+    }
+}
+
 /// Hash builder that takes the codec and the data and produces a Multihash
 #[derive(Clone, Debug, Default)]
 pub struct Builder {
@@ -449,5 +456,42 @@ mod tests {
         let v2 = Vlad::default();
         assert!(v1 != v2);
         assert!(!v2.is_null());
+    }
+
+    // test impl fmt::Display for Vlad
+    #[test]
+    fn test_display() {
+        let _s = span!(Level::INFO, "test_display").entered();
+        // build a nonce
+        let mut rng = StdRng::from_os_rng();
+        let nonce = nonce::Builder::new_from_random_bytes(32, &mut rng)
+            .try_build()
+            .unwrap();
+
+        // build a cid
+        let cid = cid::Builder::new(Codec::Cidv1)
+            .with_target_codec(Codec::DagCbor)
+            .with_hash(
+                &mh::Builder::new_from_bytes(Codec::Sha2256, b"for great justice, move every zig!")
+                    .unwrap()
+                    .try_build()
+                    .unwrap(),
+            )
+            .try_build()
+            .unwrap();
+
+        let vlad = Builder::default()
+            .with_nonce(&nonce)
+            .with_cid(&cid)
+            .try_build(|cid, _| {
+                // sign those bytes
+                let v: Vec<u8> = cid.clone().into();
+                Ok(v)
+            })
+            .unwrap();
+
+        eprintln!("vlad: {}", vlad);
+
+        assert!(!vlad.to_string().is_empty());
     }
 }
