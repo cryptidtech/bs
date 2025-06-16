@@ -911,7 +911,7 @@ impl Builder {
 
     /// Create a new [Multikey] from a seed.
     ///
-    /// Currently only supports [Codec::Ed25519Priv] seeds.
+    /// Currently only supports [Codec::Ed25519Priv] and [Codec::Mlkem512Priv] seeds.
     pub fn new_from_seed(codec: Codec, seed: &[u8]) -> Result<Self, Error> {
         match codec {
             Codec::Ed25519Priv => {

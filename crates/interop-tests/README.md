@@ -22,6 +22,8 @@ On the browser side:
 
 ## Run the test
 
+This [just command](https://just.systems/) will build the browser code and launch the server:
+
 ```bash
 just serve-interop
 ```
