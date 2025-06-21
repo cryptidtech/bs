@@ -2,7 +2,6 @@
 use crate::{platform, Error};
 use ::cid::Cid;
 use blockstore::Blockstore as BlockstoreTrait;
-use bs::resolver_ext::ResolverExt as _;
 use bs::{
     config::sync::{KeyManager, MultiSigner},
     params::{
@@ -11,16 +10,17 @@ use bs::{
     },
     update::OpParams,
 };
-use bs_p2p::events::api::Client;
+pub use bs_p2p::events::api::Client;
+pub use bs_p2p::events::PublicEvent;
 use bs_traits::CondSync;
 use futures::channel::mpsc::{self};
-use libp2p::PeerId;
+pub use libp2p::PeerId;
 use multicid::cid;
 use multicodec::Codec;
 use multihash::mh;
 use provenance_log::key::key_paths::ValidatedKeyParams;
 pub use provenance_log::resolver::{ResolvedPlog, Resolver};
-use provenance_log::{self as p, Key, Script};
+pub use provenance_log::{self as p, Key, Script};
 use std::{future::Future, pin::Pin};
 
 /// A peer in the network that is generic over the blockstore type
@@ -39,7 +39,7 @@ where
     /// Client handle to send commands to the network
     pub network_client: Option<Client>,
     /// Events emitted from the network
-    pub events: Option<mpsc::Receiver<bs_p2p::events::PublicEvent>>,
+    pub events: Option<mpsc::Receiver<PublicEvent>>,
     /// The peer ID of this peer in the network
     pub peer_id: Option<PeerId>,
 }
