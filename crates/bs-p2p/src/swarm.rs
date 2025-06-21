@@ -6,7 +6,15 @@ use config::Config;
 
 use libp2p::{identity::Keypair, relay, swarm::NetworkBehaviour};
 // web-time crate uses std::time in native targets
+use directories::ProjectDirs;
+use std::path::PathBuf;
 use web_time::Duration;
+
+/// Get the default project directory for storing configuration files
+#[cfg(not(target_arch = "wasm32"))]
+fn get_project_dir() -> Option<PathBuf> {
+    ProjectDirs::from("org", "bs", "bs-p2p").map(|proj_dirs| proj_dirs.config_dir().to_path_buf())
+}
 
 #[cfg(not(target_os = "android"))]
 pub async fn create<B: NetworkBehaviour>(
@@ -51,11 +59,16 @@ pub async fn create<B: NetworkBehaviour>(
         use libp2p_webrtc::tokio::Certificate;
         use rand::thread_rng;
 
-        let (keypair, cert) = Config::load(base_path.clone()).unwrap_or_else(|_| {
+        // Use the provided base_path or fall back to project directory
+        let config_path = base_path.or_else(get_project_dir);
+
+        tracing::info!("Using configuration path: {:?}", config_path);
+
+        let (keypair, cert) = Config::load(config_path.clone()).unwrap_or_else(|_| {
             tracing::info!("Generating new keypair and certificate");
             let keypair = Keypair::generate_ed25519();
             let cert = Certificate::generate(&mut thread_rng()).unwrap();
-            Config::save(&keypair, &cert, base_path).unwrap();
+            Config::save(&keypair, &cert, config_path).unwrap();
             (keypair, cert)
         });
 
@@ -112,11 +125,16 @@ pub async fn create<B: NetworkBehaviour>(
     use libp2p_webrtc::tokio::Certificate;
     use rand::thread_rng;
 
-    let (keypair, cert) = Config::load(base_path.clone()).unwrap_or_else(|_| {
+    // Use the provided base_path or fall back to project directory
+    let config_path = base_path.or_else(get_project_dir);
+
+    tracing::info!("Using configuration path: {:?}", config_path);
+
+    let (keypair, cert) = Config::load(config_path.clone()).unwrap_or_else(|_| {
         tracing::info!("Generating new keypair and certificate");
         let keypair = Keypair::generate_ed25519();
         let cert = Certificate::generate(&mut thread_rng()).unwrap();
-        Config::save(&keypair, &cert, base_path).unwrap();
+        Config::save(&keypair, &cert, config_path).unwrap();
         (keypair, cert)
     });
 
