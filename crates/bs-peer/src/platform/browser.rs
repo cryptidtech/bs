@@ -52,7 +52,9 @@ pub async fn start<B: Blockstore + 'static>(
     let (mut network_client, network_events, network_event_loop) = api::new(swarm).await;
 
     spawn_local(async move {
-        let _ = network_event_loop.run().await;
+        if let Err(e) = network_event_loop.run().await {
+            tracing::error!("Network event loop failed: {}", e);
+        }
     });
 
     for endpoint in libp2p_endpoints.iter() {

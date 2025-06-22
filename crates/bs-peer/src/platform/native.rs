@@ -66,7 +66,11 @@ pub async fn start<B: Blockstore + 'static>(
     let (mut network_client, network_events, network_event_loop) = api::new(swarm).await;
 
     // We need to start the network event loop first in order to listen for our address
-    tokio::spawn(async move { network_event_loop.run().await });
+    tokio::spawn(async move {
+        if let Err(e) = network_event_loop.run().await {
+            tracing::error!("Network event loop failed: {}", e);
+        }
+    });
 
     let address_webrtc = Multiaddr::from(Ipv6Addr::UNSPECIFIED)
         .with(Protocol::Udp(0))
