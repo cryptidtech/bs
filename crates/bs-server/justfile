@@ -1,0 +1,31 @@
+# Automatically loads environment variables from a `.env` file when you run any `just` command
+# - Makes those environment variables available to your recipes
+# - Allows you to reference environment variables like `$IP_ADDRESS` in your recipes
+set dotenv-load
+
+serve:
+  cargo run
+
+build:
+  cargo build --release --bin bestsign-superpeer
+
+add-target: 
+  rustup target add x86_64-unknown-linux-gnu
+
+release:
+  cargo build --release --bin bestsign-superpeer --target x86_64-unknown-linux-gnu
+
+scp:
+  scp -i ~/.ssh/oracle_cloud ../../target/x86_64-unknown-linux-gnu/release/bestsign-superpeer ubuntu@$IP_ADDRESS:~ 
+
+run-on-server:
+  ssh -i ~/.ssh/oracle_cloud ubuntu@$IP_ADDRESS './bettersign-superpeer'
+
+login:
+  ssh -i ~/.ssh/oracle_cloud ubuntu@$IP_ADDRESS
+
+
+# scp the bestsign_superpeer.service file to the remote host 
+scp-bestsign-superpeer-service:
+  scp -i ~/.ssh/oracle_cloud crates/superpeer/bestsign_superpeer.service ubuntu@$IP_ADDRESS:/etc/systemd/system/bestsign_superpeer.service
+

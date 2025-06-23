@@ -23,7 +23,7 @@ members = [
   "crates/rng",
   "crates/bs-peer",
   "crates/interop-tests",
-  "crates/bs-wallets",
+  "crates/bs-wallets", "crates/bs-server",
 ]
 
 [workspace.package]
