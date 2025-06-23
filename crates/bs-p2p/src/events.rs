@@ -1,5 +1,6 @@
 //! Event types, and loop handlers for the P2P network.
 pub mod api;
+pub use api::Client;
 
 pub mod delay;
 use api::Libp2pEvent;
