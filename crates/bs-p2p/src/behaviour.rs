@@ -13,11 +13,13 @@ use std::hash::{Hash, Hasher};
 
 use req_res::{PeerRequest, PeerResponse};
 
-/// PiperNet protocol name
-const PROTOCOL_NAME: &str = "/peerpiper/0.1.0";
+/// [kad] [StreamProtocol] name
+const PROTOCOL_NAME: &str = "/bettersign/0.1.0";
 
 /// Extension protocol name
-const EXTENSION_PROTOCOL: &str = "/peerpiper/extensions/0.1.0";
+///
+/// Work in progress.
+const EXTENSION_PROTOCOL: &str = "/bettersign/extensions/0.1.0";
 
 const MAX_MULTIHASH_LENGTH: usize = 64;
 
