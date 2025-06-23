@@ -23,7 +23,9 @@ pub use provenance_log::resolver::{ResolvedPlog, Resolver};
 pub use provenance_log::{self as p, Key, Script};
 use std::{future::Future, pin::Pin};
 
-/// A peer in the network that is generic over the blockstore type
+/// A peer that is generic over the blockstore type.
+///
+/// Can operate offline with just a local blockstore, or connect to a network
 #[derive(Debug)]
 pub struct BsPeer<KP, BS>
 where
@@ -100,7 +102,7 @@ where
         self.plog.as_ref()
     }
 
-    /// Create a BsPeer with a custom blockstore implementation
+    /// Create an offline (no network) [BsPeer] with a custom blockstore implementation
     pub fn with_blockstore(key_provider: KP, blockstore: BS) -> Self {
         Self {
             key_provider,
@@ -219,6 +221,7 @@ where
         self.store_ops(config.into()).await?;
         self.plog = Some(plog);
         self.store_entries().await?;
+        self.record_plog_to_dht().await?;
         Ok(())
     }
 
@@ -256,11 +259,9 @@ where
 
     /// Update the BsPeer's Plog with new data.
     pub async fn update(&mut self, config: bs::update::Config) -> Result<(), Error> {
-        if self.plog.is_none() {
+        let Some(ref mut plog) = self.plog else {
             return Err(Error::PlogNotInitialized);
-        }
-
-        let plog = self.plog.as_mut().unwrap();
+        };
 
         // Apply the update to the plog
         bs::ops::update_plog(plog, &config, &self.key_provider, &self.key_provider)?;
@@ -276,8 +277,9 @@ where
             }
         }
 
-        // After successful update, store CIDs
+        // After successful update, store CIDs and publish DHT record
         self.store_ops(config.into()).await?;
+        self.record_plog_to_dht().await?;
 
         Ok(())
     }
@@ -299,9 +301,35 @@ where
             }
         }
 
-        // Store the plog
+        // Store the plog, entries, and record to DHT
         self.plog = Some(plog);
         self.store_entries().await?;
+        self.record_plog_to_dht().await?;
+
+        Ok(())
+    }
+
+    /// Record Plog to DHT using Vlad as key and head CID as value
+    async fn record_plog_to_dht(&self) -> Result<(), Error> {
+        let Some(ref plog) = self.plog else {
+            return Err(Error::PlogNotInitialized);
+        };
+
+        // Get Vlad bytes for DHT key
+        let vlad_bytes: Vec<u8> = plog.vlad.cid().clone().into();
+
+        // Get the head CID bytes for DHT value
+        let head_cid_bytes: Vec<u8> = plog.head.clone().into();
+
+        // Record to DHT if network client is available
+        if let Some(client) = &self.network_client {
+            tracing::debug!("Recording Plog to DHT with Vlad: {:?}", plog.vlad.cid());
+            client.put_record(vlad_bytes, head_cid_bytes).await?;
+            tracing::debug!("Successfully recorded Plog to DHT");
+        } else {
+            tracing::warn!("Network client not available, skipping DHT recording");
+        }
+
         Ok(())
     }
 }
