@@ -328,6 +328,7 @@ where
             tracing::debug!("Successfully recorded Plog to DHT");
         } else {
             tracing::warn!("Network client not available, skipping DHT recording");
+            return Err(Error::NotConnected);
         }
 
         Ok(())

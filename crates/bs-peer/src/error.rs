@@ -83,6 +83,10 @@ pub enum Error {
     /// Wallets error
     #[error(transparent)]
     Wallets(#[from] bs_wallets::Error),
+
+    /// No network connection for this peer
+    #[error("Peer is not connected to a network")]
+    NotConnected,
 }
 
 impl From<String> for Error {
