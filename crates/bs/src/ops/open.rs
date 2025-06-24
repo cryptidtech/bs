@@ -104,7 +104,7 @@ pub fn open_plog<E: BsCompatibleError>(
     let unlock_script = config.unlock().clone();
 
     // 5. Create the builder and add operations
-    let mut builder = entry::Entry::builder();
+    let builder = entry::Entry::builder();
     let mut entry = builder
         .vlad(vlad)
         .locks(vec![lock_script])
@@ -157,7 +157,7 @@ pub fn open_plog<E: BsCompatibleError>(
         .map_err(|e| PlogError::from(EntryError::SignFailed(e.to_string())))?;
 
     // 9. Finalize entry with signature
-    let entry = entry.try_build_with_proof(signature.into())?;
+    let entry = unsigned_entry.try_build_with_proof(signature.into())?;
 
     // 10. Construct the log
     let log = provenance_log::log::Builder::new()
@@ -428,7 +428,7 @@ mod tests {
 
         // log the ops
         tracing::debug!("Ops in the log:");
-        for (cid, entry) in plog.entries {
+        for (_cid, entry) in plog.entries {
             tracing::debug!("Entry");
             for op in entry.ops() {
                 tracing::debug!("  Op: {:?}", op);

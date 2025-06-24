@@ -73,7 +73,7 @@
 //!     .build();
 //!
 //! // Prepare the unsigned entry for signing
-//! let unsigned_entry = first_entry.prepare_unsigned_entry()?;
+//! let unsigned_entry: Entry = first_entry.prepare_unsigned_entry()?;
 //! let entry_bytes: Vec<u8> = unsigned_entry.clone().into();
 //!
 //! // Sign the entry with the signing key
@@ -83,10 +83,10 @@
 //! };
 //!
 //! // Finalize the entry with the signature as proof
-//! let first_entry = first_entry.try_build_with_proof(signature.into())?;
+//! let signed_first_entry: Entry = unsigned_entry.try_build_with_proof(signature.into())?;
 //!
 //! // For subsequent entries, build from the previous entry
-//! let next_entry_builder = EntryBuilder::from(&first_entry);
+//! let next_entry_builder= EntryBuilder::from(&signed_first_entry);
 //! let next_entry = next_entry_builder
 //!     .unlock(unlock_script)
 //!     .build();
@@ -110,7 +110,7 @@
 //! };
 //!
 //! // Finalize with signature
-//! let finalized_entry = mutable_entry.try_build_with_proof(signature.into())?;
+//! let finalized_entry = unsigned_entry.try_build_with_proof(signature.into())?;
 //!
 //! // The entry is now ready to be added to the provenance log
 //! # Ok(())
@@ -647,7 +647,7 @@ impl Entry {
     }
 
     /// Preapre an unsigned [Entry] with empty proof for signing
-    pub fn prepare_unsigned_entry(&self) -> Result<Entry, Error> {
+    pub fn prepare_unsigned_entry(self) -> Result<Entry, Error> {
         let version = self.version;
         let vlad = self.vlad.clone();
         let prev = self.prev.clone();
@@ -676,7 +676,7 @@ impl Entry {
 
     /// Tries to apply the given proof to the entry and
     /// build the finalized entry with the provided proof
-    pub fn try_build_with_proof(&self, proof: Vec<u8>) -> Result<Entry, Error> {
+    pub fn try_build_with_proof(self, proof: Vec<u8>) -> Result<Entry, Error> {
         let mut entry = self.prepare_unsigned_entry()?;
         entry.proof = proof;
         Ok(entry)
@@ -688,13 +688,13 @@ impl Entry {
         since = "1.1.0",
         note = "Please use prepare_unsigned_entry() then finalize_with_proof() instead"
     )]
-    pub fn try_build<F>(&self, gen_proof: F) -> Result<Entry, Error>
+    pub fn try_build<F>(self, gen_proof: F) -> Result<Entry, Error>
     where
         F: FnOnce(&Entry) -> Result<Vec<u8>, Error>,
     {
         let unsigned_entry = self.prepare_unsigned_entry()?;
         let proof = gen_proof(&unsigned_entry)?;
-        self.try_build_with_proof(proof)
+        unsigned_entry.try_build_with_proof(proof)
     }
 }
 

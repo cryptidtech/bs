@@ -615,7 +615,7 @@ push("/entry/proof");
             .ops(vec![ephemeral_op, pubkey_op])
             .build();
 
-        entry
+        let entry = entry
             .try_build(|e| {
                 // get the serialized version of the entry (with empty proof)
                 let ev: Vec<u8> = e.clone().into();

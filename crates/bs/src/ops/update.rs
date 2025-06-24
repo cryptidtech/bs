@@ -76,10 +76,10 @@ where
 
     // 3. Construct the next entry, starting from the last entry
     let entry_builder = entry::EntryBuilder::from(&last_entry);
-    let mut entry = entry_builder.unlock(config.unlock().clone()).build();
+    let mut mutable_entry = entry_builder.unlock(config.unlock().clone()).build();
 
     for lock in config.add_entry_lock_scripts() {
-        entry.add_lock(lock);
+        mutable_entry.add_lock(lock);
     }
 
     // CRITICAL: First add ALL operations to the builder AFTER all op_params have been processed
@@ -118,7 +118,7 @@ where
         };
 
         // Add the op to the builder
-        entry.add_op(&op);
+        mutable_entry.add_op(&op);
     }
 
     // check current entry for lipmaa longhop, and set lipmaa if needed
@@ -126,11 +126,11 @@ where
     if curr_seqno.is_lipmaa() {
         let lipmaa = curr_seqno.lipmaa();
         let longhop_entry = plog.seqno(lipmaa)?;
-        entry.with_lipmaa(&longhop_entry.cid());
+        mutable_entry.with_lipmaa(&longhop_entry.cid());
     }
 
     // Now prepare for signing after ALL operations have been added
-    let unsigned_entry = entry.prepare_unsigned_entry()?;
+    let unsigned_entry = mutable_entry.prepare_unsigned_entry()?;
     let entry_bytes: Vec<u8> = unsigned_entry.clone().into();
 
     // Sign the entry
@@ -139,7 +139,7 @@ where
         .map_err(|e| PlogError::from(EntryError::SignFailed(e.to_string())))?;
 
     // Finalize the entry with the signature as proof
-    let entry = entry.try_build_with_proof(signature.into())?;
+    let entry = unsigned_entry.try_build_with_proof(signature.into())?;
 
     // try to add the entry to the p.log
     plog.try_append(&entry)?;

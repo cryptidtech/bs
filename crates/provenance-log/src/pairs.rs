@@ -192,7 +192,7 @@ impl<'a> Kvp<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{entry, Script};
+    use crate::Script;
     use multicid::Vlad;
     use test_log::test;
     use tracing::{span, Level};
@@ -224,7 +224,7 @@ mod tests {
             .locks(vec![Script::default()])
             .unlock(Script::default())
             .build();
-        e1.try_build(|_| Ok(Vec::default())).unwrap();
+        let e1 = e1.try_build(|_| Ok(Vec::default())).unwrap();
 
         let _ = p.set_entry(&e1).unwrap();
         p.apply_entry_ops(&e1).unwrap();
@@ -234,7 +234,7 @@ mod tests {
             .locks(vec![Script::default()])
             .unlock(Script::default())
             .build();
-        e2.try_build(|_| Ok(Vec::default())).unwrap();
+        let e2 = e2.try_build(|_| Ok(Vec::default())).unwrap();
 
         // this panics because the seqno of e1 is the same
         let _ = p.set_entry(&e2).unwrap();
@@ -256,7 +256,7 @@ mod tests {
                 Op::Update("/three".try_into().unwrap(), Value::Str("baz".to_string())),
             ])
             .build();
-        entry.try_build(|_| Ok(Vec::default())).unwrap();
+        let entry = entry.try_build(|_| Ok(Vec::default())).unwrap();
 
         let mut p = Kvp::default();
 

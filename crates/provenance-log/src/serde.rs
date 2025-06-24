@@ -538,9 +538,8 @@ mod tests {
             .unlock(script)
             .ops(vec![op])
             .build();
-        let entry = entry
-            .try_build_with_proof(entry.vlad.clone().into())
-            .unwrap();
+        let bytes: Vec<u8> = entry.vlad.clone().into();
+        let entry = entry.try_build_with_proof(bytes).unwrap();
 
         /*
         let v: Vec<u8> = entry.clone().into();
