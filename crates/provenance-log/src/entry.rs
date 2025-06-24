@@ -625,6 +625,11 @@ impl Entry {
         self.ops.push(op.clone());
     }
 
+    /// Set the lipmaa Cid
+    pub fn with_lipmaa(&mut self, lipmaa: &Cid) {
+        self.lipmaa = lipmaa.clone();
+    }
+
     #[allow(dead_code)]
     fn extend_ops<I>(&mut self, ops: I)
     where

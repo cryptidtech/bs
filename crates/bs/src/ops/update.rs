@@ -20,7 +20,7 @@ use multikey::{Multikey, Views};
 use provenance_log::{
     entry::{self, Entry},
     error::EntryError,
-    Error as PlogError, Log, OpId,
+    Error as PlogError, Lipmaa as _, Log, OpId,
 };
 use std::{fs::read, path::Path};
 use tracing::debug;
@@ -119,6 +119,14 @@ where
 
         // Add the op to the builder
         entry.add_op(&op);
+    }
+
+    // check current entry for lipmaa longhop, and set lipmaa if needed
+    let curr_seqno = last_entry.seqno() + 1;
+    if curr_seqno.is_lipmaa() {
+        let lipmaa = curr_seqno.lipmaa();
+        let longhop_entry = plog.seqno(lipmaa)?;
+        entry.with_lipmaa(&longhop_entry.cid());
     }
 
     // Now prepare for signing after ALL operations have been added

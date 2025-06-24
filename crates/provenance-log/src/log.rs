@@ -333,6 +333,14 @@ impl<'a> Iterator for VerifyIter<'a> {
 }
 
 impl Log {
+    /// Returns the Entries with the given seqno
+    pub fn seqno(&self, seqno: u64) -> Result<&Entry, Error> {
+        self.entries
+            .values()
+            .find(|entry| entry.seqno() == seqno)
+            .ok_or(LogError::InvalidSeqno.into())
+    }
+
     /// get an iterator over the entries in from head to foot
     pub fn iter(&self) -> impl Iterator<Item = &Entry> {
         // get a list of Entry references, sort them by seqno
