@@ -104,11 +104,12 @@ pub fn open_plog<E: BsCompatibleError>(
     let unlock_script = config.unlock().clone();
 
     // 5. Create the builder and add operations
-    let mut builder = entry::Builder::new();
-    builder
-        .with_vlad(&vlad)
-        .add_lock(&lock_script)
-        .with_unlock(&unlock_script);
+    let mut builder = entry::Entry::builder();
+    let mut entry = builder
+        .vlad(vlad)
+        .locks(vec![lock_script])
+        .unlock(unlock_script)
+        .build();
 
     // 6. Add ALL operations to builder (including entry public key)
     for params in &op_params {
@@ -144,11 +145,11 @@ pub fn open_plog<E: BsCompatibleError>(
             _ => return Err(OpenError::InvalidOpParams.into()),
         };
 
-        builder.add_op(&op);
+        entry.add_op(&op);
     }
 
     // 7. Prepare entry for signing
-    let unsigned_entry = builder.prepare_unsigned_entry()?;
+    let unsigned_entry = entry.prepare_unsigned_entry()?;
     let entry_bytes: Vec<u8> = unsigned_entry.clone().into();
 
     // 8. Sign the entry using our one-time signing function
@@ -156,11 +157,11 @@ pub fn open_plog<E: BsCompatibleError>(
         .map_err(|e| PlogError::from(EntryError::SignFailed(e.to_string())))?;
 
     // 9. Finalize entry with signature
-    let entry = builder.finalize_with_proof(signature.into())?;
+    let entry = entry.try_build_with_proof(signature.into())?;
 
     // 10. Construct the log
     let log = provenance_log::log::Builder::new()
-        .with_vlad(&vlad)
+        .with_vlad(entry.vlad())
         .with_first_lock(config.first_lock())
         .append_entry(&entry)
         .try_build()?;

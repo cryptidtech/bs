@@ -257,7 +257,7 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
             };
 
             let cfg = update::Config::builder()
-                .add_entry_lock_scripts(vec![(Key::default(), lock_script.clone())])
+                .add_entry_lock_scripts(vec![lock_script.clone()])
                 .unlock(unlock_script)
                 .entry_signing_key(entry_signing_key)
                 .additional_ops(entry_ops)

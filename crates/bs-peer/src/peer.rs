@@ -2,6 +2,7 @@
 use crate::{platform, Error};
 use ::cid::Cid;
 use blockstore::Blockstore as BlockstoreTrait;
+pub use bs::update::Config as UpdateConfig;
 use bs::{
     config::sync::{KeyManager, MultiSigner},
     params::{
@@ -258,7 +259,7 @@ where
     }
 
     /// Update the BsPeer's Plog with new data.
-    pub async fn update(&mut self, config: bs::update::Config) -> Result<(), Error> {
+    pub async fn update(&mut self, config: UpdateConfig) -> Result<(), Error> {
         let Some(ref mut plog) = self.plog else {
             return Err(Error::PlogNotInitialized);
         };
@@ -328,7 +329,6 @@ where
             tracing::debug!("Successfully recorded Plog to DHT");
         } else {
             tracing::warn!("Network client not available, skipping DHT recording");
-            return Err(Error::NotConnected);
         }
 
         Ok(())

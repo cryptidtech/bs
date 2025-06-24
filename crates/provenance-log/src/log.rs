@@ -600,12 +600,14 @@ push("/entry/proof");
         let ephemeral_op = get_key_update_op("/ephemeral", &ephemeral);
         let pubkey_op = get_key_update_op("/pubkey", &key);
 
-        let entry = entry::Builder::default()
-            .with_vlad(&vlad)
-            .add_lock(&lock)
-            .with_unlock(&unlock)
-            .add_op(&ephemeral_op)
-            .add_op(&pubkey_op)
+        let entry = Entry::builder()
+            .vlad(vlad.clone())
+            .locks(vec![lock])
+            .unlock(unlock)
+            .ops(vec![ephemeral_op, pubkey_op])
+            .build();
+
+        entry
             .try_build(|e| {
                 // get the serialized version of the entry (with empty proof)
                 let ev: Vec<u8> = e.clone().into();
@@ -645,21 +647,21 @@ push("/entry/proof");
     fn test_entry_iterator() {
         let _s = span!(Level::INFO, "test_entry_iterator").entered();
         let ephemeral = EncodedMultikey::try_from(
-            "fba2480260874657374206b6579010120cbd87095dc5863fcec46a66a1d4040a73cb329f92615e165096bd50541ee71c0"
-        )
-        .unwrap();
+        "fba2480260874657374206b6579010120cbd87095dc5863fcec46a66a1d4040a73cb329f92615e165096bd50541ee71c0"
+    )
+    .unwrap();
         let key1 = EncodedMultikey::try_from(
-            "fba2480260874657374206b6579010120d784f92e18bdba433b8b0f6cbf140bc9629ff607a59997357b40d22c3883a3b8"
-        )
-        .unwrap();
+        "fba2480260874657374206b6579010120d784f92e18bdba433b8b0f6cbf140bc9629ff607a59997357b40d22c3883a3b8"
+    )
+    .unwrap();
         let key2 = EncodedMultikey::try_from(
-            "fba2480260874657374206b65790101203f4c94407de791e53b4df12ef1d5534d1b19ff2ccfccba4ccc4722b6e5e8ea07"
-        )
-        .unwrap();
+        "fba2480260874657374206b65790101203f4c94407de791e53b4df12ef1d5534d1b19ff2ccfccba4ccc4722b6e5e8ea07"
+    )
+    .unwrap();
         let key3 = EncodedMultikey::try_from(
-            "fba2480260874657374206b6579010120518e3ea918b1168d29ca7e75b0ca84be1ad6edf593a47828894a5f1b94a83bd4"
-        )
-        .unwrap();
+        "fba2480260874657374206b6579010120518e3ea918b1168d29ca7e75b0ca84be1ad6edf593a47828894a5f1b94a83bd4"
+    )
+    .unwrap();
 
         // build a cid
         let cid = cid::Builder::new(Codec::Cidv1)
@@ -696,66 +698,90 @@ push("/entry/proof");
         let lock = lock_script();
 
         // create the first, self-signed Entry object
-        let e1 = entry::Builder::default()
-            .with_vlad(&vlad)
-            .with_seqno(0)
-            .add_lock(&lock) // "/" -> lock.wast
-            .with_unlock(&unlock)
-            .add_op(&ephemeral_op) // "/ephemeral"
-            .add_op(&pubkey1_op) // "/pubkey"
-            .add_op(&preimage1_op) // "/preimage"
-            .try_build(|e| {
-                let ev: Vec<u8> = e.clone().into();
-                let sv = ephemeral.sign_view().unwrap();
-                let ms = sv.sign(&ev, false, None).unwrap();
-                Ok(ms.into())
-            })
-            .unwrap();
+        let e1 = Entry::builder()
+            .vlad(vlad.clone())
+            .seqno(0)
+            .locks(vec![lock.clone()])
+            .unlock(unlock.clone())
+            .ops(vec![
+                ephemeral_op.clone(),
+                pubkey1_op.clone(),
+                preimage1_op.clone(),
+            ])
+            .build();
 
-        //println!("{:?}", e1);
-        let e2 = entry::Builder::default()
-            .with_vlad(&vlad)
-            .with_seqno(1)
-            .add_lock(&lock) // "/" -> lock.wast
-            .with_unlock(&unlock)
-            .with_prev(&e1.cid())
-            .add_op(&Op::Delete("/ephemeral".try_into().unwrap())) // "/ephemeral"
-            .add_op(&pubkey2_op) // "/pubkey"
-            .try_build(|e| {
-                let ev: Vec<u8> = e.clone().into();
-                let sv = key1.sign_view().unwrap();
-                let ms = sv.sign(&ev, false, None).unwrap();
-                Ok(ms.into())
-            })
-            .unwrap();
+        let unsigned_entry = e1.prepare_unsigned_entry().unwrap();
+        let entry_bytes: Vec<u8> = unsigned_entry.clone().into();
 
-        //println!("{:?}", e2);
-        let e3 = entry::Builder::default()
-            .with_vlad(&vlad)
-            .with_seqno(2)
-            .add_lock(&lock) // "/" -> lock.wast
-            .with_unlock(&unlock)
-            .with_prev(&e2.cid())
-            .try_build(|e| {
-                let ev: Vec<u8> = e.clone().into();
-                let sv = key2.sign_view().unwrap();
-                let ms = sv.sign(&ev, false, None).unwrap();
-                Ok(ms.into())
-            })
-            .unwrap();
+        let signature = {
+            let sv = ephemeral.sign_view().unwrap();
+            sv.sign(&entry_bytes, false, None).unwrap()
+        };
 
-        //println!("{:?}", e3);
-        let e4 = entry::Builder::default()
-            .with_vlad(&vlad)
-            .with_seqno(3)
-            .add_lock(&lock) // "/" -> lock.wast
-            .with_unlock(&unlock)
-            .with_prev(&e3.cid())
-            .add_op(&pubkey3_op) // "/pubkey"
-            .add_op(&preimage2_op) // "/preimage"
-            .try_build(|_| Ok(b"for great justice".to_vec()))
-            .unwrap();
-        //println!("{:?}", e4);
+        let e1 = unsigned_entry
+            .try_build_with_proof(signature.into())
+            .expect("should build e1 with proof");
+
+        let e2 = Entry::builder()
+            .vlad(vlad.clone())
+            .seqno(1)
+            .locks(vec![lock.clone()])
+            .unlock(unlock.clone())
+            .prev(e1.cid())
+            .ops(vec![
+                Op::Delete("/ephemeral".try_into().unwrap()),
+                pubkey2_op.clone(), // Changed from preimage1_op to pubkey2_op
+            ])
+            .build();
+
+        let unsigned_entry = e2.prepare_unsigned_entry().unwrap();
+        let entry_bytes: Vec<u8> = unsigned_entry.clone().into();
+
+        let signature = {
+            let sv = key1.sign_view().unwrap();
+            sv.sign(&entry_bytes, false, None).unwrap()
+        };
+
+        let e2 = unsigned_entry
+            .try_build_with_proof(signature.into())
+            .expect("should build e2 with proof");
+
+        let e3 = Entry::builder()
+            .vlad(vlad.clone())
+            .seqno(2)
+            .locks(vec![lock.clone()])
+            .unlock(unlock.clone())
+            .prev(e2.cid())
+            .build();
+
+        let unsigned_entry = e3.prepare_unsigned_entry().unwrap();
+        let entry_bytes: Vec<u8> = unsigned_entry.clone().into();
+
+        let signature = {
+            let sv = key2.sign_view().unwrap();
+            sv.sign(&entry_bytes, false, None).unwrap()
+        };
+
+        let e3 = unsigned_entry
+            .try_build_with_proof(signature.into())
+            .expect("should build e3 with proof");
+
+        let e4 = Entry::builder()
+            .vlad(vlad.clone())
+            .seqno(3)
+            .locks(vec![lock])
+            .unlock(unlock)
+            .prev(e3.cid())
+            .ops(vec![pubkey3_op, preimage2_op])
+            .build();
+
+        let unsigned_entry = e4.prepare_unsigned_entry().unwrap();
+
+        // For e4, use the raw bytes "for great justice" as the proof,
+        // just like in the original test
+        let e4 = unsigned_entry
+            .try_build_with_proof(b"for great justice".to_vec())
+            .expect("should build e4 with proof");
 
         // load the first lock script
         let first = first_lock_script();
@@ -778,11 +804,15 @@ push("/entry/proof");
         assert_eq!(Some(&e3), iter.next());
         assert_eq!(Some(&e4), iter.next());
         assert_eq!(None, iter.next());
+
+        // Add some debug info to help trace any issues
+        println!("Verifying entries...");
+
         let verify_iter = log.verify();
         for ret in verify_iter {
             match ret {
-                Ok((c, _, _)) => {
-                    println!("check count: {}", c);
+                Ok((c, e, _)) => {
+                    println!("check count for entry with seqno {}: {}", e.seqno(), c);
                 }
                 Err(e) => {
                     println!("verify failed: {}", e);

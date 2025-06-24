@@ -1,4 +1,145 @@
 // SPDX-License-Identifier: FSL-1.1
+//! # Provenance Log Entry
+//!
+//! This module implements the core `Entry` data structure for provenance logs.
+//! An `Entry` represents a single state change in a provenance log, containing
+//! operations that modify key-value pairs, along with authentication information.
+//!
+//! Entries are linked together to form a chain, with each entry containing:
+//! - References to previous entries (prev, lipmaa links)
+//! - Operations that modify the state (updates, deletes, no-ops)
+//! - Lock scripts that govern permissible operations on paths
+//! - An unlock script and proof that authenticates the entry
+//!
+//! ## Usage Example
+//!
+//! ```
+//! use provenance_log::{
+//!     entry::{Entry, EntryBuilder},
+//!     Key, Op, Script, Error, Value
+//! };
+//! use multicid::{Cid, Vlad};
+//! use multicodec::Codec;
+//! use multihash::mh;
+//! use multikey::{EncodedMultikey, Multikey, Views};
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! // Create or load a signing key
+//! let signing_key = EncodedMultikey::try_from(
+//!     "fba2480260874657374206b6579010120cbd87095dc5863fcec46a66a1d4040a73cb329f92615e165096bd50541ee71c0"
+//! )?;
+//!
+//! // Create a vlad (identifier for the provenance log)
+//! let cid = Cid::default(); // In practice, use a meaningful CID
+//! let vlad = Vlad::default(); // In practice, initialize with proper values
+//!
+//! // Create an unlock script that will be used for authentication
+//! let unlock_script = Script::Code(
+//!     Key::default(),
+//!     r#"
+//!         push("/entry/");
+//!         push("/entry/proof");
+//!     "#
+//!     .to_string(),
+//! );
+//!
+//! // Create a lock script that will govern access to paths
+//! let lock_script = Script::Code(
+//!     Key::default(),
+//!     r#"
+//!         check_signature("/pubkey", "/entry/")
+//!     "#
+//!     .to_string(),
+//! );
+//!
+//! // Create operations to be included in the entry
+//! let pubkey_op = Op::Update(
+//!     "/pubkey".try_into()?,
+//!     Value::Data(signing_key.conv_view()?.to_public_key()?.into())
+//! );
+//!
+//! let data_op = Op::Update(
+//!     "/data/example".try_into()?,
+//!     Value::Str("Hello, provenance log!".into())
+//! );
+//!
+//! // For the first entry in a log
+//! let first_entry = Entry::builder()
+//!     .vlad(vlad.clone())
+//!     .seqno(0)
+//!     .unlock(unlock_script.clone())
+//!     .locks(vec![lock_script.clone()])
+//!     .ops(vec![pubkey_op.clone()])
+//!     .build();
+//!
+//! // Prepare the unsigned entry for signing
+//! let unsigned_entry = first_entry.prepare_unsigned_entry()?;
+//! let entry_bytes: Vec<u8> = unsigned_entry.clone().into();
+//!
+//! // Sign the entry with the signing key
+//! let signature = {
+//!     let sign_view = signing_key.sign_view()?;
+//!     sign_view.sign(&entry_bytes, false, None)?
+//! };
+//!
+//! // Finalize the entry with the signature as proof
+//! let first_entry = first_entry.try_build_with_proof(signature.into())?;
+//!
+//! // For subsequent entries, build from the previous entry
+//! let next_entry_builder = EntryBuilder::from(&first_entry);
+//! let next_entry = next_entry_builder
+//!     .unlock(unlock_script)
+//!     .build();
+//!
+//! // Add lock scripts if needed
+//! let mut mutable_entry = next_entry;
+//! mutable_entry.add_lock(&lock_script);
+//!
+//! // Add operations
+//! mutable_entry.add_op(&data_op);
+//! mutable_entry.add_op(&Op::Delete("/old/data".try_into()?));
+//!
+//! // Prepare for signing
+//! let unsigned_entry = mutable_entry.prepare_unsigned_entry()?;
+//! let entry_bytes: Vec<u8> = unsigned_entry.clone().into();
+//!
+//! // Sign the entry
+//! let signature = {
+//!     let sign_view = signing_key.sign_view()?;
+//!     sign_view.sign(&entry_bytes, false, None)?
+//! };
+//!
+//! // Finalize with signature
+//! let finalized_entry = mutable_entry.try_build_with_proof(signature.into())?;
+//!
+//! // The entry is now ready to be added to the provenance log
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Entry Structure
+//!
+//! Each entry contains:
+//! - `version`: The entry format version
+//! - `vlad`: Long-lived address for this provenance log
+//! - `prev`: Link to the previous entry
+//! - `lipmaa`: Link providing O(log n) traversal between entries
+//! - `seqno`: Sequence number for this entry
+//! - `ops`: Operations on the namespace (updates, deletes, no-ops)
+//! - `locks`: Lock scripts associated with keys
+//! - `unlock`: Script that unlocks this entry
+//! - `proof`: Authentication data (signature, hash preimage, etc.)
+//!
+//! ## Building Entries
+//!
+//! Entries are created using a builder pattern with two phases:
+//! 1. Create an unsigned entry using `Entry::builder()` or `EntryBuilder::from(&prev_entry)`
+//! 2. Finalize the entry with authentication using `prepare_unsigned_entry()` to create
+//!  the bytes to be signed, followed by `try_build_with_proof()`.
+//!
+//! This two-phase approach allows for proper signature generation on the serialized form
+//! of the unsigned entry.
+
 mod fields;
 pub use fields::Field;
 
@@ -21,32 +162,82 @@ pub const ENTRY_VERSION: u64 = 1;
 /// a base encoded provenance entry
 pub type EncodedEntry = BaseEncoded<Entry>;
 
-/// An Entry represents a single state change associated with a key/value pair
-/// in a provenance log.
-#[derive(Clone, Eq, PartialEq)]
+/// An Entry represents a single state change in a provenance log, containing
+/// operations that modify key-value pairs, along with authentication information.
+///
+/// Entries are linked together to form a chain, with each entry containing
+/// references to previous entries, operations that modify the state, and
+/// cryptographic proof data that authenticates the entry.
+///
+/// # Fields
+///
+/// * `version` - Format version for this entry (defaults to `ENTRY_VERSION`)
+/// * `vlad` - Virtual Long-lived ADdress that uniquely identifies this provenance log
+/// * `prev` - CID link to the previous entry, establishing the chain
+/// * `lipmaa` - CID link providing O(log n) traversal between entries
+/// * `seqno` - Sequence number for tracking entry order and detecting forks
+/// * `ops` - Ordered list of operations that modify the namespace (updates, deletes, no-ops)
+/// * `locks` - Lock scripts that govern permissions for paths in the next entry
+/// * `unlock` - Script that authenticates this entry against the previous entry's locks
+/// * `proof` - Authentication data (signature, hash preimage, etc.) referenced by the unlock script
+///
+/// # Entry Building Process
+///
+/// Entries are created using a two-phase builder pattern:
+/// 1. Create an unsigned entry using `Entry::builder()` or `EntryBuilder::from(&prev_entry)`
+/// 2. Prepare for signing with `prepare_unsigned_entry()`, sign the serialized bytes, then
+///    finalize with `try_build_with_proof()`
+///
+/// This approach ensures proper signature generation over the serialized form of the entry.
+///
+/// # Examples
+///
+/// See the module documentation for usage examples.
+#[derive(bon::Builder, Clone, Eq, PartialEq)]
 pub struct Entry {
-    /// the entry version
+    /// Format version for this entry, defaults to `ENTRY_VERSION`
+    #[builder(default = ENTRY_VERSION)]
     pub(crate) version: u64,
-    /// long lived address for this provenance log
+
+    /// Verifiable Long-lived ADdress (VLAD) that uniquely identifies this provenance log
+    /// across different storage systems.
     pub(crate) vlad: Vlad,
-    /// link to the previous entry
+
+    /// CID link to the previous entry in the chain, defaults to `Cid::null()`
+    /// for the first entry in a log.
+    #[builder(default = Cid::null())]
     pub(crate) prev: Cid,
-    /// lipmaa link provides O(log n) traversal between entries
+
+    /// Lipmaa link provides O(log n) traversal between entries, enabling efficient
+    /// verification and navigation of the log. Defaults to `Cid::null()` for entries
+    /// where a lipmaa link isn't applicable.
+    #[builder(default = Cid::null())]
     pub(crate) lipmaa: Cid,
-    /// sequence numbering of entries
+
+    /// Sequence number of this entry in the log, defaults to 0 for the first entry.
+    /// Used for detecting forks and erasures in the log.
+    #[builder(default = 0)]
     pub(crate) seqno: u64,
-    /// operations on the namespace in this entry
+
+    /// Ordered list of operations that modify the namespace in this entry.
+    /// The order of these operations is significant as they are applied sequentially.
+    #[builder(default)]
     pub(crate) ops: Vec<Op>,
-    /// the lock scripts associated with keys
+
+    /// Lock scripts associated with this entry, governing the paths in the entry.
+    /// These scripts are organized from root to leaf by path and executed in this order
+    /// when validating the next entry in the log.
+    #[builder(default)]
     pub(crate) locks: Vec<Script>,
-    /// the script that unlocks this entry, must include all fields except itself
+
+    /// Script that unlocks/authenticates this entry against the previous entry's locks.
+    /// Must reference all fields except itself and the proof to enable validation.
     pub(crate) unlock: Script,
-    /// the proof that this entry is valid, this can be a digital signature of
-    /// some kind or a zkp or hash preimage. it is the proof data referenced by
-    /// the unlock script and required by the lock script in the previous
-    /// Entry. this data is generated using the Entry Builder by passing a
-    /// closure to the `try_build` function that gets called with the complete
-    /// serialized Entry to generate this data.
+
+    /// Proof data that authenticates this entry, typically a digital signature or hash preimage.
+    /// This data is referenced by the unlock script and validated against the lock scripts
+    /// in the previous entry.
+    #[builder(default)]
     pub(crate) proof: Vec<u8>,
 }
 
@@ -247,17 +438,6 @@ impl fmt::Debug for Entry {
     }
 }
 
-impl Default for Entry {
-    fn default() -> Self {
-        Builder::default()
-            .with_vlad(&Vlad::default())
-            .with_seqno(0)
-            .with_unlock(&Script::default())
-            .try_build(|_| Ok(Vec::default()))
-            .unwrap()
-    }
-}
-
 struct Iter<'a> {
     field_idx: usize,
     entry: &'a Entry,
@@ -341,8 +521,8 @@ impl Entry {
     }
 
     /// Get the vlad for the whole p.log
-    pub fn vlad(&self) -> Vlad {
-        self.vlad.clone()
+    pub fn vlad(&self) -> &Vlad {
+        &self.vlad
     }
 
     /// get an iterator over the operations in the entry
@@ -439,93 +619,14 @@ impl Entry {
     }
 }
 
-/// Builder for Entry objects
-#[derive(Clone)]
-pub struct Builder {
-    version: u64,
-    vlad: Option<Vlad>,
-    prev: Option<Cid>,
-    lipmaa: Option<Cid>,
-    seqno: Option<u64>,
-    ops: Vec<Op>,
-    locks: Vec<Script>,
-    unlock: Option<Script>,
-}
-
-impl Default for Builder {
-    fn default() -> Self {
-        Self {
-            version: ENTRY_VERSION,
-            vlad: None,
-            prev: None,
-            lipmaa: None,
-            seqno: None,
-            ops: Vec::default(),
-            locks: Vec::default(),
-            unlock: None,
-        }
-    }
-}
-
-// this initializes a builder for the next entry after this one
-impl From<&Entry> for Builder {
-    fn from(entry: &Entry) -> Self {
-        Self {
-            version: ENTRY_VERSION,
-            vlad: Some(entry.vlad()),
-            prev: Some(entry.cid()),
-            lipmaa: None,
-            seqno: Some(entry.seqno() + 1),
-            ops: Vec::default(),
-            locks: entry.locks.clone(),
-            unlock: None,
-        }
-    }
-}
-
-impl Builder {
-    /// Create a new builder with default values
-    pub fn new() -> Self {
-        Self::default()
-    }
-    /// Set the Vlad
-    pub fn with_vlad(&mut self, vlad: &Vlad) -> &mut Self {
-        self.vlad = Some(vlad.clone());
-        self
-    }
-
-    /// Set the prev Cid
-    pub fn with_prev(&mut self, cid: &Cid) -> &mut Self {
-        self.prev = Some(cid.clone());
-        self
-    }
-
-    /// Set the sequence number
-    pub fn with_seqno(&mut self, seqno: u64) -> &mut Self {
-        self.seqno = Some(seqno);
-        self
-    }
-
-    /// Set the lipmaa Cid
-    pub fn with_lipmaa(&mut self, lipmaa: &Cid) -> &mut Self {
-        self.lipmaa = Some(lipmaa.clone());
-        self
-    }
-
-    /// Set all operations at once, replacing any existing ones
-    pub fn with_ops(&mut self, ops: &[Op]) -> &mut Self {
-        self.ops = ops.to_vec();
-        self
-    }
-
-    /// Add an operation to the builder
-    pub fn add_op(&mut self, op: &Op) -> &mut Self {
+impl Entry {
+    /// Add an operation to the entry
+    pub fn add_op(&mut self, op: &Op) {
         self.ops.push(op.clone());
-        self
     }
 
-    /// Add multiple operations from an iterator
-    pub fn extend_ops<I>(&mut self, ops: I) -> &mut Self
+    #[allow(dead_code)]
+    fn extend_ops<I>(&mut self, ops: I)
     where
         I: IntoIterator,
         I::Item: Into<Op>,
@@ -533,39 +634,27 @@ impl Builder {
         for op in ops {
             self.ops.push(op.into());
         }
-        self
     }
 
-    /// Set all lock scripts at once, replacing any existing ones
-    pub fn with_locks(&mut self, locks: &[Script]) -> &mut Self {
-        self.locks = locks.to_vec();
-        self
-    }
-
-    /// Add a lock script
-    pub fn add_lock(&mut self, script: &Script) -> &mut Self {
+    /// Add an unlock [Script] to the entry
+    pub fn add_lock(&mut self, script: &Script) {
         self.locks.push(script.clone());
-        self
     }
 
-    /// Set the unlock script
-    pub fn with_unlock(&mut self, unlock: &Script) -> &mut Self {
-        self.unlock = Some(unlock.clone());
-        self
-    }
-
-    /// Prepare an unsigned entry with empty proof for signing
+    /// Preapre an unsigned [Entry] with empty proof for signing
     pub fn prepare_unsigned_entry(&self) -> Result<Entry, Error> {
         let version = self.version;
-        let vlad = self.vlad.clone().ok_or(EntryError::MissingVlad)?;
-        let prev = self.prev.clone().unwrap_or_else(Cid::null);
-        let seqno = self.seqno.unwrap_or_default();
+        let vlad = self.vlad.clone();
+        let prev = self.prev.clone();
+        let seqno = self.seqno;
         let lipmaa = if seqno.is_lipmaa() {
-            self.lipmaa.clone().ok_or(EntryError::MissingLipmaaLink)?
+            self.lipmaa.clone()
         } else {
             Cid::null()
         };
-        let unlock = self.unlock.clone().ok_or(EntryError::MissingUnlockScript)?;
+        let unlock = self.unlock.clone();
+        let ops = self.ops.clone();
+        let locks = self.locks.clone();
 
         Ok(Entry {
             version,
@@ -573,15 +662,16 @@ impl Builder {
             prev,
             seqno,
             lipmaa,
-            ops: self.ops.clone(),
-            locks: self.locks.clone(),
+            ops,
+            locks,
             unlock,
             proof: Vec::default(),
         })
     }
 
-    /// Finalize the entry with the provided proof
-    pub fn finalize_with_proof(&self, proof: Vec<u8>) -> Result<Entry, Error> {
+    /// Tries to apply the given proof to the entry and
+    /// build the finalized entry with the provided proof
+    pub fn try_build_with_proof(&self, proof: Vec<u8>) -> Result<Entry, Error> {
         let mut entry = self.prepare_unsigned_entry()?;
         entry.proof = proof;
         Ok(entry)
@@ -599,7 +689,27 @@ impl Builder {
     {
         let unsigned_entry = self.prepare_unsigned_entry()?;
         let proof = gen_proof(&unsigned_entry)?;
-        self.finalize_with_proof(proof)
+        self.try_build_with_proof(proof)
+    }
+}
+
+// this initializes a builder for the next entry after this one
+impl From<&Entry>
+    for EntryBuilder<
+        entry_builder::SetLocks<
+            entry_builder::SetSeqno<
+                entry_builder::SetPrev<entry_builder::SetVlad<entry_builder::SetVersion>>,
+            >,
+        >,
+    >
+{
+    fn from(entry: &Entry) -> Self {
+        Entry::builder()
+            .version(ENTRY_VERSION)
+            .vlad(entry.vlad().clone())
+            .prev(entry.cid())
+            .seqno(entry.seqno() + 1)
+            .locks(entry.locks.clone())
     }
 }
 
@@ -618,14 +728,11 @@ mod tests {
         let vlad = Vlad::default();
         let script = Script::default();
         let op = Op::default();
-        let entry = Builder::default()
-            .with_vlad(&vlad)
-            .with_unlock(&script)
-            .add_op(&op)
-            .add_op(&op)
-            .add_op(&op)
-            .try_build(|_| Ok(Vec::default()))
-            .unwrap();
+        let entry = Entry::builder()
+            .vlad(vlad)
+            .unlock(script)
+            .ops(vec![op.clone(), op.clone(), op.clone()])
+            .build();
 
         assert_eq!(entry.seqno(), 0);
         for op in entry.ops() {
@@ -640,14 +747,11 @@ mod tests {
         let vlad = Vlad::default();
         let script = Script::default();
         let op = Op::default();
-        let entry = Builder::default()
-            .with_vlad(&vlad)
-            .with_unlock(&script)
-            .add_op(&op)
-            .add_op(&op)
-            .add_op(&op)
-            .try_build(|_| Ok(Vec::default()))
-            .unwrap();
+        let entry = Entry::builder()
+            .vlad(vlad)
+            .unlock(script.clone())
+            .ops(vec![op.clone(), op.clone(), op.clone()])
+            .build();
 
         assert_eq!(entry.seqno(), 0);
         for op in entry.ops() {
@@ -655,13 +759,10 @@ mod tests {
         }
         assert_eq!(format!("{}", entry.context()), "/".to_string());
 
-        let entry2 = Builder::from(&entry)
-            .with_unlock(&script)
-            .add_op(&op)
-            .add_op(&op)
-            .add_op(&op)
-            .try_build(|_| Ok(Vec::default()))
-            .unwrap();
+        let entry2 = EntryBuilder::from(&entry)
+            .unlock(script)
+            .ops(vec![op.clone(), op.clone()])
+            .build();
         assert_eq!(entry2.seqno(), 1);
         for op in entry2.ops() {
             assert_eq!(Op::default(), op.clone());
@@ -675,14 +776,11 @@ mod tests {
         let vlad = Vlad::default();
         let script = Script::default();
         let op = Op::default();
-        let entry = Builder::default()
-            .with_vlad(&vlad)
-            .with_unlock(&script)
-            .add_op(&op)
-            .add_op(&op)
-            .add_op(&op)
-            .try_build(|_| Ok(Vec::default()))
-            .unwrap();
+        let entry = Entry::builder()
+            .vlad(vlad)
+            .unlock(script.clone())
+            .ops(vec![op.clone(), op.clone(), op.clone()])
+            .build();
 
         assert_eq!(entry.seqno(), 0);
         for op in entry.ops() {
@@ -765,13 +863,12 @@ mod tests {
             Op::Delete(Key::try_from("/bob/babe/boo").unwrap()),
         ];
 
-        let entry = Builder::default()
-            .with_vlad(&vlad)
-            .with_unlock(&script)
-            .with_locks(&locks_in2) // same locks, different order
-            .with_ops(&ops)
-            .try_build(|_| Ok(Vec::default()))
-            .unwrap();
+        let entry = Entry::builder()
+            .vlad(vlad)
+            .unlock(script)
+            .locks(locks_in2) // same locks, different order
+            .ops(ops)
+            .build();
 
         // sorting/filtering the locks from the previous event. in this case they are the same
         // locks but in a different order.
@@ -831,12 +928,7 @@ mod tests {
 
         let ops: Vec<Op> = vec![];
 
-        let entry = Builder::default()
-            .with_vlad(&vlad)
-            .with_unlock(&script)
-            .with_ops(&ops)
-            .try_build(|_| Ok(Vec::default()))
-            .unwrap();
+        let entry = Entry::builder().vlad(vlad).unlock(script).ops(ops).build();
 
         let locks_out = entry.sort_locks(&locks_in).unwrap();
         assert_eq!(
@@ -898,12 +990,7 @@ mod tests {
             Op::Delete(Key::try_from("/bob/babe/boo").unwrap()),
         ];
 
-        let entry = Builder::default()
-            .with_vlad(&vlad)
-            .with_unlock(&script)
-            .with_ops(&ops)
-            .try_build(|_| Ok(Vec::default()))
-            .unwrap();
+        let entry = Entry::builder().vlad(vlad).unlock(script).ops(ops).build();
 
         let locks_out = entry.sort_locks(&locks_in).unwrap();
         assert_eq!(
@@ -968,13 +1055,15 @@ mod tests {
 
         let script = Script::Cid(Key::default(), cid);
         let op = Op::Update("/move".try_into().unwrap(), Value::Str("zig!".into()));
-        let entry = Builder::default()
-            .with_vlad(&vlad)
-            .add_lock(&script)
-            .with_unlock(&script)
-            .add_op(&op)
-            .try_build(|e| Ok(e.vlad.clone().into()))
-            .unwrap();
+        let mut entry = Entry::builder()
+            .vlad(vlad)
+            .locks(vec![script.clone()])
+            .unlock(script)
+            .build();
+        entry.add_op(&op);
+
+        #[allow(deprecated)]
+        let entry = entry.try_build(|e| Ok(e.vlad.clone().into())).unwrap();
 
         assert_eq!(entry.seqno(), 0);
         for op in entry.ops() {

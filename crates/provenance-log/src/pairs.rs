@@ -219,22 +219,22 @@ mod tests {
     fn test_same_seqno() {
         let mut p = Kvp::default();
 
-        let e1 = entry::Builder::default()
-            .with_vlad(&Vlad::default())
-            .add_lock(&Script::default())
-            .with_unlock(&Script::default())
-            .try_build(|_| Ok(Vec::default()))
-            .unwrap();
+        let e1 = Entry::builder()
+            .vlad(Vlad::default())
+            .locks(vec![Script::default()])
+            .unlock(Script::default())
+            .build();
+        e1.try_build(|_| Ok(Vec::default())).unwrap();
 
         let _ = p.set_entry(&e1).unwrap();
         p.apply_entry_ops(&e1).unwrap();
 
-        let e2 = entry::Builder::default()
-            .with_vlad(&Vlad::default())
-            .add_lock(&Script::default())
-            .with_unlock(&Script::default())
-            .try_build(|_| Ok(Vec::default()))
-            .unwrap();
+        let e2 = Entry::builder()
+            .vlad(Vlad::default())
+            .locks(vec![Script::default()])
+            .unlock(Script::default())
+            .build();
+        e2.try_build(|_| Ok(Vec::default())).unwrap();
 
         // this panics because the seqno of e1 is the same
         let _ = p.set_entry(&e2).unwrap();
@@ -244,26 +244,19 @@ mod tests {
     #[test]
     fn test_one_entry() {
         let _s = span!(Level::INFO, "test_one_entry").entered();
-        let entry = entry::Builder::default()
-            .with_vlad(&Vlad::default())
-            .add_lock(&Script::default())
-            .with_unlock(&Script::default())
-            .add_op(&Op::Update(
-                "/one".try_into().unwrap(),
-                Value::Str("foo".to_string()),
-            ))
-            .add_op(&Op::Noop("/foo".try_into().unwrap()))
-            .add_op(&Op::Update(
-                "/two".try_into().unwrap(),
-                Value::Str("bar".to_string()),
-            ))
-            .add_op(&Op::Noop("/bar".try_into().unwrap()))
-            .add_op(&Op::Update(
-                "/three".try_into().unwrap(),
-                Value::Str("baz".to_string()),
-            ))
-            .try_build(|_| Ok(Vec::default()))
-            .unwrap();
+        let entry = Entry::builder()
+            .vlad(Vlad::default())
+            .locks(vec![Script::default()])
+            .unlock(Script::default())
+            .ops(vec![
+                Op::Update("/one".try_into().unwrap(), Value::Str("foo".to_string())),
+                Op::Noop("/foo".try_into().unwrap()),
+                Op::Update("/two".try_into().unwrap(), Value::Str("bar".to_string())),
+                Op::Noop("/bar".try_into().unwrap()),
+                Op::Update("/three".try_into().unwrap(), Value::Str("baz".to_string())),
+            ])
+            .build();
+        entry.try_build(|_| Ok(Vec::default())).unwrap();
 
         let mut p = Kvp::default();
 

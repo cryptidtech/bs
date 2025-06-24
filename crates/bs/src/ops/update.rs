@@ -70,14 +70,17 @@ where
     let (_, last_entry, _kvp) = plog.verify().last().ok_or(UpdateError::NoLastEntry)??;
 
     // 2. load the entry unlock script
-    let unlock_script = &config.unlock();
 
     // get the entry signing key
-    let entry_mk = &config.entry_signing_key();
+    let entry_key_path = config.entry_signing_key();
 
     // 3. Construct the next entry, starting from the last entry
-    let mut builder = entry::Builder::from(&last_entry);
-    builder.with_unlock(unlock_script);
+    let entry_builder = entry::EntryBuilder::from(&last_entry);
+    let mut entry = entry_builder.unlock(config.unlock().clone()).build();
+
+    for lock in config.add_entry_lock_scripts() {
+        entry.add_lock(lock);
+    }
 
     // CRITICAL: First add ALL operations to the builder AFTER all op_params have been processed
     for params in &op_params {
@@ -115,20 +118,20 @@ where
         };
 
         // Add the op to the builder
-        builder.add_op(&op);
+        entry.add_op(&op);
     }
 
     // Now prepare for signing after ALL operations have been added
-    let unsigned_entry = builder.prepare_unsigned_entry()?;
+    let unsigned_entry = entry.prepare_unsigned_entry()?;
     let entry_bytes: Vec<u8> = unsigned_entry.clone().into();
 
     // Sign the entry
     let signature = signer
-        .try_sign(entry_mk, &entry_bytes)
+        .try_sign(entry_key_path, &entry_bytes)
         .map_err(|e| PlogError::from(EntryError::SignFailed(e.to_string())))?;
 
     // Finalize the entry with the signature as proof
-    let entry = builder.finalize_with_proof(signature.into())?;
+    let entry = entry.try_build_with_proof(signature.into())?;
 
     // try to add the entry to the p.log
     plog.try_append(&entry)?;
@@ -323,6 +326,14 @@ mod tests {
         // - add a lock Script
         // - remove the entrykey lock Script
         // - add an op
+        let delegated_lock = format!(
+            r#"
+            // check a possible delegated pubkey sig...
+            check_signature(branch("{pubkey}"), "{entry_key}")
+            "#,
+            pubkey = PubkeyParams::KEY_PATH,
+            entry_key = Field::ENTRY,
+        );
 
         // CHANGED: Now using the builder pattern
         let update_cfg = Config::builder()
@@ -332,7 +343,10 @@ mod tests {
                 key: VladParams::<FirstEntryKeyParams>::FIRST_ENTRY_KEY_PATH.into(),
             }])
             // Entry lock scripts define conditions which must be met by the next entry in the plog for it to be valid.
-            .add_entry_lock_scripts(vec![(Key::try_from("/delegated/").unwrap(), lock_script)])
+            .add_entry_lock_scripts(vec![Script::Code(
+                Key::try_from("/delegated/").unwrap(),
+                delegated_lock,
+            )])
             .build();
 
         let prev = plog.head.clone();

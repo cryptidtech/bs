@@ -532,12 +532,14 @@ mod tests {
 
         let script = Script::Cid(Key::default(), cid);
         let op = Op::Update("/move".try_into().unwrap(), Value::Str("zig!".into()));
-        let entry = entry::Builder::default()
-            .with_vlad(&vlad)
-            .add_lock(&script)
-            .with_unlock(&script)
-            .add_op(&op)
-            .try_build(|e| Ok(e.vlad.clone().into()))
+        let entry = entry::Entry::builder()
+            .vlad(vlad)
+            .locks(vec![script.clone()])
+            .unlock(script)
+            .ops(vec![op])
+            .build();
+        let entry = entry
+            .try_build_with_proof(entry.vlad.clone().into())
             .unwrap();
 
         /*
