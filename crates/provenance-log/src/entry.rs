@@ -648,28 +648,21 @@ impl Entry {
 
     /// Preapre an unsigned [Entry] with empty proof for signing
     pub fn prepare_unsigned_entry(self) -> Result<Entry, Error> {
-        let version = self.version;
-        let vlad = self.vlad.clone();
-        let prev = self.prev.clone();
-        let seqno = self.seqno;
-        let lipmaa = if seqno.is_lipmaa() {
-            self.lipmaa.clone()
+        let lipmaa = if self.seqno.is_lipmaa() {
+            self.lipmaa
         } else {
             Cid::null()
         };
-        let unlock = self.unlock.clone();
-        let ops = self.ops.clone();
-        let locks = self.locks.clone();
 
         Ok(Entry {
-            version,
-            vlad,
-            prev,
-            seqno,
+            version: self.version,
+            vlad: self.vlad,
+            prev: self.prev,
+            seqno: self.seqno,
             lipmaa,
-            ops,
-            locks,
-            unlock,
+            ops: self.ops,
+            locks: self.locks,
+            unlock: self.unlock,
             proof: Vec::default(),
         })
     }
