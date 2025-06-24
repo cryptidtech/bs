@@ -8,31 +8,31 @@ wasm_bindgen_test_configure!(run_in_browser);
 
 #[wasm_bindgen_test]
 async fn basic_test() {
-    test_utils::run_basic_test().await;
+    utils::run_basic_test().await;
 }
 
 #[wasm_bindgen_test]
 async fn in_memory_blockstore_test() {
-    test_utils::run_in_memory_blockstore_test().await;
+    utils::run_in_memory_blockstore_test().await;
 }
 
 #[wasm_bindgen_test]
 async fn test_store_entries() {
-    test_utils::run_store_entries_test().await;
+    utils::run_store_entries_test().await;
 }
 
 #[wasm_bindgen_test]
 async fn run_update_test() {
-    test_utils::run_update_test().await;
+    utils::run_update_test().await;
 }
 
 #[wasm_bindgen_test]
 async fn run_load_test() {
-    test_utils::run_load_test().await;
+    utils::run_load_test().await;
 }
 
 #[wasm_bindgen_test]
 async fn test_peer_initialization() {
     // init_logger();
-    test_utils::run_peer_initialization_test().await;
+    utils::run_peer_initialization_test().await;
 }
