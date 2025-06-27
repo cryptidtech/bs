@@ -49,17 +49,15 @@ mod tests {
         let mk = get_mk();
         let cid = get_cid(b);
 
-        vlad::Builder::default()
-            .with_signing_key(&mk)
-            .with_cid(&cid)
-            .try_build_encoded(|cid, mk| {
-                let signing_view = mk.sign_view()?;
-                let cidv: Vec<u8> = cid.clone().into();
-                let ms = signing_view.sign(&cidv, false, None)?;
-                let msv: Vec<u8> = ms.clone().into();
-                Ok(msv)
-            })
-            .unwrap()
+        Vlad::generate(&cid, |cid| {
+            let signing_view = mk.sign_view().unwrap();
+            let cidv: Vec<u8> = cid.clone().into();
+            let ms = signing_view.sign(&cidv, false, None).unwrap();
+            let msv: Vec<u8> = ms.into();
+            Ok(msv)
+        })
+        .unwrap()
+        .to_encoded()
     }
 
     #[test]

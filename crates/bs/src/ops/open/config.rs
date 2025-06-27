@@ -36,7 +36,7 @@ pub struct Config<T: ValidatedKeyParams = FirstEntryKeyParams> {
 
 impl<T: ValidatedKeyParams> Config<T> {
     /// Get the vlad params
-    pub fn vlad(&self) -> &VladParams<T> {
+    pub fn vlad_params(&self) -> &VladParams<T> {
         &self.vlad
     }
 

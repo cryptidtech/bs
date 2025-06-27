@@ -592,15 +592,12 @@ push("/entry/proof");
             .unwrap();
 
         // build a vlad from the cid
-        let vlad = vlad::Builder::default()
-            .with_signing_key(&ephemeral)
-            .with_cid(&cid)
-            .try_build(|cid, _| {
-                // sign those bytes
-                let v: Vec<u8> = cid.clone().into();
-                Ok(v)
-            })
-            .unwrap();
+        let vlad = Vlad::generate(&cid, |cid| {
+            // sign those bytes
+            let v: Vec<u8> = cid.clone().into();
+            Ok(v)
+        })
+        .unwrap();
 
         // load the entry scripts
         let lock = lock_script();
@@ -684,15 +681,12 @@ push("/entry/proof");
             .unwrap();
 
         // create a vlad
-        let vlad = vlad::Builder::default()
-            .with_signing_key(&ephemeral)
-            .with_cid(&cid)
-            .try_build(|cid, _| {
-                // sign those bytes
-                let v: Vec<u8> = cid.clone().into();
-                Ok(v)
-            })
-            .unwrap();
+        let vlad = Vlad::generate(&cid, |cid| {
+            // sign those bytes
+            let v: Vec<u8> = cid.clone().into();
+            Ok(v)
+        })
+        .unwrap();
 
         let ephemeral_op = get_key_update_op("/ephemeral", &ephemeral);
         let pubkey1_op = get_key_update_op("/pubkey", &key1);

@@ -10,14 +10,14 @@ use crate::{
     update::{op, OpParams},
 };
 pub use config::Config;
-use multicid::{cid, vlad, Cid};
+use multicid::{cid, vlad, Cid, Vlad};
 use multicodec::Codec;
 use multihash::mh;
 use multikey::{Multikey, Views};
 use provenance_log::{entry, error::EntryError, Error as PlogError, Key, Log, OpId};
 use tracing::debug;
 
-/// open a new provenance log based on the config
+/// Open a new provenance log based on the [Config] provided.
 //
 // To Open a Plog, the critical steps are:
 // - First get the public key of the ephemeral first entry key
@@ -54,10 +54,11 @@ pub fn open_plog<E: BsCompatibleError>(
         })?;
 
     // 1. Extract VLAD parameters and prepare signing
-    let (vlad_key_params, vlad_cid_params): (OpParams, OpParams) = config.vlad().clone().into();
+    let (vlad_key_params, vlad_cid_params): (OpParams, OpParams) =
+        config.vlad_params().clone().into();
     let (codec, threshold, limit) = extract_key_params::<E>(&vlad_key_params)?;
 
-    // Use prepare_ephemeral_signing to get public key and signing function
+    // get ephemeral public key and one time signing function
     let (vlad_pubkey, sign_vlad) = signer.prepare_ephemeral_signing(&codec, threshold, limit)?;
 
     let cid = load_cid::<E>(&mut op_params, &vlad_cid_params)?;
@@ -71,17 +72,14 @@ pub fn open_plog<E: BsCompatibleError>(
     }
 
     // Build the VLAD using the public key
-    let vlad = vlad::Builder::default()
-        .with_signing_key(&vlad_pubkey)
-        .with_cid(&cid)
-        .try_build(|cid, _| {
-            let vlad_cid_bytes: Vec<u8> = cid.clone().into();
-            let multisig = sign_vlad(&vlad_cid_bytes).map_err(|e| {
-                tracing::error!("VLAD multisig sign failed: {:?}", e);
-                multicid::Error::Multisig(multisig::Error::SignFailed(e.to_string()))
-            })?;
-            Ok(multisig.into())
+    let vlad = Vlad::generate(&cid, |cid| {
+        let vlad_cid_bytes: Vec<u8> = cid.clone().into();
+        let multisig = sign_vlad(&vlad_cid_bytes).map_err(|e| {
+            tracing::error!("VLAD multisig sign failed: {:?}", e);
+            multicid::Error::Multisig(multisig::Error::SignFailed(e.to_string()))
         })?;
+        Ok(multisig.into())
+    })?;
 
     // 2. Extract entry key parameters and prepare signing
     let entrykey_params = &config.entrykey();

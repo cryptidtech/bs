@@ -1028,7 +1028,7 @@ mod tests {
         // build a nonce
         let bytes = hex::decode("d15c4fb2911ae1337f102bcaf4c0088d36345b88b243968e834c5ffa17907832")
             .unwrap();
-        let nonce = nonce::Builder::new_from_bytes(&bytes).try_build().unwrap();
+        let nonce = nonce::Builder::new_from_bytes(&bytes).build();
 
         // build a cid
         let cid = cid::Builder::new(Codec::Cidv1)
@@ -1042,15 +1042,7 @@ mod tests {
             .try_build()
             .unwrap();
 
-        let vlad = vlad::Builder::default()
-            .with_nonce(&nonce)
-            .with_cid(&cid)
-            .try_build(|cid, _| {
-                let v: Vec<u8> = cid.clone().into();
-                Ok(v)
-            })
-            .unwrap();
-
+        let vlad = Vlad::from_parts(nonce, cid.clone());
         let script = Script::Cid(Key::default(), cid);
         let op = Op::Update("/move".try_into().unwrap(), Value::Str("zig!".into()));
         let mut entry = Entry::builder()

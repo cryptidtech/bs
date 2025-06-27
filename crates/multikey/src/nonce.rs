@@ -149,18 +149,18 @@ impl Builder {
     }
 
     /// build a base encoded vlad
-    pub fn try_build_encoded(&self) -> Result<EncodedNonce, Error> {
-        Ok(EncodedNonce::new(
+    pub fn build_encoded(&self) -> EncodedNonce {
+        EncodedNonce::new(
             self.base_encoding.unwrap_or_else(Nonce::preferred_encoding),
-            self.try_build()?,
-        ))
+            self.build(),
+        )
     }
 
-    /// build the vlad
-    pub fn try_build(&self) -> Result<Nonce, Error> {
-        Ok(Nonce {
+    /// build the [Nonce]
+    pub fn build(&self) -> Nonce {
+        Nonce {
             nonce: self.bytes.clone(),
-        })
+        }
     }
 }
 
@@ -176,9 +176,7 @@ mod tests {
     fn test_random() {
         let _s = span!(Level::INFO, "test_random").entered();
         let mut rng = StdRng::from_os_rng();
-        let n = Builder::new_from_random_bytes(32, &mut rng)
-            .try_build()
-            .unwrap();
+        let n = Builder::new_from_random_bytes(32, &mut rng).build();
 
         assert_eq!(Codec::Nonce, n.codec());
         assert_eq!(32, n.len());
@@ -188,9 +186,7 @@ mod tests {
     fn test_binary_roundtrip() {
         let _s = span!(Level::INFO, "test_binary_roundtrip").entered();
         let mut rng = StdRng::from_os_rng();
-        let n = Builder::new_from_random_bytes(32, &mut rng)
-            .try_build()
-            .unwrap();
+        let n = Builder::new_from_random_bytes(32, &mut rng).build();
         let v: Vec<u8> = n.clone().into();
         assert_eq!(n, Nonce::try_from(v.as_ref()).unwrap());
     }
@@ -199,9 +195,7 @@ mod tests {
     fn test_encoded_roundtrip() {
         let _s = span!(Level::INFO, "test_encoded_roundtrip").entered();
         let mut rng = StdRng::from_os_rng();
-        let n = Builder::new_from_random_bytes(32, &mut rng)
-            .try_build_encoded()
-            .unwrap();
+        let n = Builder::new_from_random_bytes(32, &mut rng).build_encoded();
         let s = n.to_string();
         println!("({}) {}", s.len(), s);
         let s = n.to_string();
@@ -225,7 +219,7 @@ mod tests {
         let signature = signmk.sign(msg.as_slice(), false, None).unwrap();
 
         let s: Vec<u8> = signature.into();
-        let n = Builder::new_from_bytes(&s).try_build_encoded().unwrap();
+        let n = Builder::new_from_bytes(&s).build_encoded();
         //println!("{}", n);
         let s = n.to_string();
         assert_eq!(n, EncodedNonce::try_from(s.as_str()).unwrap());

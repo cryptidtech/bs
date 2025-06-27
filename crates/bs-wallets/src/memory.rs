@@ -237,7 +237,7 @@ where
         + Debug
         + 'static,
 {
-    type Codec = Codec; // multicodec::Codec
+    type Codec = Codec;
 
     fn prepare_ephemeral_signing(
         &self,
@@ -389,7 +389,7 @@ mod tests {
         let key_manager = InMemoryKeyManager::<crate::Error>::new();
         let data = b"test ephemeral signing";
 
-        // Use prepare_ephemeral_signing to get a public key and a one-time signing function
+        // Use get an ephemeral public key and a one-time signing function
         let (public_key, sign_once) = key_manager
             .prepare_ephemeral_signing(
                 &Codec::Ed25519Priv,

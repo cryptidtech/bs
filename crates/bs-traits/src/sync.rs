@@ -30,7 +30,7 @@ pub trait SyncPrepareEphemeralSigning: Signer + EphemeralKey {
     /// Prepares an ephemeral keypair, returning the public key and a one-time signing function
     fn prepare_ephemeral_signing(
         &self,
-        codec: &Self::Codec, // Use concrete type to avoid associated type dependency
+        codec: &Self::Codec,
         threshold: NonZeroUsize,
         limit: NonZeroUsize,
     ) -> EphemeralSigningTuple<

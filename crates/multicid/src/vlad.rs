@@ -40,6 +40,29 @@ pub struct Vlad {
 }
 
 impl Vlad {
+    /// Generate a new [Vlad] by signing a [Cid] with the provided signing function
+    pub fn generate<F>(cid: &Cid, sign_fn: F) -> Result<Self, Error>
+    where
+        F: FnOnce(&Cid) -> Result<Vec<u8>, Error>,
+    {
+        // Get signature bytes by calling the provided signing function
+        let signature_bytes = sign_fn(cid)?;
+
+        // Convert signature into a Nonce
+        let nonce = nonce::Builder::new_from_bytes(&signature_bytes).build();
+
+        Ok(Self {
+            nonce,
+            cid: cid.clone(),
+        })
+    }
+
+    /// Create a Vlad from an existing [Nonce] and [Cid]
+    /// This is useful when you already have the signature components
+    pub fn from_parts(nonce: Nonce, cid: Cid) -> Self {
+        Self { nonce, cid }
+    }
+
     /// verify a Vlad whose nonce is a digital signature over the Cid
     pub fn verify(&self, mk: &Multikey) -> Result<(), Error> {
         let vv = mk.verify_view()?;
@@ -55,6 +78,16 @@ impl Vlad {
     /// It should match the `vlad/cid` field in a Provenance Log's first Entry.
     pub fn cid(&self) -> &Cid {
         &self.cid
+    }
+
+    /// Create an encoded Vlad with the default encoding
+    pub fn to_encoded(self) -> EncodedVlad {
+        EncodedVlad::new(Self::preferred_encoding(), self)
+    }
+
+    /// Create an encoded Vlad with a specific encoding
+    pub fn to_encoded_with(self, encoding: Base) -> EncodedVlad {
+        EncodedVlad::new(encoding, self)
     }
 }
 
@@ -145,72 +178,6 @@ impl fmt::Display for Vlad {
     }
 }
 
-/// Hash builder that takes the codec and the data and produces a Multihash
-#[derive(Clone, Debug, Default)]
-pub struct Builder {
-    nonce: Option<Nonce>,
-    mk: Option<Multikey>,
-    cid: Option<Cid>,
-    base_encoding: Option<Base>,
-}
-
-impl Builder {
-    /// set the nonce
-    pub fn with_nonce(mut self, nonce: &Nonce) -> Self {
-        self.nonce = Some(nonce.clone());
-        self
-    }
-
-    /// set cid
-    pub fn with_cid(mut self, cid: &Cid) -> Self {
-        self.cid = Some(cid.clone());
-        self
-    }
-
-    /// set the signing key to generate a signature nonce
-    pub fn with_signing_key(mut self, mk: &Multikey) -> Self {
-        self.mk = Some(mk.clone());
-        self
-    }
-
-    /// set the base encoding codec
-    pub fn with_base_encoding(mut self, base: Base) -> Self {
-        self.base_encoding = Some(base);
-        self
-    }
-
-    /// build a base encoded vlad
-    pub fn try_build_encoded(
-        &mut self,
-        gen_proof: impl FnMut(&Cid, &mut Multikey) -> Result<Vec<u8>, Error>,
-    ) -> Result<EncodedVlad, Error> {
-        Ok(EncodedVlad::new(
-            self.base_encoding.unwrap_or_else(Vlad::preferred_encoding),
-            self.try_build(gen_proof)?,
-        ))
-    }
-
-    /// build the vlad
-    pub fn try_build(
-        &mut self,
-        gen_proof: impl FnOnce(&Cid, &mut Multikey) -> Result<Vec<u8>, Error>,
-    ) -> Result<Vlad, Error> {
-        let cid = self.cid.clone().ok_or(VladError::MissingCid)?;
-        match &self.nonce {
-            Some(nonce) => Ok(Vlad {
-                nonce: nonce.clone(),
-                cid,
-            }),
-            None => {
-                let msv = gen_proof(&cid, self.mk.as_mut().ok_or(VladError::MissingSigningKey)?)?;
-                let nonce = nonce::Builder::new_from_bytes(&msv).try_build()?;
-
-                Ok(Vlad { nonce, cid })
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -227,9 +194,7 @@ mod tests {
         let _s = span!(Level::INFO, "test_default").entered();
         // build a nonce
         let mut rng = StdRng::from_os_rng();
-        let nonce = nonce::Builder::new_from_random_bytes(32, &mut rng)
-            .try_build()
-            .unwrap();
+        let nonce = nonce::Builder::new_from_random_bytes(32, &mut rng).build();
 
         // build a cid
         let cid = cid::Builder::new(Codec::Cidv1)
@@ -243,15 +208,7 @@ mod tests {
             .try_build()
             .unwrap();
 
-        let vlad = Builder::default()
-            .with_nonce(&nonce)
-            .with_cid(&cid)
-            .try_build(|cid, _| {
-                // sign those bytes
-                let v: Vec<u8> = cid.clone().into();
-                Ok(v)
-            })
-            .unwrap();
+        let vlad = Vlad::from_parts(nonce, cid);
 
         assert_eq!(Codec::Vlad, vlad.codec());
     }
@@ -261,9 +218,7 @@ mod tests {
         let _s = span!(Level::INFO, "test_binary_roundtrip").entered();
         // build a nonce
         let mut rng = StdRng::from_os_rng();
-        let nonce = nonce::Builder::new_from_random_bytes(32, &mut rng)
-            .try_build()
-            .unwrap();
+        let nonce = nonce::Builder::new_from_random_bytes(32, &mut rng).build();
 
         // build a cid
         let cid = cid::Builder::new(Codec::Cidv1)
@@ -277,15 +232,12 @@ mod tests {
             .try_build()
             .unwrap();
 
-        let vlad = Builder::default()
-            .with_nonce(&nonce)
-            .with_cid(&cid)
-            .try_build(|cid, _| {
-                // sign those bytes
-                let v: Vec<u8> = cid.clone().into();
-                Ok(v)
-            })
-            .unwrap();
+        let vlad = Vlad::generate(&cid, |cid| {
+            // sign those bytes
+            let v: Vec<u8> = cid.clone().into();
+            Ok(v)
+        })
+        .unwrap();
 
         let v: Vec<u8> = vlad.clone().into();
         //println!("byte len: {}", v.len());
@@ -297,9 +249,7 @@ mod tests {
         let _s = span!(Level::INFO, "test_encoded_roundtrip").entered();
         // build a nonce
         let mut rng = StdRng::from_os_rng();
-        let nonce = nonce::Builder::new_from_random_bytes(32, &mut rng)
-            .try_build()
-            .unwrap();
+        let nonce = nonce::Builder::new_from_random_bytes(32, &mut rng).build();
 
         // build a cid
         let cid = cid::Builder::new(Codec::Cidv1)
@@ -313,15 +263,15 @@ mod tests {
             .try_build()
             .unwrap();
 
-        let vlad = Builder::default()
-            .with_nonce(&nonce)
-            .with_cid(&cid)
-            .try_build_encoded(|cid, _| {
+        let vlad = EncodedVlad::new(
+            Base::Base32Lower,
+            Vlad::generate(&cid, |cid| {
                 // sign those bytes
                 let v: Vec<u8> = cid.clone().into();
                 Ok(v)
             })
-            .unwrap();
+            .unwrap(),
+        );
 
         let s = vlad.to_string();
         //println!("({}) {}", s.len(), s);
@@ -333,9 +283,7 @@ mod tests {
         let _s = span!(Level::INFO, "test_encodings_roundtrip").entered();
         // build a nonce
         let mut rng = StdRng::from_os_rng();
-        let nonce = nonce::Builder::new_from_random_bytes(32, &mut rng)
-            .try_build()
-            .unwrap();
+        let nonce = nonce::Builder::new_from_random_bytes(32, &mut rng).build();
 
         // build a cid
         let cid = cid::Builder::new(Codec::Cidv1)
@@ -354,16 +302,15 @@ mod tests {
 
         for encoding in itr {
             //print!("{}...", base_name(encoding));
-            let vlad = Builder::default()
-                .with_nonce(&nonce)
-                .with_cid(&cid)
-                .with_base_encoding(encoding)
-                .try_build_encoded(|cid, _| {
+            let vlad = EncodedVlad::new(
+                encoding,
+                Vlad::generate(&cid, |cid| {
                     // sign those bytes
                     let v: Vec<u8> = cid.clone().into();
                     Ok(v)
                 })
-                .unwrap();
+                .unwrap(),
+            );
 
             let s = vlad.to_string();
             println!("{}: ({}) {}", base_name(encoding), s.len(), s);
@@ -421,11 +368,9 @@ mod tests {
         let s = "fba2480260874657374206b657901012064e58adf88f85cbec6a0448a0803f9d28cf9231a7141be413f83cf6aa883cd04";
         let mk = EncodedMultikey::try_from(s).unwrap();
 
-        let vlad = Builder::default()
-            .with_signing_key(&mk)
-            .with_cid(&cid)
-            .with_base_encoding(Base::Base32Z)
-            .try_build_encoded(|cid, _mk| {
+        let vlad = EncodedVlad::new(
+            Base::Base32Z,
+            Vlad::generate(&cid, |cid| {
                 // use mk to sign those cid bytes
                 let signing_view = mk.sign_view()?;
                 let cidv: Vec<u8> = cid.clone().into();
@@ -433,7 +378,8 @@ mod tests {
                 let msv: Vec<u8> = ms.clone().into();
                 Ok(msv)
             })
-            .unwrap();
+            .unwrap(),
+        );
 
         // make sure the signature checks out
         assert!(vlad.verify(&mk).is_ok());
@@ -464,9 +410,7 @@ mod tests {
         let _s = span!(Level::INFO, "test_display").entered();
         // build a nonce
         let mut rng = StdRng::from_os_rng();
-        let nonce = nonce::Builder::new_from_random_bytes(32, &mut rng)
-            .try_build()
-            .unwrap();
+        let nonce = nonce::Builder::new_from_random_bytes(32, &mut rng).build();
 
         // build a cid
         let cid = cid::Builder::new(Codec::Cidv1)
@@ -480,15 +424,7 @@ mod tests {
             .try_build()
             .unwrap();
 
-        let vlad = Builder::default()
-            .with_nonce(&nonce)
-            .with_cid(&cid)
-            .try_build(|cid, _| {
-                // sign those bytes
-                let v: Vec<u8> = cid.clone().into();
-                Ok(v)
-            })
-            .unwrap();
+        let vlad = Vlad::from_parts(nonce, cid);
 
         eprintln!("vlad: {}", vlad);
 
