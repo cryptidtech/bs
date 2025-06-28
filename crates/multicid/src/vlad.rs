@@ -89,6 +89,28 @@ impl Vlad {
     pub fn to_encoded_with(self, encoding: Base) -> EncodedVlad {
         EncodedVlad::new(encoding, self)
     }
+
+    /// Attempts to decode a Vlad instance from its string representation.
+    ///
+    /// This method takes a string slice and attempts to parse it into an
+    /// `EncodedVlad`, and then extracts the inner `Vlad` instance.
+    ///
+    /// # Arguments
+    ///
+    /// * `s` - The string representation to decode.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing a `Vlad` instance if the string is a valid
+    /// representation, otherwise an `Error`.
+    pub fn try_from_str(s: &str) -> Result<Self, Error> {
+        // Parse the string into an EncodedVlad, which handles base decoding
+        // and deserialization of the inner Vlad.
+        let encoded_vlad = EncodedVlad::try_from(s)?;
+
+        // Extract the inner Vlad instance from the EncodedVlad.
+        Ok(encoded_vlad.to_inner())
+    }
 }
 
 impl CodecInfo for Vlad {
