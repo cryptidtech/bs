@@ -20,6 +20,21 @@ pub struct Nonce {
 }
 
 impl Nonce {
+    /// Generate a new [Nonce] from random bytes of the given size.
+    pub fn new_from_random_bytes(size: usize, rng: &mut impl rand_core_6::CryptoRngCore) -> Self {
+        let mut bytes = vec![0; size];
+        bytes.resize(size, 0u8);
+        rng.fill_bytes(bytes.as_mut());
+        Self { nonce: bytes }
+    }
+
+    /// Create a new [Nonce] from existing bytes.
+    pub fn new_from_bytes(bytes: &[u8]) -> Self {
+        Self {
+            nonce: bytes.to_vec(),
+        }
+    }
+
     /// return the size of the nonce in bytes
     pub fn len(&self) -> usize {
         self.nonce.len()
