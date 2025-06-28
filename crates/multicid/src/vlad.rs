@@ -90,7 +90,7 @@ impl Vlad {
         EncodedVlad::new(encoding, self)
     }
 
-    /// Attempts to decode a Vlad instance from its string representation.
+    /// Attempts to decode a Vlad instance from its [Base] encoded string representation.
     ///
     /// This method takes a string slice and attempts to parse it into an
     /// `EncodedVlad`, and then extracts the inner `Vlad` instance.
@@ -101,7 +101,7 @@ impl Vlad {
     ///
     /// # Returns
     ///
-    /// A `Result` containing a `Vlad` instance if the string is a valid
+    /// A `Result` containing a [Vlad] instance if the string is a valid
     /// representation, otherwise an `Error`.
     pub fn try_from_str(s: &str) -> Result<Self, Error> {
         // Parse the string into an EncodedVlad, which handles base decoding
