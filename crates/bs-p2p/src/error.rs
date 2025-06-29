@@ -53,4 +53,20 @@ pub enum Error {
     /// From TransportError
     #[error("TransportError: {0}")]
     TransportIo(#[from] libp2p::core::transport::TransportError<std::io::Error>),
+
+    /// Failure to resolve Provenance Log from the network client
+    #[error("Failed to Resolve provenance log {0}")]
+    ResolveError(#[from] provenance_log::resolver::ResolveError),
+
+    /// From<multicid::Error>
+    #[error("Multicid error {0}")]
+    MulticidError(#[from] multicid::Error),
+
+    /// From<multihash::Error>
+    #[error("Multihash error {0}")]
+    MultihashError(#[from] multihash::Error),
+
+    /// From<provenance_log::Error>
+    #[error("Provenance Log error {0}")]
+    PlogError(#[from] provenance_log::Error),
 }

@@ -336,47 +336,6 @@ where
     }
 }
 
-impl<KP: KeyManager<Error> + MultiSigner<Error>> Resolver for &DefaultBsPeer<KP> {
-    type Error = TestError;
-
-    fn resolve(
-        &self,
-        cid: &multicid::Cid,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Self::Error>> + Send>> {
-        tracing::debug!("DefaultBsPeer Resolving CID over bitswap: {}", cid);
-        let cid_bytes: Vec<u8> = cid.clone().into();
-        let client = self.network_client.clone();
-        Box::pin(async move {
-            let Some(client) = client else {
-                return Err(TestError::NotConnected);
-            };
-
-            Ok(client.get_bits(cid_bytes).await?)
-        })
-    }
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum TestError {
-    #[error("Provenance Log not initialized")]
-    NotConnected,
-    // from bs_p2p
-    #[error("Plog already exists {0}")]
-    P2p(#[from] bs_p2p::Error),
-    // From<provenance_log::resolver::ResolveError>
-    #[error("Resolve error {0}")]
-    ResolveError(#[from] provenance_log::resolver::ResolveError),
-    /// From<multicid::Error>
-    #[error("Multicid error {0}")]
-    MulticidError(#[from] multicid::Error),
-    /// From<multihash::Error>
-    #[error("Multihash error {0}")]
-    MultihashError(#[from] multihash::Error),
-    /// From<provenance_log::Error>
-    #[error("Provenance Log error {0}")]
-    PlogError(#[from] provenance_log::Error),
-}
-
 #[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 mod tests {

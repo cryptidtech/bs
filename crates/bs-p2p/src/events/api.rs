@@ -2,6 +2,7 @@
 use crate::events::delay;
 pub use crate::behaviour::req_res::{PeerRequest, PeerResponse};
 use libp2p::Multiaddr;
+use provenance_log::resolver::Resolver;
 use crate::events::{NetworkError, PublicEvent};
 use crate::behaviour::{Behaviour, BehaviourEvent};
 use crate::Error;
@@ -23,7 +24,9 @@ use libp2p::request_response::{self, OutboundRequestId, ResponseChannel};
 use libp2p::swarm::{Swarm, SwarmEvent};
 use libp2p::{identify, kad, ping, PeerId, StreamProtocol};
 use std::collections::{HashMap, HashSet};
+use std::future::Future;
 use std::net::Ipv4Addr;
+use std::pin::Pin;
 use std::time::Duration;
 use web_time::Instant;
 
@@ -197,6 +200,21 @@ impl Client {
     }
 }
 
+impl Resolver for Client {
+    type Error = crate::Error;
+
+    fn resolve(
+        &self,
+        cid: &multicid::Cid,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Self::Error>> + Send>> {
+        tracing::debug!("DefaultBsPeer Resolving CID over bitswap: {}", cid);
+        let cid_bytes: Vec<u8> = cid.clone().into();
+        let client = self.clone();
+        Box::pin(async move {
+            client.get_bits(cid_bytes).await
+        })
+    }
+}
 /// PeerPiper Network Commands (Libp2p)
 #[derive(Debug)]
 pub enum NetworkCommand {

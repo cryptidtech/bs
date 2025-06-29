@@ -132,21 +132,25 @@ async fn verify_remote_plog<KP: KeyManager<bs_peer::Error> + MultiSigner<bs_peer
 
     tokio::time::sleep(Duration::from_secs(4)).await;
 
-    // get bytes from KAd DHT record
-    let cid_bytes = {
+    let network_client = {
         let mut lock = bs_peer.lock().await;
+
         let network_client = lock.network_client.as_mut().ok_or_else(|| {
             tracing::error!("Network client is not initialized");
             "Network client is not initialized".to_string()
         })?;
-        network_client
-            .get_record(peer_id.into())
-            .await
-            .map_err(|e| {
-                tracing::error!("Failed to get DHT record: {}", e);
-                format!("Failed to get DHT record: {}", e)
-            })?
+
+        network_client.clone()
     };
+
+    // get bytes from KAd DHT record
+    let cid_bytes = network_client
+        .get_record(peer_id.into())
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get DHT record: {}", e);
+            format!("Failed to get DHT record: {}", e)
+        })?;
 
     tracing::info!("2/ Retrieved plog head bytes: {:?}", cid_bytes);
 
@@ -167,7 +171,7 @@ async fn verify_remote_plog<KP: KeyManager<bs_peer::Error> + MultiSigner<bs_peer
     // Now fetch and verify the entry chain
     let entry_chain = {
         let peer = bs_peer.lock().await;
-        (&*peer).get_entry_chain(&head).await.map_err(|e| {
+        network_client.get_entry_chain(&head).await.map_err(|e| {
             tracing::error!("Failed to get entry chain: {}", e);
             e.to_string()
         })?
@@ -188,10 +192,13 @@ async fn verify_remote_plog<KP: KeyManager<bs_peer::Error> + MultiSigner<bs_peer
         tracing::info!("Multiple entries - resolving foot CID");
         let entry_bytes = {
             let peer = bs_peer.lock().await;
-            (&*peer).resolve(&entry_chain.foot_cid).await.map_err(|e| {
-                tracing::error!("Failed to resolve foot CID: {}", e);
-                e.to_string()
-            })?
+            network_client
+                .resolve(&entry_chain.foot_cid)
+                .await
+                .map_err(|e| {
+                    tracing::error!("Failed to resolve foot CID: {}", e);
+                    e.to_string()
+                })?
         };
 
         tracing::info!("Foot resolved. Converting to Entry...");
@@ -290,7 +297,7 @@ async fn verify_remote_plog<KP: KeyManager<bs_peer::Error> + MultiSigner<bs_peer
     // running resolve_plog should return the same plog
     let resolved_plog = {
         let peer = bs_peer.lock().await;
-        (&*peer).resolve_plog(&head).await.map_err(|e| {
+        network_client.resolve_plog(&head).await.map_err(|e| {
             verification_success = false;
             format!("Failed to resolve plog: {}", e)
         })?
