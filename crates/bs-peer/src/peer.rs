@@ -23,7 +23,6 @@ use multihash::mh;
 use provenance_log::key::key_paths::ValidatedKeyParams;
 pub use provenance_log::resolver::{ResolvedPlog, Resolver};
 pub use provenance_log::{self as p, Key, Script};
-use std::{future::Future, pin::Pin};
 
 /// A peer that is generic over the blockstore type.
 ///

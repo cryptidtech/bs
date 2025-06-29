@@ -51,6 +51,10 @@ pub async fn new<B: Blockstore + 'static>(
 }
 
 /// This client is used to send [Command]s to the network event loop
+///
+/// Can be [Clone]d so that commands can be sent from various sources.
+///
+/// Bring [Resolver] into scope to be able to resolve Plogs using the netowrk client.
 #[derive(Clone, Debug)]
 pub struct Client {
     command_sender: tokio::sync::mpsc::Sender<NetworkCommand>,

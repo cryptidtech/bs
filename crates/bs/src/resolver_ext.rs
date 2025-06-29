@@ -16,7 +16,10 @@ pub type FirstLockFuture<'a, R> =
 pub type PlogResolutionFuture<'a, R> =
     Pin<Box<dyn Future<Output = Result<ResolvedPlog, <R as Resolver>::Error>> + Send + 'a>>;
 
-/// Extension trait for Resolver to provide VLAD-specific resolution functions
+/// Extension trait for [Resolver] to provide VLAD-specific [Entry] resolution functions
+///
+/// In other words, uses [Resolver] to resolve first lock from an [Entry] and an entire
+/// [provenance_log::Log] from a head [Cid]
 pub trait ResolverExt: Resolver {
     /// Resolve a [multicid::Vlad]'s first lock [Script] bytes from an [Entry]
     fn resolve_first_lock<'a>(&'a self, entry: &'a Entry) -> FirstLockFuture<'a, Self> {
