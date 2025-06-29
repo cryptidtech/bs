@@ -47,6 +47,24 @@ where
     pub peer_id: Option<PeerId>,
 }
 
+/// Impl Clone for BsPeer - You get everything except the events because you can't clone a Receiver
+impl<KP, BS> Clone for BsPeer<KP, BS>
+where
+    KP: KeyManager<Error> + MultiSigner<Error> + CondSync + Clone,
+    BS: BlockstoreTrait + CondSync + Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            plog: self.plog.clone(),
+            key_provider: self.key_provider.clone(),
+            blockstore: self.blockstore.clone(),
+            network_client: self.network_client.clone(),
+            events: None,
+            peer_id: self.peer_id,
+        }
+    }
+}
+
 // Default platform-specific version of BsPeer
 pub type DefaultBsPeer<KP> = BsPeer<KP, platform::Blockstore>;
 
