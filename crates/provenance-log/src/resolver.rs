@@ -10,7 +10,7 @@
 //!
 //! Users can implement the [Resolver] trait to define how to resolve the data
 //! from a CID chain.
-use crate::{log, Entry, Error as PlogError, Log, Op, Script, Value};
+use crate::{Entry, Error as PlogError, Log};
 
 use multicid::Cid;
 use multitrait::Null;
@@ -35,7 +35,7 @@ impl EntriesFootprint {
 }
 
 /// Result of resolving and verifying a Plog
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ResolvedPlog {
     /// The reconstructed and verified provenance log
     pub log: Log,
