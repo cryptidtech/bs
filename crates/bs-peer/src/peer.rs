@@ -2,6 +2,7 @@
 use crate::{platform, Error};
 use ::cid::Cid;
 use blockstore::Blockstore as BlockstoreTrait;
+pub use bs::resolver_ext::ResolverExt;
 pub use bs::update::Config as UpdateConfig;
 use bs::{
     config::sync::{KeyManager, MultiSigner},
