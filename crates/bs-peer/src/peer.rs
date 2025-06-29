@@ -311,7 +311,7 @@ where
     }
 
     /// Record Plog to DHT using Vlad as key and head CID as value
-    async fn record_plog_to_dht(&self) -> Result<(), Error> {
+    pub async fn record_plog_to_dht(&self) -> Result<(), Error> {
         let Some(ref plog) = self.plog else {
             return Err(Error::PlogNotInitialized);
         };
