@@ -39,6 +39,9 @@ use std::sync::{Arc, Mutex};
 pub struct InMemoryKeyManager<E = crate::Error> {
     // Map of key paths to their corresponding secret keys
     secret_keys: Arc<Mutex<HashMap<Key, Multikey>>>,
+    /// The [Key] used to sign [provenance_log::Entry]s
+    entry_signing_key: Option<Key>,
+    // PhantomData to hold the error type
     _phantom: PhantomData<E>,
 }
 
@@ -46,6 +49,7 @@ impl<E> Clone for InMemoryKeyManager<E> {
     fn clone(&self) -> Self {
         Self {
             secret_keys: self.secret_keys.clone(),
+            entry_signing_key: None,
             _phantom: PhantomData,
         }
     }
@@ -68,6 +72,7 @@ where
     pub fn new() -> Self {
         Self {
             secret_keys: Arc::new(Mutex::new(HashMap::new())),
+            entry_signing_key: None,
             _phantom: PhantomData,
         }
     }
@@ -93,8 +98,19 @@ where
     /// Store secret key by path
     pub fn store_secret_key(&self, path: Key, secret_key: Multikey) -> Result<(), E> {
         let mut secret_keys = self.secret_keys.lock().unwrap();
-        secret_keys.insert(path, secret_key);
+        secret_keys.insert(path.clone(), secret_key);
+
         Ok(())
+    }
+
+    /// Explicitly set the entry signing key
+    pub fn set_entry_signing_key(&mut self, key: Key) {
+        self.entry_signing_key = Some(key);
+    }
+
+    /// Convenience method to get the entry signing [Key] if it exists
+    pub fn get_entry_signing_key(&self) -> &Option<Key> {
+        &self.entry_signing_key
     }
 
     /// Remove secret key by path
