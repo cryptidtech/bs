@@ -1,4 +1,6 @@
 //! BetterSign Peer: BetterSign core + libp2p networking + Blockstore
+use std::sync::{Arc, Mutex};
+
 use crate::{platform, Error};
 use ::cid::Cid;
 use blockstore::Blockstore as BlockstoreTrait;
@@ -34,7 +36,7 @@ where
     BS: BlockstoreTrait + CondSync,
 {
     /// The Provenance Log of the peer, which contains the history of operations
-    plog: Option<p::Log>,
+    plog: Arc<Mutex<Option<p::Log>>>,
     /// Key provider for the peer, used for signing and key management
     key_provider: KP,
     /// [Blockstore] to save data
@@ -47,7 +49,10 @@ where
     pub peer_id: Option<PeerId>,
 }
 
-/// Impl Clone for BsPeer - You get everything except the events because you can't clone a Receiver
+/// Impl Clone for BsPeer - You get everything except the events because you can't clone a
+/// Receiver.
+///
+/// Plog is wraped in Arc<Mutex> to allow shared access of a single [provenance_log::Log] across threads,
 impl<KP, BS> Clone for BsPeer<KP, BS>
 where
     KP: KeyManager<Error> + MultiSigner<Error> + CondSync + Clone,
@@ -102,7 +107,7 @@ where
 
         Ok(Self {
             network_client: Some(network_client),
-            plog: None,
+            plog: Default::default(),
             key_provider,
             blockstore,
             events: Some(rx_evts),
@@ -117,15 +122,15 @@ where
     BS: BlockstoreTrait + CondSync,
 {
     /// Returns the p[p::Log] of the peer, if it exists.
-    pub fn plog(&self) -> Option<&p::Log> {
-        self.plog.as_ref()
+    pub fn plog(&self) -> Arc<Mutex<Option<p::Log>>> {
+        self.plog.clone()
     }
 
     /// Create an offline (no network) [BsPeer] with a custom blockstore implementation
     pub fn with_blockstore(key_provider: KP, blockstore: BS) -> Self {
         Self {
             key_provider,
-            plog: None,
+            plog: Default::default(),
             blockstore,
             network_client: Default::default(),
             events: None,
@@ -183,26 +188,25 @@ where
 
     /// Store all the plog [provenance_log::Entry]s in the [blockstore::Blockstore]
     async fn store_entries(&self) -> Result<(), Error> {
-        let plog = self.plog.as_ref().ok_or(Error::PlogNotInitialized)?;
-        // add the first lock CID to the blockstore
-        // first we need to convert from multicid::Cid to cid::Cid
-        let first_lock_cid = plog.vlad.cid();
-        let first_lock_cid_bytes: Vec<u8> = first_lock_cid.clone().into();
-        let first_lock_cid = Cid::try_from(first_lock_cid_bytes.clone())?;
+        let (first_lock_cid, first_lock_bytes, entries) = {
+            let plog = self.plog.lock().map_err(|_| Error::LockPosioned)?;
+            plog.as_ref()
+                .map(|p| {
+                    let first_lock_cid_bytes: Vec<u8> = p.vlad.cid().clone().into();
+                    let first_lock_cid = Cid::try_from(first_lock_cid_bytes).unwrap();
+                    let first_lock_bytes: Vec<u8> = p.first_lock.clone().into();
 
-        // Next we need to extract the first lock script as Script
-        let first_lock_bytes: Vec<u8> = plog.first_lock.clone().into();
-
-        // the Cid of the extracted bytes should match those in the vlad.cid()
-        let plog_vlad_cid_bytes: Vec<u8> = plog.vlad.cid().clone().into();
-        debug_assert_eq!(first_lock_cid_bytes, plog_vlad_cid_bytes);
+                    (first_lock_cid, first_lock_bytes, p.entries.clone())
+                })
+                .ok_or(Error::PlogNotInitialized)?
+        };
 
         self.blockstore
             .put_keyed(&first_lock_cid, &first_lock_bytes)
             .await?;
 
         // Put all the entries in the blockstore
-        for (multi_cid, entry) in plog.entries.clone() {
+        for (multi_cid, entry) in entries.clone() {
             let entry_bytes: Vec<u8> = entry.into();
 
             // we need to convert multicid::Cid to cid:Cid first before putting it in the blockstore,
@@ -220,7 +224,7 @@ where
 
     /// Generate a new Plog with the given configuration.
     pub async fn generate_with_config(&mut self, config: bs::open::Config) -> Result<(), Error> {
-        if self.plog.is_some() {
+        if self.plog.lock().map_err(|_| Error::LockPosioned)?.is_some() {
             return Err(Error::PlogAlreadyExists);
         }
 
@@ -238,7 +242,10 @@ where
         }
 
         self.store_ops(config.into()).await?;
-        self.plog = Some(plog);
+        self.plog
+            .lock()
+            .map_err(|_| Error::LockPosioned)?
+            .replace(plog);
         self.store_entries().await?;
         self.record_plog_to_dht().await?;
         Ok(())
@@ -250,7 +257,7 @@ where
         lock: impl AsRef<str>,
         unlock: impl AsRef<str>,
     ) -> Result<(), Error> {
-        if self.plog.is_some() {
+        if self.plog.lock().map_err(|_| Error::LockPosioned)?.is_some() {
             return Err(Error::PlogAlreadyExists);
         }
 
@@ -278,10 +285,10 @@ where
 
     /// Update the BsPeer's Plog with new data.
     pub async fn update(&mut self, config: UpdateConfig) -> Result<(), Error> {
-        let Some(ref mut plog) = self.plog else {
+        let mut plog = self.plog.lock().map_err(|_| Error::LockPosioned)?;
+        let Some(ref mut plog) = *plog else {
             return Err(Error::PlogNotInitialized);
         };
-
         // Apply the update to the plog
         bs::ops::update_plog(plog, &config, &self.key_provider, &self.key_provider)?;
 
@@ -305,7 +312,7 @@ where
 
     /// Load a Plog into ths BsPeer.
     pub async fn load(&mut self, plog: p::Log) -> Result<(), Error> {
-        if self.plog.is_some() {
+        if self.plog.lock().map_err(|_| Error::LockPosioned)?.is_some() {
             return Err(Error::PlogAlreadyExists);
         }
 
@@ -321,7 +328,10 @@ where
         }
 
         // Store the plog, entries, and record to DHT
-        self.plog = Some(plog);
+        self.plog
+            .lock()
+            .map_err(|_| Error::LockPosioned)?
+            .replace(plog);
         self.store_entries().await?;
         self.record_plog_to_dht().await?;
 
@@ -330,19 +340,23 @@ where
 
     /// Record Plog to DHT using Vlad as key and head CID as value
     pub async fn record_plog_to_dht(&self) -> Result<(), Error> {
-        let Some(ref plog) = self.plog else {
-            return Err(Error::PlogNotInitialized);
+        let (vlad_bytes, head_cid_bytes) = {
+            let plog = self.plog.lock().map_err(|_| Error::LockPosioned)?;
+            let Some(ref plog) = *plog else {
+                return Err(Error::PlogNotInitialized);
+            };
+
+            // Get Vlad bytes for DHT key
+            let vlad_bytes: Vec<u8> = plog.vlad.cid().clone().into();
+
+            // Get the head CID bytes for DHT value
+            let head_cid_bytes: Vec<u8> = plog.head.clone().into();
+
+            (vlad_bytes, head_cid_bytes)
         };
-
-        // Get Vlad bytes for DHT key
-        let vlad_bytes: Vec<u8> = plog.vlad.cid().clone().into();
-
-        // Get the head CID bytes for DHT value
-        let head_cid_bytes: Vec<u8> = plog.head.clone().into();
 
         // Record to DHT if network client is available
         if let Some(client) = &self.network_client {
-            tracing::debug!("Recording Plog to DHT with Vlad: {:?}", plog.vlad.cid());
             client.put_record(vlad_bytes, head_cid_bytes).await?;
             tracing::debug!("Successfully recorded Plog to DHT");
         } else {

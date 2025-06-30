@@ -87,6 +87,10 @@ pub enum Error {
     /// No network connection for this peer
     #[error("Peer is not connected to a network")]
     NotConnected,
+
+    /// Mutex Lock Poisoned
+    #[error("Mutex lock poisoned")]
+    LockPosioned,
 }
 
 impl From<String> for Error {
