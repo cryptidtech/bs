@@ -285,15 +285,15 @@ where
 
     /// Update the BsPeer's Plog with new data.
     pub async fn update(&mut self, config: UpdateConfig) -> Result<(), Error> {
-        let mut plog = self.plog.lock().map_err(|_| Error::LockPosioned)?;
-        let Some(ref mut plog) = *plog else {
-            return Err(Error::PlogNotInitialized);
-        };
-        // Apply the update to the plog
-        bs::ops::update_plog(plog, &config, &self.key_provider, &self.key_provider)?;
-
-        // Verify the updated plog
         {
+            let mut plog = self.plog.lock().map_err(|_| Error::LockPosioned)?;
+            let Some(ref mut plog) = *plog else {
+                return Err(Error::PlogNotInitialized);
+            };
+            // Apply the update to the plog
+            bs::ops::update_plog(plog, &config, &self.key_provider, &self.key_provider)?;
+
+            // Verify the updated plog
             let verify_iter = &mut plog.verify();
             for result in verify_iter {
                 if let Err(e) = result {
