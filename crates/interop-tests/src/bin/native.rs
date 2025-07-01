@@ -12,6 +12,7 @@ use bs::resolver_ext::ResolverExt as _;
 use bs_p2p::events::api::Libp2pEvent;
 use bs_p2p::events::PublicEvent;
 use bs_peer::peer::{DefaultBsPeer, Resolver};
+use bs_peer::platform::StartConfig;
 use bs_wallets::memory::InMemoryKeyManager;
 use futures::StreamExt;
 use libp2p::multiaddr::{Multiaddr, Protocol};
@@ -39,7 +40,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let key_manager = InMemoryKeyManager::<bs_peer::Error>::default();
 
     // Create a new peer with the default platform blockstore
-    let bs_peer = DefaultBsPeer::new(key_manager).await.unwrap();
+    let bs_peer = DefaultBsPeer::new(key_manager, StartConfig::default())
+        .await
+        .unwrap();
 
     // Wrap the peer in Arc<Mutex<>> to safely share between tasks
     let bs_peer = Arc::new(Mutex::new(bs_peer));

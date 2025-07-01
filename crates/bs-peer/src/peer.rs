@@ -96,11 +96,10 @@ where
     /// start a [bs_p2p] network node,
     /// set a network access [Client] to send commands,
     /// link an event receiver for network [bs_p2p::events::PublicEvent]s.
-    pub async fn new(key_provider: KP) -> Result<Self, Error> {
+    pub async fn new(key_provider: KP, config: platform::StartConfig) -> Result<Self, Error> {
         let blockstore = platform::Blockstore::new(directories()).await.unwrap();
 
         let (tx_evts, rx_evts) = mpsc::channel(16);
-        let config = platform::StartConfig::default();
         let blockstore_clone = blockstore.clone();
 
         let (network_client, peer_id) = platform::start(tx_evts, blockstore_clone, config).await?;

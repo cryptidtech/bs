@@ -1,6 +1,7 @@
 //! Common tests between web and native
 
 use crate::peer::DefaultBsPeer;
+use crate::platform::StartConfig;
 use crate::{peer::BsPeer, Error};
 use ::cid::Cid;
 use blockstore::Blockstore as BlockstoreTrait;
@@ -122,7 +123,7 @@ pub async fn setup_network_test_peer() -> Result<NetworkTestFixture, Error> {
     let key_manager = InMemoryKeyManager::<Error>::default();
 
     // Create a network-enabled peer
-    let peer = DefaultBsPeer::new(key_manager).await?;
+    let peer = DefaultBsPeer::new(key_manager, StartConfig::default()).await?;
 
     let (lock_script, unlock_script) = create_default_scripts();
 
@@ -783,7 +784,7 @@ pub async fn run_peer_initialization_test() {
     let key_manager = InMemoryKeyManager::<Error>::default();
 
     // Create a new peer with the default platform blockstore
-    let peer_result = DefaultBsPeer::new(key_manager).await;
+    let peer_result = DefaultBsPeer::new(key_manager, StartConfig::default()).await;
 
     match &peer_result {
         Ok(_) => tracing::info!("Peer initialization succeeded"),
