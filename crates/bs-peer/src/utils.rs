@@ -42,13 +42,13 @@ where
     BS: BlockstoreTrait + CondSync,
 {
     /// Helper to create CID from the same parameters for testing
-    pub async fn verify_cid_stored(
+    pub fn verify_cid_stored(
         &self,
         version: Codec,
         target: Codec,
         hash: Codec,
         data: &[u8],
-    ) -> Result<bool, Error> {
+    ) -> Result<Cid, Error> {
         // Create CID
         let multi_cid = cid::Builder::new(version)
             .with_target_codec(target)
@@ -60,8 +60,8 @@ where
         let cid = Cid::try_from(multi_cid_bytes)?;
 
         // Check if stored in blockstore
-        let result = self.blockstore().has(&cid).await?;
-        Ok(result)
+        // self.blockstore().has(&cid).await?;
+        Ok(cid)
     }
 }
 
@@ -308,21 +308,24 @@ pub async fn run_in_memory_blockstore_test() {
 
     // verify the plog
     let plog = fixture.peer.plog();
-    let binding = plog.lock().unwrap();
-    let verify_iter = &mut binding.as_ref().unwrap().verify();
-    for result in verify_iter {
-        if let Err(e) = result {
-            tracing::error!("Plog verification failed: {}", e);
-            panic!("Plog verification failed: {}", e);
-        }
-    }
 
     // Verify the CID was stored
-    let stored = fixture
-        .peer
-        .verify_cid_stored(version, target, hash, &test_data)
-        .await
-        .unwrap();
+    let cid = {
+        let binding = plog.lock().unwrap();
+        let verify_iter = &mut binding.as_ref().unwrap().verify();
+        for result in verify_iter {
+            if let Err(e) = result {
+                tracing::error!("Plog verification failed: {}", e);
+                panic!("Plog verification failed: {}", e);
+            }
+        }
+        fixture
+            .peer
+            .verify_cid_stored(version, target, hash, &test_data)
+            .unwrap()
+    };
+
+    let stored = fixture.peer.blockstore().has(&cid).await.unwrap();
 
     assert!(stored, "CID should be stored in blockstore");
 
@@ -400,11 +403,12 @@ pub async fn run_network_blockstore_test() {
     );
 
     // Verify the CID was stored
-    let stored = fixture
+    let cid = fixture
         .peer
         .verify_cid_stored(version, target, hash, &test_data)
-        .await
         .unwrap();
+
+    let stored = fixture.peer.blockstore().has(&cid).await.unwrap();
 
     assert!(stored, "CID should be stored in network peer blockstore");
 
@@ -446,10 +450,13 @@ pub async fn run_store_entries_test() {
 
     // Get the first lock CID from the plog for verification
     let plog = fixture.peer.plog();
-    let binding = plog.lock().unwrap();
-    let first_lock_cid = binding.as_ref().unwrap().vlad.cid();
-    let first_lock_cid_bytes: Vec<u8> = first_lock_cid.clone().into();
-    let cid = Cid::try_from(first_lock_cid_bytes).unwrap();
+    let cid = {
+        let binding = plog.lock().unwrap();
+        let first_lock_cid = binding.as_ref().unwrap().vlad.cid();
+        let first_lock_cid_bytes: Vec<u8> = first_lock_cid.clone().into();
+
+        Cid::try_from(first_lock_cid_bytes).unwrap()
+    };
 
     // Verify first lock is in blockstore
     let stored_first_lock = fixture.peer.blockstore().has(&cid).await.unwrap();
@@ -465,8 +472,13 @@ pub async fn run_store_entries_test() {
         "First lock data should be retrievable"
     );
 
+    let entries = {
+        let binding = plog.lock().unwrap();
+        binding.as_ref().unwrap().entries.clone()
+    };
+
     // Verify each entry is stored in the blockstore
-    for (multi_cid, _) in plog.lock().unwrap().as_ref().unwrap().entries.iter() {
+    for (multi_cid, _) in entries.iter() {
         let multi_cid_bytes: Vec<u8> = multi_cid.clone().into();
         let entry_cid = Cid::try_from(multi_cid_bytes).unwrap();
 
@@ -486,12 +498,15 @@ pub async fn run_network_store_entries_test() {
         .await
         .expect("Should create initialized network peer");
 
-    // Get the first lock CID from the plog for verification
     let plog = fixture.peer.plog();
-    let binding = plog.lock().unwrap();
-    let first_lock_cid = binding.as_ref().unwrap().vlad.cid();
-    let first_lock_cid_bytes: Vec<u8> = first_lock_cid.clone().into();
-    let cid = Cid::try_from(first_lock_cid_bytes).unwrap();
+
+    // Get the first lock CID from the plog for verification
+    let cid = {
+        let binding = plog.lock().unwrap();
+        let first_lock_cid = binding.as_ref().unwrap().vlad.cid();
+        let first_lock_cid_bytes: Vec<u8> = first_lock_cid.clone().into();
+        Cid::try_from(first_lock_cid_bytes).unwrap()
+    };
 
     // Verify first lock is in blockstore
     let stored_first_lock = fixture.peer.blockstore().has(&cid).await.unwrap();
@@ -507,8 +522,13 @@ pub async fn run_network_store_entries_test() {
         "First lock data should be retrievable from network peer"
     );
 
+    let entries = {
+        let binding = plog.lock().unwrap();
+        binding.as_ref().unwrap().entries.clone()
+    };
+
     // Verify each entry is stored in the blockstore
-    for (multi_cid, _) in plog.lock().unwrap().as_ref().unwrap().entries.iter() {
+    for (multi_cid, _) in entries.iter() {
         let multi_cid_bytes: Vec<u8> = multi_cid.clone().into();
         let entry_cid = Cid::try_from(multi_cid_bytes).unwrap();
 
@@ -557,11 +577,12 @@ pub async fn run_update_test() {
     assert!(res.is_ok(), "Expected successful update");
 
     // Verify the update was stored
-    let stored = fixture
+    let cid = fixture
         .peer
         .verify_cid_stored(version, target, hash, &new_data)
-        .await
         .unwrap();
+
+    let stored = fixture.peer.blockstore().has(&cid).await.unwrap();
 
     assert!(stored, "Updated CID should be stored in blockstore");
 
@@ -610,11 +631,12 @@ pub async fn run_network_update_test() {
     assert!(res.is_ok(), "Expected successful update of network peer");
 
     // Verify the update was stored
-    let stored = fixture
+    let cid = fixture
         .peer
         .verify_cid_stored(version, target, hash, &new_data)
-        .await
         .unwrap();
+
+    let stored = fixture.peer.blockstore().has(&cid).await.unwrap();
 
     assert!(
         stored,
