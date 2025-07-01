@@ -357,7 +357,7 @@ where
         // Record to DHT if network client is available
         if let Some(client) = &self.network_client {
             client.put_record(vlad_bytes, head_cid_bytes).await?;
-            tracing::debug!("Successfully recorded Plog to DHT");
+            tracing::debug!("Sent Plog record to DHT");
         } else {
             tracing::warn!("Network client not available, skipping DHT recording");
         }

@@ -584,39 +584,40 @@ impl<B: Blockstore> EventLoop<B> {
             )) => {
                 tracing::debug!("{peer_id} subscribed to {topic}");
 
-                // Indiscriminately add the peer to the routing table
                 self.swarm
                     .behaviour_mut()
                     .gossipsub
                     .add_explicit_peer(&peer_id);
 
-                // publish a message
-                // get the last 4 chars of the peer_id as slice:
-                let message = format!(
-                    "📨 Welcome subscriber ..{} of topic {:?}! 🎉",
-                    &peer_id.to_string()[peer_id.to_string().len() - 4..],
-                    topic
-                );
+                self.event_sender
+                    .send(PublicEvent::NewSubscriber {
+                        peer: peer_id.to_string(),
+                        topic: topic.to_string(),
+                    })
+                    .await?;
 
-                // subscribe to this topic so we can act as super peer to browsers
-                if let Err(err) = self
+                // Query the local DHT for values on the topic as a key.
+                // If we have  key for this value, publish it to the topic.
+                let key = topic.to_string().into_bytes();
+                tracing::debug!("Querying DHT for key: {:?}", key);
+                if let Some(record) = self
                     .swarm
                     .behaviour_mut()
-                    .gossipsub
-                    .subscribe(&libp2p::gossipsub::IdentTopic::new(topic.as_str()))
-                {
-                    tracing::error!("Failed to subscribe to topic: {err}");
-                }
-
-                if let Err(err) = self
-                    .swarm
-                    .behaviour_mut()
-                    .gossipsub
-                    .publish(topic, message.as_bytes())
-                {
-                    tracing::error!("Failed to publish welcome message: {err}");
-                    return Err(Error::StaticStr("Failed to publish welcome message"));
-                }
+                    .kad
+                    .store_mut()
+                    .get(&libp2p::kad::RecordKey::new(&key))
+                    .map(|record| record.into_owned()) {
+                        tracing::debug!("Found record for key {:?}: {:?}", key, record);
+                        // Publish the record to the topic
+                        if let Err(e) = self
+                            .swarm
+                            .behaviour_mut()
+                            .gossipsub
+                            .publish(topic, record.value.clone())
+                        {
+                            tracing::error!("Failed to publish record to topic: {e}");
+                        }
+                } 
             }
             SwarmEvent::Behaviour(BehaviourEvent::PeerRequest(
                 request_response::Event::Message { message, .. },
@@ -1053,11 +1054,13 @@ impl<B: Blockstore> EventLoop<B> {
             NetworkCommand::PutRecord { key, value } => {
                 tracing::info!("API: Handling PutRecord command");
                 let record = kad::Record::new(key, value);
-                let _ = self
+                if let Err(e) = self
                     .swarm
                     .behaviour_mut()
                     .kad
-                    .put_record(record, kad::Quorum::One);
+                    .put_record(record, kad::Quorum::One) {
+                    tracing::error!("Failed to put record: {e}");
+                }
             }
             NetworkCommand::GetRecord { key, sender } => {
                 tracing::info!("API: Handling GetRecord command");

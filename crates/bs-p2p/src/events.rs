@@ -20,7 +20,7 @@ pub enum PublicEvent {
         peer: String,
         rtt: u64,
     },
-    /// Data received from a peer about a topic.
+    /// Data received from a pubsub peer about a topic.
     Message {
         peer: String,
         topic: String,
@@ -40,6 +40,11 @@ pub enum PublicEvent {
     },
     Connected,
     Swarm(Libp2pEvent),
+    /// A new subscriber has been seen interested in a topic.
+    NewSubscriber {
+        peer: String,
+        topic: String,
+    },
 }
 
 #[derive(Debug, Clone)]

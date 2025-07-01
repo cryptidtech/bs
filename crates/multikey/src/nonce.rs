@@ -13,7 +13,7 @@ pub const SIGIL: Codec = Codec::Nonce;
 pub type EncodedNonce = BaseEncoded<Nonce>;
 
 /// a multicodec Nonce type
-#[derive(Clone, Default, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Default, Eq, Ord, PartialEq, PartialOrd, Hash)]
 pub struct Nonce {
     /// the random nonce bytes
     pub(crate) nonce: Vec<u8>,

@@ -31,7 +31,7 @@ pub type EncodedVlad = BaseEncoded<Vlad, DetectedEncoder>;
 ///
 /// The solution is to realize that we only need a random identifier and a cryptographic commitment
 /// to a validation function to replace keys as identifiers. VLADs meet those requirements.
-#[derive(Clone, Default, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Default, Eq, Ord, PartialEq, PartialOrd, Hash)]
 pub struct Vlad {
     /// the random nonce for uniqueness
     pub(crate) nonce: Nonce,
