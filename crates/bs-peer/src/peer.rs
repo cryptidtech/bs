@@ -14,7 +14,7 @@ use bs::{
     },
     update::OpParams,
 };
-pub use bs_p2p::events::api::Client;
+pub use bs_p2p::events::api::{Client, Libp2pEvent};
 pub use bs_p2p::events::PublicEvent;
 use bs_traits::CondSync;
 use futures::channel::mpsc::{self};
