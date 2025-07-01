@@ -28,7 +28,7 @@ wasm-bindgen = "0.2"
 getrandom = { version = "0.3", features = ["wasm_js"] }
 # We have netsed deps that use v0.2, so we need to ensure the feature is flagged here
 getrandom_v02 = { package = "getrandom", version = "0.2.15", features = ["js"] }
-web-sys = { version = "0.3", features = ["Window", "Crypto"] }
+web-sys = { workspace = true, features = ["Window", "Crypto"] }
 hex = "0.4"
 console_error_panic_hook = "0.1"
 tracing-wasm = "0.2"                                                             # For sending tracing events to browser console

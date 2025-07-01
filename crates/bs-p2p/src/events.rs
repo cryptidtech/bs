@@ -2,6 +2,9 @@
 pub mod api;
 pub use api::Client;
 
+mod timeout;
+pub use timeout::TimeoutError;
+
 pub mod delay;
 use api::Libp2pEvent;
 pub(crate) use delay::Delay;

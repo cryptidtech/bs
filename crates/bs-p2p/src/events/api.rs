@@ -1,8 +1,9 @@
 //! The Events API for interacting witht he netowrk events. 
 use crate::events::delay;
 pub use crate::behaviour::req_res::{PeerRequest, PeerResponse};
+use crate::events::timeout::with_timeout;
 use libp2p::Multiaddr;
-use provenance_log::resolver::Resolver;
+use provenance_log::resolver::{Resolver, SuperResolver};
 use crate::events::{NetworkError, PublicEvent};
 use crate::behaviour::{Behaviour, BehaviourEvent};
 use crate::Error;
@@ -211,12 +212,13 @@ impl Resolver for Client {
     fn resolve(
         &self,
         cid: &multicid::Cid,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Self::Error>> + Send>> {
+    // ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Self::Error>> + CondSend>> {
+    ) -> Pin<Box<dyn SuperResolver<'_, Self> + '_>> {
         tracing::debug!("DefaultBsPeer Resolving CID over bitswap: {}", cid);
         let cid_bytes: Vec<u8> = cid.clone().into();
         let client = self.clone();
         Box::pin(async move {
-            client.get_bits(cid_bytes).await
+            with_timeout(client.get_bits(cid_bytes), Duration::from_secs(10)).await?
         })
     }
 }
@@ -372,7 +374,8 @@ impl<B: Blockstore> EventLoop<B> {
 
         records.into_iter().for_each(|record| {
             tracing::debug!(
-                "Kad Key: {:?} \n\n Value: {:?}",
+                "Kad Key ({} bytes): {:?} \n\n Value: {:?}",
+                record.key.to_vec().len(),
                 record.key.to_vec(),
                 record.value
             );
@@ -884,7 +887,7 @@ impl<B: Blockstore> EventLoop<B> {
             SwarmEvent::Behaviour(BehaviourEvent::Bitswap(bitswap)) => {
                 match bitswap {
                     beetswap::Event::GetQueryResponse { query_id, data } => {
-                        tracing::trace!("Bitswap: received response for {query_id:?}: {data:?}");
+                        tracing::debug!("Bitswap: received response for {query_id:?}: {data:?}");
                         if let Some(sender) = self.pending_queries.remove(&query_id) {
                             sender.send(data).map_err(|_| {
                                 tracing::error!("Failed to send response for Bitswap result");

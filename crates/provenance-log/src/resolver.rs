@@ -12,10 +12,25 @@
 //! from a CID chain.
 use crate::{Entry, Error as PlogError, Log};
 
+use bs_traits::CondSend;
 use multicid::Cid;
 use multitrait::Null;
 use multiutil::CodecInfo;
 use std::{collections::BTreeMap, future::Future, pin::Pin};
+
+/// Supertrait for the future returned by resolver methods
+/// implemented so we can use non-auto trait [CondSend] instead of [Send]
+pub trait SuperResolver<'a, R: Resolver>:
+    Future<Output = Result<Vec<u8>, <R as Resolver>::Error>> + CondSend
+{
+}
+
+impl<'a, R, F> SuperResolver<'a, R> for F
+where
+    R: Resolver,
+    F: Future<Output = Result<Vec<u8>, <R as Resolver>::Error>> + CondSend + 'a,
+{
+}
 
 /// Result of resolving entries in a plog chain
 #[derive(Debug, Clone)]
@@ -98,7 +113,7 @@ impl ResolvedPlog {
 /// use std::sync::Arc;
 /// use multicid::Cid;
 /// use provenance_log::Entry;
-/// use provenance_log::resolver::Resolver;
+/// use provenance_log::resolver::{Resolver, SuperResolver};
 ///
 /// struct MyResolver {
 ///    // Your resolver state, e.g. a database connection or HTTP client
@@ -122,7 +137,7 @@ impl ResolvedPlog {
 ///    fn resolve(
 ///        &self,
 ///        cid: &Cid,
-///    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Self::Error>> + Send>> {
+///    ) -> Pin<Box<dyn SuperResolver<'_, Self> + '_>> {
 ///        Box::pin(async move {
 ///           todo!(); // get your data from the state struct, e.g. a database or HTTP request
 ///        })
@@ -140,10 +155,7 @@ pub trait Resolver {
         + 'static;
 
     /// Core method to resolve a CID into bytes
-    fn resolve(
-        &self,
-        cid: &Cid,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Self::Error>> + Send>>;
+    fn resolve(&self, cid: &Cid) -> Pin<Box<dyn SuperResolver<'_, Self> + '_>>;
 
     /// Helper method to verify that a CID matches the content
     fn verify_cid_match(&self, cid: &Cid, data: &[u8]) -> Result<(), Self::Error> {
@@ -170,7 +182,7 @@ pub trait Resolver {
     fn get_entry_chain(
         &self,
         head_cid: &Cid,
-    ) -> impl Future<Output = Result<EntriesFootprint, Self::Error>> + Send
+    ) -> impl Future<Output = Result<EntriesFootprint, Self::Error>> + CondSend
     where
         Self: Sync,
     {

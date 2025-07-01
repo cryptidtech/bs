@@ -1,20 +1,33 @@
 //! Extension trait for Resolver to provide VLAD-specific resolution functions
 use crate::ops::params::vlad::{FirstEntryKeyParams, VladParams};
+use bs_traits::{CondSend, CondSync};
 use multicid::Cid;
 use provenance_log::{
-    resolver::{ResolveError, ResolvedPlog, Resolver},
+    resolver::{ResolveError, ResolvedPlog, Resolver, SuperResolver},
     Entry, Error as PlogError, Key, Script, Value,
 };
 use std::future::Future;
 use std::pin::Pin;
 
 /// Type alias for the future returned by resolve_vlad_first_lock_bytes
-pub type FirstLockFuture<'a, R> =
-    Pin<Box<dyn Future<Output = Result<Vec<u8>, <R as Resolver>::Error>> + Send + 'a>>;
+pub type FirstLockFuture<'a, R> = Pin<Box<dyn SuperResolver<'a, R> + 'a>>;
+
+/// Supertrait for the future returned by resolver methods
+// Supertrait so we can use non-auto trait CondSend instead of Send in: Pin<Box<dyn Future<Output = Result<Vec<u8>, Self::Error>> + Send>>;
+pub trait SuperPlogResolver<'a, R: Resolver>:
+    Future<Output = Result<ResolvedPlog, <R as Resolver>::Error>> + CondSend
+{
+}
+
+impl<'a, R, F> SuperPlogResolver<'a, R> for F
+where
+    R: Resolver,
+    F: Future<Output = Result<ResolvedPlog, <R as Resolver>::Error>> + CondSend + 'a,
+{
+}
 
 /// Type alias for the future returned by resolve_plog
-pub type PlogResolutionFuture<'a, R> =
-    Pin<Box<dyn Future<Output = Result<ResolvedPlog, <R as Resolver>::Error>> + Send + 'a>>;
+pub type PlogResolutionFuture<'a, R> = Pin<Box<dyn SuperPlogResolver<'a, R> + 'a>>;
 
 /// Extension trait for [Resolver] to provide VLAD-specific [Entry] resolution functions
 ///
@@ -22,7 +35,10 @@ pub type PlogResolutionFuture<'a, R> =
 /// [provenance_log::Log] from a head [Cid]
 pub trait ResolverExt: Resolver {
     /// Resolve a [multicid::Vlad]'s first lock [Script] bytes from an [Entry]
-    fn resolve_first_lock<'a>(&'a self, entry: &'a Entry) -> FirstLockFuture<'a, Self> {
+    fn resolve_first_lock<'a>(&'a self, entry: &'a Entry) -> FirstLockFuture<'a, Self>
+    where
+        Self: Sized,
+    {
         Box::pin(async move {
             let binding = entry.vlad();
             let first_lock_cid = binding.cid();
@@ -56,6 +72,7 @@ pub trait ResolverExt: Resolver {
     fn resolve_plog<'a>(&'a self, head_cid: &'a Cid) -> PlogResolutionFuture<'a, Self>
     where
         Self: Sync,
+        Self: Sized,
     {
         Box::pin(async move {
             tracing::debug!("Resolving plog for head CID: {}", head_cid);

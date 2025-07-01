@@ -71,7 +71,16 @@ pub async fn run_test_wasm(libp2p_endpoint: String) -> Result<(), JsValue> {
 
     // put the plog head as a record for PeerId bytes inthe DHT.
     // Extract the plog head bytes that we'll share when requested
-    let head_bytes: Vec<u8> = fixture.peer.plog().unwrap().head.clone().into();
+    let head_bytes: Vec<u8> = fixture
+        .peer
+        .plog()
+        .lock()
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .head
+        .clone()
+        .into();
 
     fixture
         .peer

@@ -69,4 +69,8 @@ pub enum Error {
     /// From<provenance_log::Error>
     #[error("Provenance Log error {0}")]
     PlogError(#[from] provenance_log::Error),
+
+    /// From<events::timeout::TimeoutError>
+    #[error("Timeout error: {0}")]
+    TimeoutError(#[from] crate::events::TimeoutError),
 }

@@ -42,11 +42,11 @@ directories = "6.0.0"
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 send_wrapper = { version = "0.6.0", features = ["futures"] }
 wasm-bindgen = "0.2.93"
-wasm-bindgen-futures = "0.4.50"
+wasm-bindgen-futures.workspace = true
 futures = "0.3.29"
 js-sys = "0.3.66"
 getrandom = { version = "0.3", features = ["wasm_js"] }
-web-sys = { version = "0.3.70", features = [
+web-sys = { workspace = true, features = [
   "Window",
   "Navigator",
   "Storage",

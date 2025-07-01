@@ -23,7 +23,8 @@ members = [
   "crates/rng",
   "crates/bs-peer",
   "crates/interop-tests",
-  "crates/bs-wallets", "crates/bs-server",
+  "crates/bs-wallets",
+  "crates/bs-server",
 ]
 
 [workspace.package]
@@ -90,6 +91,8 @@ tokio = { version = "1.44.2" }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 unsigned-varint = { version = "0.8.0", features = ["std"] }
+web-sys = { version = "0.3.77" }
+wasm-bindgen-futures = "0.4.50"
 
 [profile.bench]
 opt-level = 3
