@@ -175,6 +175,7 @@ pub trait Resolver {
         Self: Sync,
     {
         async {
+            tracing::trace!("Resolving entry chain for head CID: {}", head_cid.clone());
             let mut entries = BTreeMap::new();
             let mut current_cid = head_cid.clone();
             let foot_cid;

@@ -110,6 +110,7 @@ impl Client {
 
     /// Request bits via Bitswap
     pub async fn get_bits(&self, cid: Vec<u8>) -> Result<Vec<u8>, Error> {
+        tracing::debug!("Requesting bitswap for CID: {:?}", cid);
         let (sender, receiver) = oneshot::channel();
         self.command_sender
             .send(NetworkCommand::BitswapQuery { cid, sender })

@@ -58,6 +58,7 @@ pub trait ResolverExt: Resolver {
         Self: Sync,
     {
         Box::pin(async move {
+            tracing::debug!("Resolving plog for head CID: {}", head_cid);
             let entry_chain = self.get_entry_chain(head_cid).await?;
 
             tracing::info!(
