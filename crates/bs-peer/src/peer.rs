@@ -346,7 +346,7 @@ where
             };
 
             // Get Vlad bytes for DHT key
-            let vlad_bytes: Vec<u8> = plog.vlad.cid().clone().into();
+            let vlad_bytes: Vec<u8> = plog.vlad.clone().into();
 
             // Get the head CID bytes for DHT value
             let head_cid_bytes: Vec<u8> = plog.head.clone().into();
