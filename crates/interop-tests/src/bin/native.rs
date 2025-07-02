@@ -173,7 +173,6 @@ async fn verify_remote_plog<KP: KeyManager<bs_peer::Error> + MultiSigner<bs_peer
 
     // Now fetch and verify the entry chain
     let entry_chain = {
-        let peer = bs_peer.lock().await;
         network_client.get_entry_chain(&head).await.map_err(|e| {
             tracing::error!("Failed to get entry chain: {}", e);
             e.to_string()
@@ -194,7 +193,6 @@ async fn verify_remote_plog<KP: KeyManager<bs_peer::Error> + MultiSigner<bs_peer
         // For multiple entries, resolve the foot separately
         tracing::info!("Multiple entries - resolving foot CID");
         let entry_bytes = {
-            let peer = bs_peer.lock().await;
             network_client
                 .resolve(&entry_chain.foot_cid)
                 .await
