@@ -304,6 +304,7 @@ where
 
         // After successful update, store CIDs and publish DHT record
         self.store_ops(config.into()).await?;
+        self.store_entries().await?;
         self.record_plog_to_dht().await?;
 
         Ok(())
