@@ -73,4 +73,8 @@ pub enum Error {
     /// From<events::timeout::TimeoutError>
     #[error("Timeout error: {0}")]
     TimeoutError(#[from] crate::events::TimeoutError),
+
+    /// From<kad::GetRecordError>
+    #[error("Kad GetRecord error: {0}")]
+    KadGetRecord(#[from] libp2p::kad::GetRecordError),
 }

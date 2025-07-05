@@ -48,6 +48,10 @@ pub enum PublicEvent {
         peer: String,
         topic: String,
     },
+    Ack {
+        peer: String,
+        topic: String,
+    },
 }
 
 #[derive(Debug, Clone)]

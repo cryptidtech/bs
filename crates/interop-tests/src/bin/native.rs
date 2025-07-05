@@ -353,7 +353,7 @@ pub(crate) async fn serve(libp2p_transport: Multiaddr) {
 
     let serve_addr_ipv4 = Ipv4Addr::new(127, 0, 0, 1);
 
-    let addr = SocketAddr::new(serve_addr_ipv4.into(), 8080);
+    let addr = SocketAddr::new(serve_addr_ipv4.into(), 8081);
 
     tracing::info!(url=%format!("http://{addr}"), "Serving client files at url");
 

@@ -188,14 +188,13 @@ pub async fn run_basic_test() {
 
     // Check if the plog is initialized
     assert!(
-        fixture.peer.plog().lock().unwrap().is_some(),
+        fixture.peer.plog().is_some(),
         "Expected plog to be initialized"
     );
 
     // Check if the plog can be verified
-    let plog = fixture.peer.plog();
-    let binding = plog.lock().unwrap();
-    let verify_iter = &mut binding.as_ref().unwrap().verify();
+    let plog = fixture.peer.plog().unwrap();
+    let verify_iter = &mut plog.verify();
     for result in verify_iter {
         if let Err(e) = result {
             panic!("Plog verification failed: {}", e);
@@ -238,14 +237,13 @@ pub async fn run_basic_network_test() {
 
     // Check if the plog is initialized
     assert!(
-        fixture.peer.plog().lock().unwrap().is_some(),
+        fixture.peer.plog().is_some(),
         "Expected plog to be initialized in network peer"
     );
 
     // Check if the plog can be verified
-    let plog = fixture.peer.plog();
-    let binding = plog.lock().unwrap();
-    let verify_iter = &mut binding.as_ref().unwrap().verify();
+    let plog = fixture.peer.plog().unwrap();
+    let verify_iter = &mut plog.verify();
     for result in verify_iter {
         if let Err(e) = result {
             panic!("Plog verification failed in network peer: {}", e);
@@ -312,8 +310,8 @@ pub async fn run_in_memory_blockstore_test() {
 
     // Verify the CID was stored
     let cid = {
-        let binding = plog.lock().unwrap();
-        let verify_iter = &mut binding.as_ref().unwrap().verify();
+        let binding = plog.unwrap();
+        let verify_iter = &mut binding.verify();
         for result in verify_iter {
             if let Err(e) = result {
                 tracing::error!("Plog verification failed: {}", e);
@@ -452,8 +450,8 @@ pub async fn run_store_entries_test() {
     // Get the first lock CID from the plog for verification
     let plog = fixture.peer.plog();
     let cid = {
-        let binding = plog.lock().unwrap();
-        let first_lock_cid = binding.as_ref().unwrap().vlad.cid();
+        let binding = plog.as_ref().unwrap();
+        let first_lock_cid = binding.vlad.cid();
         let first_lock_cid_bytes: Vec<u8> = first_lock_cid.clone().into();
 
         Cid::try_from(first_lock_cid_bytes).unwrap()
@@ -474,8 +472,8 @@ pub async fn run_store_entries_test() {
     );
 
     let entries = {
-        let binding = plog.lock().unwrap();
-        binding.as_ref().unwrap().entries.clone()
+        let binding = plog.as_ref().unwrap();
+        binding.entries.clone()
     };
 
     // Verify each entry is stored in the blockstore
@@ -503,8 +501,8 @@ pub async fn run_network_store_entries_test() {
 
     // Get the first lock CID from the plog for verification
     let cid = {
-        let binding = plog.lock().unwrap();
-        let first_lock_cid = binding.as_ref().unwrap().vlad.cid();
+        let binding = plog.as_ref().unwrap();
+        let first_lock_cid = binding.vlad.cid();
         let first_lock_cid_bytes: Vec<u8> = first_lock_cid.clone().into();
         Cid::try_from(first_lock_cid_bytes).unwrap()
     };
@@ -524,8 +522,8 @@ pub async fn run_network_store_entries_test() {
     );
 
     let entries = {
-        let binding = plog.lock().unwrap();
-        binding.as_ref().unwrap().entries.clone()
+        let binding = plog.unwrap();
+        binding.entries.clone()
     };
 
     // Verify each entry is stored in the blockstore
@@ -589,8 +587,8 @@ pub async fn run_update_test() {
 
     // Verify plog is still valid after update
     let plog = fixture.peer.plog();
-    let binding = plog.lock().unwrap();
-    let verify_iter = &mut binding.as_ref().unwrap().verify();
+    let binding = plog.as_ref().unwrap();
+    let verify_iter = &mut binding.verify();
     for result in verify_iter {
         if let Err(e) = result {
             panic!("Plog verification failed after update: {}", e);
@@ -646,8 +644,8 @@ pub async fn run_network_update_test() {
 
     // Verify plog is still valid
     let plog = fixture.peer.plog();
-    let binding = plog.lock().unwrap();
-    let verify_iter = &mut binding.as_ref().unwrap().verify();
+    let binding = plog.as_ref().unwrap();
+    let verify_iter = &mut binding.verify();
     for result in verify_iter {
         if let Err(e) = result {
             panic!("Network peer plog verification failed after update: {}", e);
@@ -662,14 +660,14 @@ pub async fn run_load_test() {
     let fixture = setup_initialized_peer().await;
 
     // Get the plog from the initialized peer
-    let original_plog = fixture.peer.plog().lock().unwrap().clone().unwrap().clone();
+    let original_plog = fixture.peer.plog().as_ref().unwrap().clone();
 
     // Create a new peer with empty state
     let mut new_fixture = setup_test_peer().await;
 
     // Ensure the new peer has no plog yet
     assert!(
-        new_fixture.peer.plog().lock().unwrap().is_none(),
+        new_fixture.peer.plog().is_none(),
         "New peer should have no plog initially"
     );
 
@@ -679,12 +677,12 @@ pub async fn run_load_test() {
 
     // Verify the plog was loaded
     assert!(
-        new_fixture.peer.plog().lock().unwrap().is_some(),
+        new_fixture.peer.plog().is_some(),
         "Plog should now be loaded"
     );
 
     // Verify the loaded plog has the correct data
-    let loaded_plog = new_fixture.peer.plog().lock().unwrap().clone().unwrap();
+    let loaded_plog = new_fixture.peer.plog().unwrap();
     assert_eq!(
         loaded_plog.vlad.cid(),
         original_plog.vlad.cid(),
@@ -732,7 +730,7 @@ pub async fn run_network_load_test() {
     let fixture = setup_initialized_peer().await;
 
     // Get the plog from the initialized peer
-    let original_plog = fixture.peer.plog().lock().unwrap().clone().unwrap().clone();
+    let original_plog = fixture.peer.plog().clone().unwrap().clone();
 
     // Create a new network peer with empty state
     let mut new_fixture = setup_network_test_peer()
@@ -741,7 +739,7 @@ pub async fn run_network_load_test() {
 
     // Ensure the new network peer has no plog yet
     assert!(
-        new_fixture.peer.plog().lock().unwrap().is_none(),
+        new_fixture.peer.plog().is_none(),
         "New network peer should have no plog initially"
     );
 
@@ -754,12 +752,12 @@ pub async fn run_network_load_test() {
 
     // Verify the plog was loaded
     assert!(
-        new_fixture.peer.plog().lock().unwrap().is_some(),
+        new_fixture.peer.plog().is_some(),
         "Plog should now be loaded in network peer"
     );
 
     // Verify the loaded plog has the correct data
-    let loaded_plog = new_fixture.peer.plog().lock().unwrap().clone().unwrap();
+    let loaded_plog = new_fixture.peer.plog().as_ref().unwrap().clone();
     assert_eq!(
         loaded_plog.vlad.cid(),
         original_plog.vlad.cid(),

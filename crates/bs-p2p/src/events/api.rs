@@ -23,9 +23,8 @@ use libp2p::kad::{InboundRequest, Record};
 pub use libp2p::multiaddr::Protocol;
 use libp2p::request_response::{self, OutboundRequestId, ResponseChannel};
 use libp2p::swarm::{Swarm, SwarmEvent};
-use libp2p::{identify, kad, ping, PeerId, StreamProtocol};
+use libp2p::{identify, kad, ping, PeerId, };
 use std::collections::{HashMap, HashSet};
-use std::future::Future;
 use std::net::Ipv4Addr;
 use std::pin::Pin;
 use std::time::Duration;
@@ -59,6 +58,13 @@ pub async fn new<B: Blockstore + 'static>(
 #[derive(Clone, Debug)]
 pub struct Client {
     command_sender: tokio::sync::mpsc::Sender<NetworkCommand>,
+}
+
+// impl PartialEq for Client
+impl PartialEq for Client {
+    fn eq(&self, other: &Self) -> bool {
+        true
+    }
 }
 
 impl Client {
@@ -145,7 +151,7 @@ impl Client {
         self.command_sender
             .send(NetworkCommand::GetRecord { key, sender })
             .await?;
-        receiver.await.map_err(Error::OneshotCanceled)
+        receiver.await.map_err(Error::OneshotCanceled)?
     }
 
     /// Add a peer to the routing table
@@ -157,7 +163,7 @@ impl Client {
     }
 
     /// Publish to a gossipsub topic
-    pub async fn publish(&mut self, message: impl AsRef<[u8]>, topic: String) -> Result<(), Error> {
+    pub async fn publish(&self, message: impl AsRef<[u8]>, topic: String) -> Result<(), Error> {
         Ok(self
             .command_sender
             .send(NetworkCommand::Publish {
@@ -166,7 +172,7 @@ impl Client {
             })
             .await?)
     }
-    pub async fn subscribe(&mut self, topic: String) -> Result<(), Error> {
+    pub async fn subscribe(&self, topic: String) -> Result<(), Error> {
         Ok(self
             .command_sender
             .send(NetworkCommand::Subscribe { topic })
@@ -266,7 +272,7 @@ pub enum NetworkCommand {
     /// Get a record from the DHT
     GetRecord {
         key: Vec<u8>,
-        sender: oneshot::Sender<Vec<u8>>,
+        sender: oneshot::Sender<Result<Vec<u8>, Error>>,
     },
     /// Get a record from the DHT
     GetProviders {
@@ -323,7 +329,7 @@ pub struct EventLoop<B: Blockstore + 'static> {
     pending_queries: HashMap<beetswap::QueryId, oneshot::Sender<Vec<u8>>>,
 
     /// Pending Get Records from DHT
-    pending_get_records: HashMap<kad::QueryId, oneshot::Sender<Vec<u8>>>,
+    pending_get_records: HashMap<kad::QueryId, oneshot::Sender<Result<Vec<u8>, Error>>>,
 }
 
 impl<B: Blockstore> EventLoop<B> {
@@ -579,9 +585,15 @@ impl<B: Blockstore> EventLoop<B> {
                     .send(PublicEvent::Message {
                         peer: peer_id.to_string(),
                         topic: message.topic.to_string(),
-                        data: message.data,
+                        data: message.data.clone(),
                     })
                     .await?;
+
+                // Send ACK back to the sender
+                let ack_topic = format!("ack/{}", message.topic.to_string());
+                if let Err(e) = self.swarm.behaviour_mut().gossipsub.publish(libp2p::gossipsub::IdentTopic::new(&ack_topic), message.data) {
+                    tracing::error!("Failed to publish ACK: {e}");
+                }
             }
             SwarmEvent::Behaviour(BehaviourEvent::Gossipsub(
                 libp2p::gossipsub::Event::Subscribed { peer_id, topic },
@@ -781,7 +793,7 @@ impl<B: Blockstore> EventLoop<B> {
                         tracing::debug!("Got QueryResult Record: {:?}", record);
                         if let Some(sender) = self.pending_get_records.remove(&id) {
                             sender
-                                .send(record.value.clone())
+                                .send(Ok(record.value.clone()))
                                 .expect("Receiver not to be dropped");
 
                             // emit a GotRecord event
@@ -796,6 +808,14 @@ impl<B: Blockstore> EventLoop<B> {
                                 .query_mut(&id)
                                 .unwrap()
                                 .finish();
+                        }
+                    }
+                    kad::QueryResult::GetRecord(Err(e)) => {
+                        tracing::error!("Failed to get record: {e}");
+                        if let Some(sender) = self.pending_get_records.remove(&id) {
+                            sender
+                                .send(Err(Error::KadGetRecord(e)))
+                                .expect("Receiver not to be dropped");
                         }
                     }
                     _ => {
