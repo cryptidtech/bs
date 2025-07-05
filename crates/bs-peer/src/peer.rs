@@ -294,6 +294,7 @@ where
         self.set_plog(plog)?;
         self.store_entries().await?;
         self.record_plog_to_dht().await?;
+        self.publish_to_pubsub().await?;
         Ok(())
     }
 
@@ -357,6 +358,7 @@ where
         self.store_ops(config.into()).await?;
         self.store_entries().await?;
         self.record_plog_to_dht().await?;
+        self.publish_to_pubsub().await?;
         Ok(())
     }
 
@@ -440,37 +442,7 @@ where
         if let Some(client) = &self.network_client {
             client.put_record(vlad_bytes, head_bytes).await?;
             tracing::debug!("Recorded Plog to DHT");
-        } else {
-            tracing::warn!("Network client not available, skipping DHT record");
-        }
-        Ok(())
-    }
-
-    /// Records the current PeerId to the DHT.
-    ///
-    /// This method takes the current PeerId (if available), and attempts to
-    /// put it into the DHT via the `network_client`.
-    ///
-    /// The `PeerId` is used as the key, and the `Multiaddr` is used as the value.
-    /// This allows other peers to discover and retrieve the latest Plog for a given `vlad`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an `Error` if:
-    /// - The `network_client` is not available.
-    /// - There is an error putting the record into the DHT.
-    pub async fn record_peer_id_to_dht(&mut self) -> Result<(), Error> {
-        if let Some(client) = &self.network_client {
-            if let Some(peer_id) = self.peer_id {
-                // TODO: Get the actual observed address
-                let multiaddr = format!("/p2p/{}", peer_id);
-                client
-                    .put_record(peer_id.to_bytes(), multiaddr.as_bytes().to_vec())
-                    .await?;
-                tracing::debug!("Recorded PeerId to DHT");
-            } else {
-                tracing::warn!("PeerId not available, skipping DHT record");
-            }
+            self.publish_to_pubsub().await?;
         } else {
             tracing::warn!("Network client not available, skipping DHT record");
         }
