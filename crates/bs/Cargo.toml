@@ -11,6 +11,7 @@ license = "Functional Source License 1.1"
 bs-traits.workspace = true
 bs-wallets.workspace = true
 best-practices.workspace = true
+comrade.workspace = true
 multicid.workspace = true
 multicodec.workspace = true
 multihash.workspace = true

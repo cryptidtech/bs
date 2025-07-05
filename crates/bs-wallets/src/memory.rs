@@ -3,7 +3,7 @@
 pub use bs_traits::sync::{
     EphemeralSigningTuple, SyncGetKey, SyncPrepareEphemeralSigning, SyncSigner,
 };
-use bs_traits::{EphemeralKey, GetKey, Signer};
+use bs_traits::{self, EphemeralKey, GetKey, Signer};
 use multicodec::Codec;
 use multikey::{mk, Multikey, Views as _};
 use multisig::Multisig;
@@ -13,6 +13,7 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
+
 /// In-memory key manager that provides key management and signing capabilities.
 ///
 /// You can specify an Error type that implements From<[multikey::Error]> and From<[multihash::Error]>
@@ -37,8 +38,10 @@ use std::sync::{Arc, Mutex};
 /// }
 #[derive(Debug)]
 pub struct InMemoryKeyManager<E = crate::Error> {
-    // Map of key paths to their corresponding secret keys
-    secret_keys: Arc<Mutex<HashMap<Key, Multikey>>>,
+    // Map of key fingerprints to their corresponding secret keys
+    keys: Arc<Mutex<HashMap<Vec<u8>, Multikey>>>,
+    // Map of key paths to their corresponding key fingerprints
+    paths: Arc<Mutex<HashMap<Key, Vec<u8>>>>,
     /// The [Key] used to sign [provenance_log::Entry]s
     entry_signing_key: Option<Key>,
     // PhantomData to hold the error type
@@ -48,7 +51,8 @@ pub struct InMemoryKeyManager<E = crate::Error> {
 impl<E> Clone for InMemoryKeyManager<E> {
     fn clone(&self) -> Self {
         Self {
-            secret_keys: self.secret_keys.clone(),
+            keys: self.keys.clone(),
+            paths: self.paths.clone(),
             entry_signing_key: None,
             _phantom: PhantomData,
         }
@@ -71,7 +75,8 @@ where
     /// Create a new key manager with auto-generated keys
     pub fn new() -> Self {
         Self {
-            secret_keys: Arc::new(Mutex::new(HashMap::new())),
+            keys: Arc::new(Mutex::new(HashMap::new())),
+            paths: Arc::new(Mutex::new(HashMap::new())),
             entry_signing_key: None,
             _phantom: PhantomData,
         }
@@ -79,27 +84,34 @@ where
 
     /// Get public key by path - enhanced to support custom path lookups too
     fn get_public_key_by_path(&self, path: &Key) -> Result<Option<Multikey>, E> {
-        // For custom paths, check if we have the secret key and convert to public
-        let secret_keys = self.secret_keys.lock().unwrap();
-        if let Some(secret_key) = secret_keys.get(path) {
-            let public_key = secret_key.conv_view()?.to_public_key()?;
-            return Ok(Some(public_key));
+        let paths = self.paths.lock().unwrap();
+        if let Some(fingerprint) = paths.get(path) {
+            let keys = self.keys.lock().unwrap();
+            if let Some(secret_key) = keys.get(fingerprint) {
+                let public_key = secret_key.conv_view()?.to_public_key()?;
+                return Ok(Some(public_key));
+            }
         }
-
         Ok(None)
     }
 
     /// Get secret key by path
     fn get_secret_key(&self, path: &Key) -> Result<Option<Multikey>, E> {
-        let secret_keys = self.secret_keys.lock().unwrap();
-        Ok(secret_keys.get(path).cloned())
+        let paths = self.paths.lock().unwrap();
+        if let Some(fingerprint) = paths.get(path) {
+            let keys = self.keys.lock().unwrap();
+            return Ok(keys.get(fingerprint).cloned());
+        }
+        Ok(None)
     }
 
     /// Store secret key by path
     pub fn store_secret_key(&self, path: Key, secret_key: Multikey) -> Result<(), E> {
-        let mut secret_keys = self.secret_keys.lock().unwrap();
-        secret_keys.insert(path.clone(), secret_key);
-
+        let fingerprint = secret_key.fingerprint_view()?.fingerprint(Codec::Sha2256)?;
+        let mut keys = self.keys.lock().unwrap();
+        keys.insert(fingerprint.clone().into(), secret_key);
+        let mut paths = self.paths.lock().unwrap();
+        paths.insert(path, fingerprint.into());
         Ok(())
     }
 
@@ -115,8 +127,11 @@ where
 
     /// Remove secret key by path
     pub fn remove_secret_key(&self, path: &Key) -> Result<(), E> {
-        let mut secret_keys = self.secret_keys.lock().unwrap();
-        secret_keys.remove(path);
+        let mut paths = self.paths.lock().unwrap();
+        if let Some(fingerprint) = paths.remove(path) {
+            let mut keys = self.keys.lock().unwrap();
+            keys.remove(&fingerprint);
+        }
         Ok(())
     }
 
@@ -130,6 +145,13 @@ where
     pub fn generate_from_seed(codec: &Codec, seed: &[u8]) -> Result<Multikey, E> {
         let mk = mk::Builder::new_from_seed(*codec, seed)?.try_build()?;
         Ok(mk)
+    }
+
+    /// Update the path mapping for a key
+    pub fn update_path_mapping(&self, path: Key, fingerprint: Vec<u8>) -> Result<(), E> {
+        let mut paths = self.paths.lock().unwrap();
+        paths.insert(path, fingerprint);
+        Ok(())
     }
 }
 
@@ -177,10 +199,11 @@ where
 
         // Generate a new key since we don't have it yet
         let secret_key = Self::generate_key(codec)?;
+        let fingerprint = secret_key.fingerprint_view()?.fingerprint(Codec::Sha2256)?;
         tracing::debug!(
             "Generated new key for path {}: {:?}",
             key_path,
-            secret_key.fingerprint_view()?.fingerprint(Codec::Sha2256)?
+            fingerprint
         );
         let public_key = secret_key.conv_view()?.to_public_key()?;
 

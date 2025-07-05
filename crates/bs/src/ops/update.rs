@@ -250,11 +250,13 @@ mod tests {
     use crate::{open, open_plog};
 
     use bs_traits::sync::SyncGetKey;
+    use bs_traits::sync::SyncSigner;
     use bs_wallets::memory::InMemoryKeyManager;
     use multicodec::Codec;
-    use provenance_log::entry::Field;
+    use multikey::Views;
     use provenance_log::key::key_paths::ValidatedKeyParams;
     use provenance_log::Script;
+    use provenance_log::{entry::Field, value::try_extract};
     use provenance_log::{Key, Pairs};
     use tracing_subscriber::fmt;
 
@@ -267,7 +269,7 @@ mod tests {
     }
 
     #[test]
-    fn test_create_using_defaults() {
+    fn test_create_using_defaults_and_rotate_keys() {
         // init_logger();
 
         let pubkey_params = PubkeyParams::builder().codec(Codec::Ed25519Priv).build();
@@ -321,7 +323,7 @@ mod tests {
             open_plog(&open_config, &key_manager, &key_manager).expect("Failed to open plog");
 
         // We need to generate PubkeyParams key in our wallet:
-        key_manager
+        let old_pk = key_manager
             .get_key(
                 &PubkeyParams::KEY_PATH.into(),
                 &pubkey_params.codec(),
@@ -366,16 +368,65 @@ mod tests {
         // plog head prev should match prev
         assert_eq!(prev, plog.entries.get(&plog.head).unwrap().prev());
 
-        // There should be no DEFAULT_ENTRYKEY kvp
-        let verify_iter = &mut plog.verify();
+        {
+            // There should be no DEFAULT_ENTRYKEY kvp
+            let verify_iter = &mut plog.verify();
 
+            let mut last = None;
+
+            // the log should also verify
+            for ret in verify_iter {
+                if let Some(e) = ret.clone().err() {
+                    tracing::error!("Error: {:#?}", e);
+                    // fail test
+                    panic!("Error in log verification");
+                } else {
+                    last = Some(ret.ok().unwrap());
+                }
+            }
+
+            let (_count, _entry, kvp) = last.ok_or("No last entry").unwrap();
+            let op = kvp.get(&VladParams::<FirstEntryKeyParams>::FIRST_ENTRY_KEY_PATH);
+
+            assert!(op.is_none());
+        }
+
+        // 3. Rotate the key
+        // Generate a new key without a path
+        let new_pk = InMemoryKeyManager::<crate::Error>::generate_key(&Codec::Ed25519Priv)
+            .expect("Failed to generate new key");
+        let new_pk_fp = new_pk
+            .fingerprint_view()
+            .unwrap()
+            .fingerprint(Codec::Sha2256)
+            .unwrap();
+
+        // Create the key rotation entry
+        let key_rotation_config = Config::builder()
+            .unlock(unlock_script.clone())
+            .entry_signing_key(PubkeyParams::KEY_PATH.into()) // Sign with the old key
+            .additional_ops(vec![
+                // Update /pubkey with the new key
+                OpParams::UseKey {
+                    key: PubkeyParams::KEY_PATH.into(),
+                    mk: new_pk.conv_view().unwrap().to_public_key().unwrap(),
+                },
+            ])
+            .build();
+
+        update_plog(&mut plog, &key_rotation_config, &key_manager, &key_manager)
+            .expect("Failed to rotate key");
+
+        // Update the key manager's path mapping
+        key_manager
+            .update_path_mapping(PubkeyParams::KEY_PATH.into(), new_pk_fp.into())
+            .expect("Failed to update path mapping");
+
+        // 4. Verify the key was rotated
         let mut last = None;
-
-        // the log should also verify
-        for ret in verify_iter {
+        for ret in plog.verify() {
             if let Some(e) = ret.clone().err() {
                 tracing::error!("Error: {:#?}", e);
-                // fail test
                 panic!("Error in log verification");
             } else {
                 last = Some(ret.ok().unwrap());
@@ -383,8 +434,16 @@ mod tests {
         }
 
         let (_count, _entry, kvp) = last.ok_or("No last entry").unwrap();
-        let op = kvp.get(&VladParams::<FirstEntryKeyParams>::FIRST_ENTRY_KEY_PATH);
+        let new_pk_op = kvp.get(&PubkeyParams::KEY_PATH).expect("No pubkey found");
 
-        assert!(op.is_none());
+        let new_pk_from_log: Multikey = try_extract(&new_pk_op).unwrap();
+
+        assert_ne!(old_pk, new_pk_from_log, "Key was not rotated");
+
+        assert_eq!(
+            new_pk.conv_view().unwrap().to_public_key().unwrap(),
+            new_pk_from_log,
+            "New key in log does not match generated key"
+        );
     }
 }
