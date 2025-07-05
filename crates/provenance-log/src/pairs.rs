@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, fmt};
 
 /// Kvp is the virtual key-value pair storage system that builds up the state
 /// encoded in provenance logs as time series of verifiable state changes.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Kvp<'a> {
     /// the key-value pair store itself
     kvp: BTreeMap<Key, Value>,

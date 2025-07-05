@@ -6,14 +6,14 @@ use config::Config;
 
 use libp2p::{identity::Keypair, relay, swarm::NetworkBehaviour};
 // web-time crate uses std::time in native targets
-use directories::ProjectDirs;
 use std::path::PathBuf;
 use web_time::Duration;
 
 /// Get the default project directory for storing configuration files
 #[cfg(not(target_arch = "wasm32"))]
 fn get_project_dir() -> Option<PathBuf> {
-    ProjectDirs::from("org", "bs", "bs-p2p").map(|proj_dirs| proj_dirs.config_dir().to_path_buf())
+    directories::ProjectDirs::from("org", "bs", "bs-p2p")
+        .map(|proj_dirs| proj_dirs.config_dir().to_path_buf())
 }
 
 #[cfg(not(target_os = "android"))]

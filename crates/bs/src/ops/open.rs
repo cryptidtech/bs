@@ -10,7 +10,7 @@ use crate::{
     update::{op, OpParams},
 };
 pub use config::Config;
-use multicid::{cid, vlad, Cid, Vlad};
+use multicid::{cid, Cid, Vlad};
 use multicodec::Codec;
 use multihash::mh;
 use multikey::{Multikey, Views};

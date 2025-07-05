@@ -5,7 +5,7 @@ use provenance_log::{
     const_assert_valid_key,
     entry::Field,
     key::key_paths::{ValidatedKeyParams, ValidatedKeyPath},
-    Key, Script,
+    Script,
 };
 use std::num::NonZeroUsize;
 

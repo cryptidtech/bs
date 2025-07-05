@@ -1,6 +1,6 @@
 //! Extension trait for Resolver to provide VLAD-specific resolution functions
 use crate::ops::params::vlad::{FirstEntryKeyParams, VladParams};
-use bs_traits::{CondSend, CondSync};
+use bs_traits::CondSend;
 use multicid::Cid;
 use provenance_log::{
     resolver::{ResolveError, ResolvedPlog, Resolver, SuperResolver},
