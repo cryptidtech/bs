@@ -447,8 +447,9 @@ mod tests {
             .unwrap();
 
         let vlad = Vlad::from_parts(nonce, cid);
+        let vlad_bytes: Vec<u8> = vlad.clone().into();
 
-        eprintln!("vlad: {}", vlad);
+        eprintln!("vlad: {}, ({} bytes long)", vlad, vlad_bytes.len());
 
         assert!(!vlad.to_string().is_empty());
     }
