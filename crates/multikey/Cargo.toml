@@ -19,7 +19,7 @@ ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 elliptic-curve.workspace = true
 hex.workspace = true
 k256 = "0.13"
-ml-kem = { version = "0.2.1", features = ["deterministic"]}
+ml-kem = { version = "0.2.1", features = ["deterministic"] }
 multibase.workspace = true
 multicodec.workspace = true
 multihash.workspace = true
@@ -38,7 +38,7 @@ thiserror.workspace = true
 tracing.workspace = true
 typenum = "1.17"
 unsigned-varint.workspace = true
-vsss-rs = "5.1.0"
+vsss-rs = "4.3.8"
 zeroize = "1.7"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
