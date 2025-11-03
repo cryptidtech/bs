@@ -250,7 +250,6 @@ mod tests {
     use crate::{open, open_plog};
 
     use bs_traits::sync::SyncGetKey;
-    use bs_traits::sync::SyncSigner;
     use bs_wallets::memory::InMemoryKeyManager;
     use multicodec::Codec;
     use multikey::Views;
