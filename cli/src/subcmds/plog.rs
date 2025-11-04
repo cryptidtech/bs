@@ -2,6 +2,9 @@
 
 /// Plog command
 pub mod command;
+use bs::params::vlad::VladParams;
+use bs_traits::sync::{SyncGetKey, SyncPrepareEphemeralSigning, SyncSigner};
+use bs_traits::{EphemeralKey, GetKey, Signer};
 pub use command::Command;
 
 use crate::{error::PlogError, Config, Error};
@@ -11,6 +14,7 @@ use bs::{
     ops::{open, update},
     update::OpParams,
 };
+use comrade::Pairs;
 use multibase::Base;
 use multicid::{Cid, EncodedCid, EncodedVlad, Vlad};
 use multicodec::Codec;
@@ -20,9 +24,114 @@ use multisig::Multisig;
 use multiutil::{BaseEncoded, CodecInfo, DetectedEncoder, EncodingInfo};
 use provenance_log::{Key, Log, Script};
 use rng::StdRng;
-use std::{collections::VecDeque, convert::TryFrom, path::PathBuf};
+use std::num::{NonZero, NonZeroUsize};
+use std::{
+    collections::{HashMap, VecDeque},
+    convert::TryFrom,
+};
 use tracing::debug;
-use wacc::Pairs;
+
+/// Cli KeyManager
+#[derive(Clone, Debug, Default)]
+struct KeyManager(HashMap<Key, Multikey>);
+
+impl GetKey for KeyManager {
+    type Key = Multikey;
+    type KeyPath = Key;
+    type Codec = Codec;
+    type Error = Error;
+}
+
+impl SyncGetKey for KeyManager {
+    fn get_key(
+        &self,
+        key_path: &Self::KeyPath,
+        codec: &Self::Codec,
+        threshold: NonZeroUsize,
+        limit: NonZeroUsize,
+    ) -> Result<Self::Key, Self::Error> {
+        // Your implementation using crate::error::Error
+        debug!("Generating {} key ({} of {})...", codec, threshold, limit);
+        let mut rng = StdRng::from_os_rng();
+        let mk = mk::Builder::new_from_random_bytes(*codec, &mut rng)?.try_build()?;
+        let fingerprint = mk.fingerprint_view()?.fingerprint(Codec::Blake3)?;
+
+        let ef = EncodedMultihash::new(Base::Base32Z, fingerprint);
+        debug!("Writing {} key fingerprint: {}", key_path, ef);
+        let w = writer(&Some(format!("{}.multikey", ef).into()))?;
+        serde_cbor::to_writer(w, &mk)?; // This now works with ?
+        Ok(mk)
+    }
+}
+
+// EphemeralKey
+impl EphemeralKey for KeyManager {
+    type PubKey = Multikey;
+}
+
+// Implement the new SyncPrepareEphemeralSigning trait
+impl SyncPrepareEphemeralSigning for KeyManager {
+    type Codec = Codec;
+
+    fn prepare_ephemeral_signing(
+        &self,
+        codec: &Self::Codec,
+        threshold: NonZeroUsize,
+        limit: NonZeroUsize,
+    ) -> Result<
+        (
+            <Self as EphemeralKey>::PubKey,
+            Box<dyn FnOnce(&[u8]) -> Result<<Self as Signer>::Signature, <Self as Signer>::Error>>,
+        ),
+        <Self as Signer>::Error,
+    > {
+        debug!(
+            "Preparing ephemeral signing with {} key ({} of {})...",
+            codec, threshold, limit
+        );
+
+        // Generate a new key for signing
+        let mut rng = StdRng::from_os_rng();
+        let secret_key = mk::Builder::new_from_random_bytes(*codec, &mut rng)?
+            .with_threshold(threshold)
+            .with_limit(limit)
+            .try_build()?;
+
+        // Get the public key
+        let public_key = secret_key.conv_view()?.to_public_key()?;
+
+        // Create the signing closure that owns the secret key
+        let sign_once = Box::new(
+            move |data: &[u8]| -> Result<<Self as Signer>::Signature, <Self as Signer>::Error> {
+                debug!("Signing data with ephemeral key");
+                let signature = secret_key.sign_view()?.sign(data, false, None)?;
+                Ok(signature)
+            },
+        );
+
+        Ok((public_key, sign_once))
+    }
+}
+
+impl Signer for KeyManager {
+    type KeyPath = Key;
+    type Signature = Multisig;
+    type Error = Error;
+}
+
+impl SyncSigner for KeyManager {
+    fn try_sign(
+        &self,
+        key_path: &Self::KeyPath,
+        data: &[u8],
+    ) -> Result<Self::Signature, Self::Error> {
+        let key = self
+            .0
+            .get(key_path)
+            .ok_or(PlogError::NoKeyPresent(key_path.clone()))?;
+        Ok(key.sign_view()?.sign(data, false, None)?)
+    }
+}
 
 /// processes plog subcommands
 pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
@@ -39,39 +148,55 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
             output,
         } => {
             let (vlad_key, vlad_cid) = parse_vlad_params(&vlad_params)?;
-            let cfg = open::Config::default()
-                .with_pubkey_params(parse_key_params(&pub_key_params, Some("/pubkey"))?)
-                .with_additional_ops(&build_key_params(&key_ops)?)
-                .with_additional_ops(&build_string_params(&string_ops)?)
-                .with_additional_ops(&build_file_params(&file_ops)?)
-                .with_vlad_params(vlad_key, vlad_cid)
-                .with_entrykey_params(parse_key_params(&entry_key_codec, Some("/entrykey"))?)
-                .with_entry_lock_script(&lock_script_path)
-                .with_entry_unlock_script(&unlock_script_path);
+
+            let OpParams::KeyGen {
+                codec: vlad_key_codec,
+                ..
+            } = vlad_key
+            else {
+                return Err(PlogError::InvalidFileParams.into());
+            };
+
+            let OpParams::CidGen {
+                hash: vlad_cid_hash,
+                ..
+            } = vlad_cid
+            else {
+                return Err(PlogError::InvalidFileParams.into());
+            };
+
+            let lock_script = Script::Code(
+                Key::default(),
+                std::fs::read_to_string(&lock_script_path).map_err(|_| PlogError::NoKeyPath)?,
+            );
+            let unlock_script = Script::Code(
+                Key::default(),
+                std::fs::read_to_string(&unlock_script_path).map_err(|_| PlogError::NoKeyPath)?,
+            );
+
+            let mut additional_ops = Vec::new();
+            additional_ops.extend(build_key_params(&key_ops)?);
+            additional_ops.extend(build_string_params(&string_ops)?);
+            additional_ops.extend(build_file_params(&file_ops)?);
+
+            let cfg = open::Config::builder()
+                .pubkey(parse_key_params(&pub_key_params, Some("/pubkey"))?)
+                .vlad(
+                    VladParams::builder()
+                        .key(vlad_key_codec)
+                        .hash(vlad_cid_hash)
+                        .build(),
+                )
+                .entrykey(parse_key_params(&entry_key_codec, Some("/entrykey"))?)
+                .unlock(unlock_script)
+                .lock(lock_script.clone())
+                .additional_ops(additional_ops) // Add all operations at once
+                .build();
+
+            let key_manager = KeyManager::default();
 
             // open the p.log
-            let plog = open::open_plog(
-                cfg,
-                |key: &Key,
-                 codec: Codec,
-                 threshold: usize,
-                 limit: usize|
-                 -> Result<Multikey, bs::Error> {
-                    debug!("Generating {} key ({} of {})...", codec, threshold, limit);
-                    let mut rng = StdRng::from_os_rng();
-                    let mk = mk::Builder::new_from_random_bytes(codec, &mut rng)?.try_build()?;
-                    let fingerprint = mk.fingerprint_view()?.fingerprint(Codec::Blake3)?;
-                    let ef = EncodedMultihash::new(Base::Base32Z, fingerprint);
-                    debug!("Writing {} key fingerprint: {}", key, ef);
-                    let w = writer(&Some(format!("{}.multikey", ef).into()))?;
-                    serde_cbor::to_writer(w, &mk)?;
-                    Ok(mk)
-                },
-                |mk: &Multikey, data: &[u8]| -> Result<Multisig, bs::Error> {
-                    debug!("Signing the first entry");
-                    Ok(mk.sign_view()?.sign(data, false, None)?)
-                },
-            )?;
+            let plog = open::open_plog(&cfg, &key_manager, &key_manager)?;
 
             println!("Created p.log {}", writer_name(&output)?.to_string_lossy());
             print_plog(&plog)?;
@@ -83,7 +208,6 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
             let mut v = Vec::default();
             reader(&input)?.read_to_end(&mut v)?;
             let plog: Log = serde_cbor::from_slice(&v)?;
-            //let plog: Log = serde_cbor::from_reader(reader(&input)?)?;
             println!("p.log");
             print_plog(&plog)?;
         }
@@ -93,7 +217,7 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
             key_ops,
             string_ops,
             file_ops,
-            lock_script_path: _,
+            lock_script_path,
             unlock_script_path,
             entry_signing_key,
             output,
@@ -107,45 +231,42 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
             };
             debug!("read p.log");
 
-            let entry_signing_key = {
-                let mut v = Vec::default();
-                reader(&Some(entry_signing_key))?.read_to_end(&mut v)?;
-                serde_cbor::from_slice::<Multikey>(&v)?
-            };
-            debug!("read p.log signing key");
+            let lock_script = Script::Code(
+                Key::default(),
+                std::fs::read_to_string(&lock_script_path).map_err(|_| PlogError::NoKeyPath)?,
+            );
 
-            let cfg = update::Config::default()
-                .with_ops(&build_delete_params(&delete_ops)?)
-                .with_ops(&build_key_params(&key_ops)?)
-                .with_ops(&build_string_params(&string_ops)?)
-                .with_ops(&build_file_params(&file_ops)?)
-                .with_entry_signing_key(&entry_signing_key)
-                .with_entry_unlock_script(&unlock_script_path);
+            let unlock_script = {
+                let mut v = Vec::default();
+                reader(&Some(unlock_script_path))?.read_to_end(&mut v)?;
+                Script::Code(Key::default(), String::from_utf8(v)?)
+            };
+
+            // Collect all operations first
+            let mut entry_ops = Vec::new();
+            entry_ops.extend(build_delete_params(&delete_ops)?);
+            entry_ops.extend(build_key_params(&key_ops)?);
+            entry_ops.extend(build_string_params(&string_ops)?);
+            entry_ops.extend(build_file_params(&file_ops)?);
+
+            // read the entry signing key from the path
+            // on Ok, try into Key, and fail Plog::Error::NoKeyPath
+            let entry_signing_key = match std::fs::read_to_string(&entry_signing_key) {
+                Ok(s) => Key::try_from(s.trim())?,
+                Err(_) => return Err(PlogError::NoKeyPath.into()),
+            };
+
+            let cfg = update::Config::builder()
+                .add_entry_lock_scripts(vec![lock_script.clone()])
+                .unlock(unlock_script)
+                .entry_signing_key(entry_signing_key)
+                .additional_ops(entry_ops)
+                .build();
+
+            let key_manager = KeyManager::default();
 
             // update the p.log
-            update::update_plog(
-                &mut plog,
-                cfg,
-                |key: &Key,
-                 codec: Codec,
-                 threshold: usize,
-                 limit: usize|
-                 -> Result<Multikey, bs::Error> {
-                    debug!("Generating {} key ({} of {})...", codec, threshold, limit);
-                    let mut rng = StdRng::from_os_rng();
-                    let mk = mk::Builder::new_from_random_bytes(codec, &mut rng)?.try_build()?;
-                    let fingerprint = mk.fingerprint_view()?.fingerprint(Codec::Blake3)?;
-                    let ef = EncodedMultihash::new(Base::Base32Z, fingerprint);
-                    debug!("Writing {} key fingerprint: {}", key, ef);
-                    let w = writer(&Some(format!("{}.multikey", ef).into()))?;
-                    serde_cbor::to_writer(w, &mk)?;
-                    Ok(mk)
-                },
-                |mk: &Multikey, data: &[u8]| -> Result<Multisig, bs::Error> {
-                    debug!("Signing the first entry");
-                    Ok(mk.sign_view()?.sign(data, false, None)?)
-                },
-            )?;
+            update::update_plog::<Error>(&mut plog, &cfg, &key_manager, &key_manager)?;
 
             println!("Writing p.log {}", writer_name(&output)?.to_string_lossy());
             print_plog(&plog)?;
@@ -259,16 +380,7 @@ fn print_plog(plog: &Log) -> Result<(), Error> {
             }
         }
     }
-    /*
-    let kvp_lines = kvp.to_string().lines().map(|s| s.to_string()).collect::<Vec<_>>();
-    for i in 0..kvp_lines.len() {
-        if i < kvp_lines.len() - 1 {
-            println!("    ├─ {}", kvp_lines[i]);
-        } else {
-            println!("    ╰─ {}", kvp_lines[i]);
-        }
-    }
-    */
+
     Ok(())
 }
 
@@ -279,36 +391,18 @@ fn get_codec_from_plog_value(value: &provenance_log::Value) -> Option<Codec> {
         _ => None,
     }
 }
-/*
-fn get_from_plog_value<'a, T>(value: &'a provenance_log::Value) -> Option<T>
-where
-    T: TryFrom<&'a [u8]> + EncodingInfo,
-    BaseEncoded<T, DetectedEncoder>: TryFrom<&'a str>,
-{
-    match value {
-        provenance_log::Value::Data(v) => T::try_from(v.as_slice()).ok(),
-        provenance_log::Value::Str(s) => {
-            match BaseEncoded::<T, DetectedEncoder>::try_from(s.as_str()) {
-                Ok(be) => Some(be.to_inner()),
-                Err(_) => None
-            }
-        }
-        _ => None,
-    }
-}
-*/
 
-fn get_from_wacc_value<'a, T>(value: &'a wacc::Value) -> Option<T>
+fn get_from_wacc_value<'a, T>(value: &'a comrade::Value) -> Option<T>
 where
     T: TryFrom<&'a [u8]> + EncodingInfo,
     BaseEncoded<T, DetectedEncoder>: TryFrom<&'a str>,
 {
     match value {
-        wacc::Value::Bin {
+        comrade::Value::Bin {
             hint: _,
             data: ref v,
         } => T::try_from(v.as_slice()).ok(),
-        wacc::Value::Str {
+        comrade::Value::Str {
             hint: _,
             data: ref s,
         } => match BaseEncoded::<T, DetectedEncoder>::try_from(s.as_str()) {
@@ -386,8 +480,8 @@ fn parse_key_params(s: &str, key_path: Option<&str>) -> Result<OpParams, Error> 
     Ok(OpParams::KeyGen {
         key,
         codec,
-        threshold,
-        limit,
+        threshold: NonZero::new(threshold).unwrap(),
+        limit: NonZero::new(limit).unwrap(),
         revoke,
     })
 }
@@ -411,7 +505,6 @@ fn parse_file_params(s: &str) -> Result<OpParams, Error> {
     if !key.is_branch() {
         return Err(PlogError::InvalidKeyPath.into());
     }
-    let path = PathBuf::from(parts.pop_front().ok_or(PlogError::NoInputFile)?);
     if !parts.is_empty() && parts.len() != 4 {
         return Err(PlogError::InvalidFileParams.into());
     }
@@ -437,14 +530,13 @@ fn parse_file_params(s: &str) -> Result<OpParams, Error> {
         target,
         hash,
         inline,
-        path,
+        data: vec![], // TODO: Placeholder for actual data
     })
 }
 
 /// <first lock script path>[:<signing key codec>:<cid hashing codec>[:<hash length in bits>]]
 fn parse_vlad_params(s: &str) -> Result<(OpParams, OpParams), Error> {
     let mut parts = s.split(":").collect::<VecDeque<_>>();
-    let path = PathBuf::from(parts.pop_front().ok_or(PlogError::NoInputFile)?);
     if !(parts.is_empty() || parts.len() == 2 || parts.len() == 3) {
         return Err(PlogError::InvalidFileParams.into());
     }
@@ -463,8 +555,8 @@ fn parse_vlad_params(s: &str) -> Result<(OpParams, OpParams), Error> {
         OpParams::KeyGen {
             key: Key::try_from("/vlad/key")?,
             codec,
-            threshold: 0,
-            limit: 0,
+            threshold: NonZero::new(0).unwrap(),
+            limit: NonZero::new(0).unwrap(),
             revoke: false,
         },
         OpParams::CidGen {
@@ -473,7 +565,7 @@ fn parse_vlad_params(s: &str) -> Result<(OpParams, OpParams), Error> {
             target: Codec::Identity,
             hash,
             inline: true,
-            path,
+            data: vec![], // TODO: Placeholder for actual data
         },
     ))
 }

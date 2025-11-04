@@ -9,18 +9,29 @@ license = "Functional Source License 1.1"
 
 [dependencies]
 bs-traits.workspace = true
+bs-wallets.workspace = true
 best-practices.workspace = true
+comrade.workspace = true
 multicid.workspace = true
 multicodec.workspace = true
 multihash.workspace = true
 multikey.workspace = true
 multisig.workspace = true
+multiutil.workspace = true
 provenance-log.workspace = true
 rand.workspace = true
-serde_cbor.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
-wacc.workspace = true
+serde = { workspace = true, optional = true }
+bon = "3.6.3"
+
+[dev-dependencies]
+tracing-subscriber.workspace = true
+bs-wallets.workspace = true
+multibase.workspace = true
 
 [lints]
 workspace = true
+
+[features]
+serde = ["dep:serde"]

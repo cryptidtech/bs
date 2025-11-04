@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: FSL-1.1
 
+use std::num::NonZeroUsize;
+
 use multicid::Cid;
 use multicodec::Codec;
 use multikey::Multikey;
 use provenance_log::Key;
-use std::path::PathBuf;
 
 /// The Op params for additional ops
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum OpParams {
     /// Noop params
     Noop {
@@ -33,8 +35,8 @@ pub enum OpParams {
         hash: Codec,
         /// whether store the file data inside the p.log
         inline: bool,
-        /// the path to the file
-        path: PathBuf,
+        /// The Data save in the content address
+        data: Vec<u8>,
     },
 
     /// For generating a new key
@@ -44,9 +46,9 @@ pub enum OpParams {
         /// the key codec
         codec: Codec,
         /// the threshold for threshold key splitting
-        threshold: usize,
+        threshold: NonZeroUsize,
         /// the limit for threshold key splitting
-        limit: usize,
+        limit: NonZeroUsize,
         /// the previous key should be explicitly deleted
         revoke: bool,
     },

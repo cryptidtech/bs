@@ -12,7 +12,7 @@ use multibase::Base;
 use multicodec::Codec;
 use multitrait::{Null, TryDecodeFrom};
 use multiutil::{BaseEncoded, CodecInfo, EncodingInfo, Varbytes, VarbytesIter, Varuint};
-use std::{collections::BTreeMap, fmt};
+use std::{collections::BTreeMap, fmt, num::NonZeroUsize};
 
 /// the list of signature codecs currently supported
 pub const SIG_CODECS: [Codec; 4] = [
@@ -356,8 +356,8 @@ impl Builder {
 
     /// create a new builder from a Bls SignatureShare
     pub fn new_from_bls_signature_share<C>(
-        threshold: usize,
-        limit: usize,
+        threshold: NonZeroUsize,
+        limit: NonZeroUsize,
         sigshare: &SignatureShare<C>,
     ) -> Result<Self, Error>
     where
@@ -378,8 +378,8 @@ impl Builder {
         };
         let mut attributes = BTreeMap::new();
         attributes.insert(AttrId::SigData, value);
-        attributes.insert(AttrId::Threshold, Varuint(threshold).into());
-        attributes.insert(AttrId::Limit, Varuint(limit).into());
+        attributes.insert(AttrId::Threshold, Varuint::<usize>(threshold.into()).into());
+        attributes.insert(AttrId::Limit, Varuint::<usize>(limit.into()).into());
         attributes.insert(AttrId::ShareIdentifier, Varuint(identifier).into());
         attributes.insert(AttrId::Scheme, scheme_type_id.into());
         Ok(Self {
@@ -487,6 +487,8 @@ impl Builder {
 
 #[cfg(test)]
 mod tests {
+    use std::num::NonZero;
+
     use super::*;
 
     #[test]
@@ -577,10 +579,14 @@ mod tests {
                 )
                 .unwrap();
             sigs.push(
-                Builder::new_from_bls_signature_share(3, 4, &sig)
-                    .unwrap()
-                    .try_build()
-                    .unwrap(),
+                Builder::new_from_bls_signature_share(
+                    NonZero::new(3).unwrap(),
+                    NonZero::new(4).unwrap(),
+                    &sig,
+                )
+                .unwrap()
+                .try_build()
+                .unwrap(),
             );
         });
 
@@ -683,10 +689,14 @@ mod tests {
                 )
                 .unwrap();
             sigs.push({
-                let ms = Builder::new_from_bls_signature_share(3, 4, &sig)
-                    .unwrap()
-                    .try_build()
-                    .unwrap();
+                let ms = Builder::new_from_bls_signature_share(
+                    NonZero::new(3).unwrap(),
+                    NonZero::new(4).unwrap(),
+                    &sig,
+                )
+                .unwrap()
+                .try_build()
+                .unwrap();
                 let sc = ms.conv_view().unwrap();
                 sc.to_ssh_signature().unwrap()
             });

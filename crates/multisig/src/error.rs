@@ -49,6 +49,10 @@ pub enum Error {
     /// Unsupported signature algorithm
     #[error("Unsupported signature codec: {0}")]
     UnsupportedAlgorithm(String),
+
+    /// Signature Failed
+    #[error("Signature failed: {0}")]
+    SignFailed(String),
 }
 
 /// Attributes errors created by this library

@@ -54,7 +54,7 @@ pub const SIGIL: Codec = Codec::Multihash;
 pub type EncodedMultihash = BaseEncoded<Multihash, DetectedEncoder>;
 
 /// inner implementation of the multihash
-#[derive(Clone, Default, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Default, Eq, Ord, PartialEq, PartialOrd, Hash)]
 pub struct Multihash {
     /// hash codec
     pub(crate) codec: Codec,

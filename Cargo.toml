@@ -6,6 +6,10 @@ members = [
   "crates/bs",
   "crates/bs-p2p",
   "crates/bs-traits",
+  "crates/comrade",
+  "crates/comrade-component",
+  "crates/comrade-reference",
+  "crates/bs-p2p",
   "crates/content-addressable",
   "crates/multibase",
   "crates/multicid",
@@ -17,13 +21,19 @@ members = [
   "crates/multiutil",
   "crates/provenance-log",
   "crates/rng",
-  "crates/wacc",
+  "crates/bs-peer",
+  "crates/interop-tests",
+  "crates/bs-wallets",
+  "crates/bs-server",
 ]
 
 [workspace.package]
 version = "1.0.0"
 edition = "2021"
-authors = ["Dave Grantham <dwg@linuxprogrammer.org>"]
+authors = [
+  "Dave Grantham <dwg@linuxprogrammer.org>",
+  "Doug Anderson <doug@peerpiper.io>",
+]
 description = "The BetterSign Provenance-Based Identity Solution"
 readme = "README.md"
 license = "FSL-1.1 OR Apache-2.0"
@@ -32,13 +42,17 @@ license = "FSL-1.1 OR Apache-2.0"
 unexpected_cfgs = { level = "warn", check-cfg = [
   'cfg(feature, values("cargo-clippy"))',
   'cfg(fuzzing)',
-]}
+] }
 
 [workspace.dependencies]
 # Crate ependencies
 bs = { path = "crates/bs" }
 bs-p2p = { path = "crates/bs-p2p" }
+bs-peer = { path = "crates/bs-peer" }
 bs-traits = { path = "crates/bs-traits" }
+bs-wallets = { path = "crates/bs-wallets" }
+comrade = { path = "crates/comrade" }
+comrade-reference = { path = "crates/comrade-reference" }
 multibase = { path = "crates/multibase" }
 multicid = { path = "crates/multicid" }
 multicodec = { path = "crates/multicodec" }
@@ -49,29 +63,41 @@ multitrait = { path = "crates/multitrait" }
 multiutil = { path = "crates/multiutil" }
 provenance-log = { path = "crates/provenance-log" }
 rng = { path = "crates/rng" }
-wacc = { path = "crates/wacc" }
 
 # Core dependencies
 best-practices = { version = "0.1.0", git = "https://github.com/cryptidtech/best-practices.git" }
+blockstore = "0.7.1"
+cid = "0.11.0"
 criterion = "0.5.1"
 elliptic-curve = "0.13.8"
 hex = "0.4.3"
+libp2p = { version = "0.54.1" }
+multihash-codetable = { version = "0.1.4" }
 rand = { version = "0.9.0", features = ["os_rng"] }
 rand_core = "0.9.3"
 rand_6 = { version = "0.6.4", package = "rand" }
 rand_core_6 = { version = "0.6.4", package = "rand_core" }
-serde = { version = "1.0.219", default-features = false, features = ["alloc", "derive"]}
-serde_cbor = { version = "0.11.2", features = ["tags"]}
-serde_json = { version = "1.0.104"}
-serde_test = { version = "1.0.104"}
+serde = { version = "1.0.219", default-features = false, features = [
+  "alloc",
+  "derive",
+] }
+serde_cbor = { version = "0.11.2", features = ["tags"] }
+serde_json = { version = "1.0.104" }
+serde_test = { version = "1.0.104" }
 sha3 = "0.10.8"
 test-log = { version = "0.2.17", features = ["trace", "color"] }
 thiserror = "2.0.12"
-tokio = { version = "1.44.2", features = ["fs", "io-util", "macros", "rt", "test-util"] }
+tokio = { version = "1.44.2" }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 unsigned-varint = { version = "0.8.0", features = ["std"] }
+web-sys = { version = "0.3.77" }
+wasm-bindgen-futures = "0.4.50"
 
 [profile.bench]
 opt-level = 3
 debug = false
+
+# until lands: https://github.com/libp2p/rust-libp2p/issues/5877
+[patch.crates-io]
+libp2p-webrtc-utils = { git = "https://github.com/DougAnderson444/rust-libp2p.git", branch = "core-v0.42-webrtc-utils-0.3.0" }

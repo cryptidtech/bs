@@ -1,14 +1,12 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! BetterSign peer to peer communication
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+/// Entry point for the crate. Create a libp2p swarm either natively or in wasm32.
+pub mod swarm;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+mod error;
+pub use error::Error;
+
+mod behaviour;
+pub use behaviour::BehaviourBuilder;
+
+pub mod events;

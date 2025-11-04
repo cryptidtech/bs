@@ -5,7 +5,7 @@ mod ser;
 
 #[cfg(test)]
 mod tests {
-    use crate::{cid, vlad};
+    use crate::{cid, vlad, Vlad};
     use multicodec::Codec;
     use multihash::mh;
     use multikey::nonce;
@@ -256,7 +256,7 @@ mod tests {
         let _ = span!(Level::INFO, "test_vlad_serde_encoded_string").entered();
         let bytes = hex::decode("d15c4fb2911ae1337f102bcaf4c0088d36345b88b243968e834c5ffa17907832")
             .unwrap();
-        let nonce = nonce::Builder::new_from_bytes(&bytes).try_build().unwrap();
+        let nonce = nonce::Builder::new_from_bytes(&bytes).build();
 
         // build a cid
         let cid = cid::Builder::new(Codec::Cidv1)
@@ -270,11 +270,7 @@ mod tests {
             .try_build()
             .unwrap();
 
-        let vlad = vlad::Builder::default()
-            .with_nonce(&nonce)
-            .with_cid(&cid)
-            .try_build_encoded()
-            .unwrap();
+        let vlad = Vlad::from_parts(nonce, cid).to_encoded();
 
         assert_tokens(
             &vlad.readable(),
@@ -288,7 +284,7 @@ mod tests {
         let _ = span!(Level::INFO, "test_vlad_serde_readable").entered();
         let bytes = hex::decode("d15c4fb2911ae1337f102bcaf4c0088d36345b88b243968e834c5ffa17907832")
             .unwrap();
-        let nonce = nonce::Builder::new_from_bytes(&bytes).try_build().unwrap();
+        let nonce = nonce::Builder::new_from_bytes(&bytes).build();
 
         // build a cid
         let cid = cid::Builder::new(Codec::Cidv1)
@@ -302,11 +298,7 @@ mod tests {
             .try_build()
             .unwrap();
 
-        let vlad = vlad::Builder::default()
-            .with_nonce(&nonce)
-            .with_cid(&cid)
-            .try_build()
-            .unwrap();
+        let vlad = Vlad::from_parts(nonce, cid);
 
         assert_tokens(
             &vlad.readable(),
@@ -352,7 +344,7 @@ mod tests {
         let _ = span!(Level::INFO, "test_vlad_serde_json").entered();
         let bytes = hex::decode("d15c4fb2911ae1337f102bcaf4c0088d36345b88b243968e834c5ffa17907832")
             .unwrap();
-        let nonce = nonce::Builder::new_from_bytes(&bytes).try_build().unwrap();
+        let nonce = nonce::Builder::new_from_bytes(&bytes).build();
 
         // build a cid
         let cid = cid::Builder::new(Codec::Cidv1)
@@ -366,11 +358,7 @@ mod tests {
             .try_build()
             .unwrap();
 
-        let vlad = vlad::Builder::default()
-            .with_nonce(&nonce)
-            .with_cid(&cid)
-            .try_build()
-            .unwrap();
+        let vlad = Vlad::from_parts(nonce, cid);
 
         let s = serde_json::to_string(&vlad).unwrap();
         assert_eq!(s, "{\"nonce\":{\"nonce\":\"f20d15c4fb2911ae1337f102bcaf4c0088d36345b88b243968e834c5ffa17907832\"},\"cid\":{\"version\":1,\"encoding\":\"dag-cbor\",\"hash\":{\"codec\":\"sha3-512\",\"hash\":\"f405792dad96085b6076b8e4e63b578c90d0336bcaadef4f24704df866149526a1e6d23f89e218ad3f6172a7e26e6e37a3dea728e5f232e41696ad286bcca9201be\"}}}");
@@ -383,7 +371,7 @@ mod tests {
         let _ = span!(Level::INFO, "test_vlad_serde_cbor").entered();
         let bytes = hex::decode("d15c4fb2911ae1337f102bcaf4c0088d36345b88b243968e834c5ffa17907832")
             .unwrap();
-        let nonce = nonce::Builder::new_from_bytes(&bytes).try_build().unwrap();
+        let nonce = nonce::Builder::new_from_bytes(&bytes).build();
 
         // build a cid
         let cid = cid::Builder::new(Codec::Cidv1)
@@ -397,11 +385,7 @@ mod tests {
             .try_build()
             .unwrap();
 
-        let vlad = vlad::Builder::default()
-            .with_nonce(&nonce)
-            .with_cid(&cid)
-            .try_build()
-            .unwrap();
+        let vlad = Vlad::from_parts(nonce, cid);
 
         let v = serde_cbor::to_vec(&vlad).unwrap();
         //println!("serde_cbor vlad: {}", hex::encode(&v));
@@ -415,7 +399,7 @@ mod tests {
         let _ = span!(Level::INFO, "test_vlad_serde_dag_cbor").entered();
         let bytes = hex::decode("d15c4fb2911ae1337f102bcaf4c0088d36345b88b243968e834c5ffa17907832")
             .unwrap();
-        let nonce = nonce::Builder::new_from_bytes(&bytes).try_build().unwrap();
+        let nonce = nonce::Builder::new_from_bytes(&bytes).build();
 
         // build a cid
         let cid = cid::Builder::new(Codec::Cidv1)
@@ -429,12 +413,7 @@ mod tests {
             .try_build()
             .unwrap();
 
-        let vlad = vlad::Builder::default()
-            .with_nonce(&nonce)
-            .with_cid(&cid)
-            .try_build()
-            .unwrap();
-
+        let vlad = Vlad::from_parts(nonce, cid);
         let v = serde_cbor::to_vec(&vlad).unwrap();
         //println!("{}", hex::encode(&v));
         assert_eq!(v, hex::decode("83410782413b582120d15c4fb2911ae1337f102bcaf4c0088d36345b88b243968e834c5ffa17907832d82a584500017114405792dad96085b6076b8e4e63b578c90d0336bcaadef4f24704df866149526a1e6d23f89e218ad3f6172a7e26e6e37a3dea728e5f232e41696ad286bcca9201be").unwrap());
@@ -488,7 +467,7 @@ mod tests {
     #[test]
     fn test_null_vlad_serde_compact() {
         let _ = span!(Level::INFO, "test_null_vlad_serde_compact").entered();
-        let v = vlad::Vlad::null();
+        let v = Vlad::null();
         assert_tokens(
             &v.compact(),
             &[Token::BorrowedBytes(&[135, 36, 187, 36, 0, 1, 0, 0, 0])],
@@ -498,7 +477,7 @@ mod tests {
     #[test]
     fn test_null_vlad_serde_readable() {
         let _ = span!(Level::INFO, "test_null_vlad_serde_readable").entered();
-        let v = vlad::Vlad::null();
+        let v = Vlad::null();
         assert_tokens(
             &v.readable(),
             &[
@@ -542,7 +521,7 @@ mod tests {
     #[test]
     fn test_encoded_null_vlad_serde_readable() {
         let _ = span!(Level::INFO, "test_encoded_null_vlad_serde_readable").entered();
-        let v: vlad::EncodedVlad = vlad::Vlad::null().into();
+        let v: vlad::EncodedVlad = Vlad::null().into();
         assert_tokens(&v.readable(), &[Token::BorrowedStr("bq4slwjaaaeaaaaa")]);
     }
 }

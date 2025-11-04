@@ -15,7 +15,7 @@ use ssh_key::{
     public::{EcdsaPublicKey, KeyData},
     EcdsaCurve, PrivateKey, PublicKey,
 };
-use std::{collections::BTreeMap, fmt};
+use std::{collections::BTreeMap, fmt, num::NonZeroUsize};
 use zeroize::Zeroizing;
 
 /// the list of key codecs supported for key generation
@@ -629,8 +629,8 @@ impl Builder {
                     };
                     let key_share = bls12381::KeyShare::try_from(key_bytes.as_ref())?;
                     let identifier: Vec<u8> = Varuint(key_share.0).into();
-                    let threshold: Vec<u8> = Varuint(key_share.1).into();
-                    let limit: Vec<u8> = Varuint(key_share.2).into();
+                    let threshold: Vec<u8> = Varuint::<usize>(key_share.1.into()).into();
+                    let limit: Vec<u8> = Varuint::<usize>(key_share.2.into()).into();
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::ShareIdentifier, identifier.into());
                     attributes.insert(AttrId::Threshold, threshold.into());
@@ -674,8 +674,8 @@ impl Builder {
                     };
                     let key_share = bls12381::KeyShare::try_from(key_bytes.as_ref())?;
                     let identifier: Vec<u8> = Varuint(key_share.0).into();
-                    let threshold: Vec<u8> = Varuint(key_share.1).into();
-                    let limit: Vec<u8> = Varuint(key_share.2).into();
+                    let threshold: Vec<u8> = Varuint::<usize>(key_share.1.into()).into();
+                    let limit: Vec<u8> = Varuint::<usize>(key_share.2.into()).into();
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::ShareIdentifier, identifier.into());
                     attributes.insert(AttrId::Threshold, threshold.into());
@@ -844,8 +844,8 @@ impl Builder {
                     };
                     let key_share = bls12381::KeyShare::try_from(key_bytes.as_ref())?;
                     let identifier: Vec<u8> = Varuint(key_share.0).into();
-                    let threshold: Vec<u8> = Varuint(key_share.1).into();
-                    let limit: Vec<u8> = Varuint(key_share.2).into();
+                    let threshold: Vec<u8> = Varuint::<usize>(key_share.1.into()).into();
+                    let limit: Vec<u8> = Varuint::<usize>(key_share.2.into()).into();
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::ShareIdentifier, identifier.into());
                     attributes.insert(AttrId::Threshold, threshold.into());
@@ -889,8 +889,8 @@ impl Builder {
                     };
                     let key_share = bls12381::KeyShare::try_from(key_bytes.as_ref())?;
                     let identifier: Vec<u8> = Varuint(key_share.0).into();
-                    let threshold: Vec<u8> = Varuint(key_share.1).into();
-                    let limit: Vec<u8> = Varuint(key_share.2).into();
+                    let threshold: Vec<u8> = Varuint::<usize>(key_share.1.into()).into();
+                    let limit: Vec<u8> = Varuint::<usize>(key_share.2.into()).into();
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::ShareIdentifier, identifier.into());
                     attributes.insert(AttrId::Threshold, threshold.into());
@@ -911,7 +911,7 @@ impl Builder {
 
     /// Create a new [Multikey] from a seed.
     ///
-    /// Currently only supports [Codec::Ed25519Priv] seeds.
+    /// Currently only supports [Codec::Ed25519Priv] and [Codec::Mlkem512Priv] seeds.
     pub fn new_from_seed(codec: Codec, seed: &[u8]) -> Result<Self, Error> {
         match codec {
             Codec::Ed25519Priv => {
@@ -995,13 +995,16 @@ impl Builder {
     }
 
     /// add in the threshold value
-    pub fn with_threshold(self, threshold: usize) -> Self {
-        self.with_attribute(AttrId::Threshold, &Varuint(threshold).into())
+    pub fn with_threshold(self, threshold: NonZeroUsize) -> Self {
+        self.with_attribute(
+            AttrId::Threshold,
+            &Varuint::<usize>(threshold.into()).into(),
+        )
     }
 
     /// add in the limit value
-    pub fn with_limit(self, limit: usize) -> Self {
-        self.with_attribute(AttrId::Limit, &Varuint(limit).into())
+    pub fn with_limit(self, limit: NonZeroUsize) -> Self {
+        self.with_attribute(AttrId::Limit, &Varuint::<usize>(limit.into()).into())
     }
 
     /// add in the share identifier value
@@ -1045,6 +1048,7 @@ impl Builder {
             for share in &shares {
                 mk = {
                     let tv = mk.threshold_view()?;
+                    // if ConversionsError::UnsupportedCodec, we can just ignore it
                     tv.add_share(share)?
                 };
             }
@@ -1057,6 +1061,8 @@ impl Builder {
 
 #[cfg(test)]
 mod tests {
+    use std::num::NonZero;
+
     use super::*;
     use crate::{cipher, kdf};
     use multisig::EncodedMultisig;
@@ -1385,7 +1391,9 @@ mod tests {
         assert_eq!("test key".to_string(), mk1.comment);
 
         let tv = mk1.threshold_view().unwrap();
-        let shares = tv.split(3, 4).unwrap();
+        let shares = tv
+            .split(NonZero::new(3).unwrap(), NonZero::new(4).unwrap())
+            .unwrap();
         assert_eq!(4, shares.len());
         for share in &shares {
             assert_eq!("test key".to_string(), share.comment);
@@ -1408,8 +1416,8 @@ mod tests {
         assert_eq!("test key".to_string(), mk2.comment);
 
         let av = mk2.threshold_attr_view().unwrap();
-        assert_eq!(3, av.threshold().unwrap());
-        assert_eq!(4, av.limit().unwrap());
+        assert_eq!(3, usize::from(av.threshold().unwrap()));
+        assert_eq!(4, usize::from(av.limit().unwrap()));
 
         let tv = mk2.threshold_view().unwrap();
         let mk3 = tv.combine().unwrap();
@@ -1428,7 +1436,11 @@ mod tests {
             .try_build()
             .unwrap();
         let tv = mk.threshold_view().unwrap();
-        let sk1 = { tv.split(3, 4).unwrap()[0].clone() };
+        let sk1 = {
+            tv.split(NonZero::new(3).unwrap(), NonZero::new(4).unwrap())
+                .unwrap()[0]
+                .clone()
+        };
 
         assert_eq!(Codec::Bls12381G1PrivShare, sk1.codec);
         let cv = sk1.conv_view().unwrap();

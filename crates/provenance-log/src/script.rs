@@ -230,7 +230,7 @@ impl<'a> TryDecodeFrom<'a> for Script {
         // decode the sigil
         let (sigil, ptr) = Codec::try_decode_from(bytes)?;
         if sigil != SIGIL {
-            return Err(ScriptError::MissingSigil.into());
+            return Err(ScriptError::MissingScriptSigil.into());
         }
         // decode the value id
         let (id, ptr) = ScriptId::try_decode_from(ptr)?;
@@ -364,5 +364,18 @@ mod tests {
         for s in v {
             println!("{}: {:?}", s.path(), s);
         }
+    }
+
+    // test to/from Vec<u8> roundtrip
+    #[test]
+    fn script_to_from_vec() {
+        let _s = span!(Level::INFO, "script_to_from_vec").entered();
+        let script = Script::Bin(
+            Key::try_from("/vlad/data").unwrap(),
+            r#"check_signature("/ephemeral", "/entry/")"#.as_bytes().to_vec(),
+        );
+        let bytes: Vec<u8> = script.clone().into();
+        let decoded_script = Script::try_from(bytes.as_slice()).unwrap();
+        assert_eq!(script, decoded_script);
     }
 }

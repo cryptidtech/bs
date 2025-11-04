@@ -1,70 +1,71 @@
 // SPDX-License-Identifier: FSL-1.1
 use crate::update::op_params::OpParams;
-use multikey::Multikey;
-use std::path::{Path, PathBuf};
+use provenance_log::{Key, Script};
 
-/// the configuration for opening a new provenance log
-#[derive(Clone, Debug, Default)]
+/// The configuration for updating a provenance log
+#[derive(bon::Builder, Clone, Debug)]
 pub struct Config {
-    /// clear all lock scripts?
-    pub clear_lock_scripts: bool,
+    /// [provenance_log::Entry] unlock [provenance_log::Script] used for the new entry
+    unlock: Script,
 
-    /// entry lock script
-    pub add_entry_lock_scripts: Vec<(String, PathBuf)>,
+    /// [Key] path for the signing key for this [provenance_log::Entry]
+    ///
+    /// The signer will look for the signing key with this path
+    /// in the wallet and use it to sign the entry.
+    entry_signing_key: Key,
 
-    /// remove lock scripts
-    pub remove_entry_lock_scripts: Vec<String>,
+    /// Whether to clear all existing lock scripts
+    #[builder(default = false)]
+    clear_lock_scripts: bool,
 
-    /// entry unlock script
-    pub entry_unlock_script: Option<PathBuf>,
+    /// Lock [provenance_log::Script]s to add.
+    ///
+    /// For example, if you wanted to add a lock script to the key path "/delegated/"
+    /// with lock script `check_signature(branch("pubkey"), "entry_key")`, you would set:
+    /// ```ignore
+    /// .add_entry_lock_scripts(
+    ///     vec![Script::Code(
+    ///         Key::try_from_str("/delegated/").unwrap(),
+    ///         "check_signature(branch("pubkey"), "/entry/")")
+    ///         .into()
+    ///         ]
+    ///     );
+    /// ```
+    #[builder(default = Vec::new())]
+    add_entry_lock_scripts: Vec<Script>,
 
-    /// entry signing key
-    pub entry_signing_key: Option<Multikey>,
+    /// Key paths of lock scripts to remove
+    #[builder(default = Vec::new())]
+    remove_entry_lock_scripts: Vec<Key>,
 
-    /// entry operations
-    pub entry_ops: Vec<OpParams>,
+    /// Operations to perform in this entry
+    #[builder(default = Vec::new())]
+    additional_ops: Vec<OpParams>,
 }
 
 impl Config {
-    /// are we clearing lock scripts?
-    pub fn clear_lock_scripts(mut self, clear: bool) -> Self {
-        self.clear_lock_scripts = clear;
-        self
+    /// Returns the additional ops
+    pub fn additional_ops(&self) -> &[OpParams] {
+        &self.additional_ops
     }
 
-    /// lock scripts we're adding
-    pub fn add_lock_script<S: AsRef<str>, P: AsRef<Path>>(
-        mut self,
-        key_path: &S,
-        path: &P,
-    ) -> Self {
-        self.add_entry_lock_scripts
-            .push((key_path.as_ref().to_string(), path.as_ref().to_path_buf()));
-        self
+    /// Returns unlock script
+    pub fn unlock(&self) -> &Script {
+        &self.unlock
     }
 
-    /// add in the entry unlock script
-    pub fn with_entry_unlock_script<P: AsRef<Path>>(mut self, path: &P) -> Self {
-        self.entry_unlock_script = Some(path.as_ref().to_path_buf());
-        self
+    /// Returns the entry signing key
+    pub fn entry_signing_key(&self) -> &Key {
+        &self.entry_signing_key
     }
 
-    /// add in the entry signing key
-    pub fn with_entry_signing_key(mut self, mk: &Multikey) -> Self {
-        self.entry_signing_key = Some(mk.clone());
-        self
+    pub(crate) fn add_entry_lock_scripts(&self) -> &[Script] {
+        &self.add_entry_lock_scripts
     }
+}
 
-    /// lock scripts we're removing
-    pub fn remove_lock_script<S: AsRef<str>>(mut self, key_path: &S) -> Self {
-        self.remove_entry_lock_scripts
-            .push(key_path.as_ref().to_string());
-        self
-    }
-
-    /// the ops we're recording
-    pub fn with_ops(mut self, ops: &[OpParams]) -> Self {
-        self.entry_ops.append(&mut ops.to_vec());
-        self
+impl From<Config> for Vec<OpParams> {
+    fn from(config: Config) -> Self {
+        config.additional_ops.clone()
     }
 }

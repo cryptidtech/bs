@@ -13,30 +13,35 @@ pub use config::Config;
 pub mod op_params;
 pub use op_params::OpParams;
 
-use crate::{error::UpdateError, Error};
+use crate::error::UpdateError;
 use multicid::{cid, Cid};
-use multicodec::Codec;
 use multihash::mh;
 use multikey::{Multikey, Views};
-use multisig::Multisig;
 use provenance_log::{
     entry::{self, Entry},
     error::EntryError,
-    Error as PlogError, Key, Log, OpId,
+    Error as PlogError, Lipmaa as _, Log, OpId,
 };
 use std::{fs::read, path::Path};
 use tracing::debug;
 
-/// update a provenance log given the update config
-pub fn update_plog<F1, F2>(
+/// Updates a provenance log given the update config
+pub fn update_plog<E>(
     plog: &mut Log,
-    config: Config,
-    get_key: F1,
-    sign_entry: F2,
-) -> Result<Entry, Error>
+    config: &Config,
+    key_manager: &dyn crate::config::sync::KeyManager<E>,
+    signer: &dyn crate::config::sync::MultiSigner<E>,
+) -> Result<Entry, E>
 where
-    F1: Fn(&Key, Codec, usize, usize) -> Result<Multikey, Error>,
-    F2: Fn(&Multikey, &[u8]) -> Result<Multisig, Error>,
+    E: From<UpdateError>
+        + From<PlogError>
+        + From<std::io::Error>
+        + From<multicid::Error>
+        + From<multikey::Error>
+        + From<multihash::Error>
+        + From<crate::Error>
+        + ToString
+        + std::fmt::Debug,
 {
     // 0. Set up the list of ops we're going to add
     let mut op_params = Vec::default();
@@ -44,16 +49,16 @@ where
     // go through the additional ops and generate CIDs and keys and adding the resulting op params
     // to the vec of op params
     config
-        .entry_ops
+        .additional_ops()
         .iter()
-        .try_for_each(|params| -> Result<(), Error> {
+        .try_for_each(|params| -> Result<(), E> {
             match params {
                 p @ OpParams::KeyGen { .. } => {
-                    let _ = load_key(&mut op_params, p, &get_key)?;
+                    let _ = load_key::<E>(&mut op_params, p, key_manager)?;
                 }
                 p @ OpParams::CidGen { .. } => {
-                    let _ = load_cid(&mut op_params, p, |path| -> Result<Vec<u8>, Error> {
-                        Ok(read(path)?)
+                    let _ = load_cid(&mut op_params, p, |path| -> Result<Vec<u8>, E> {
+                        read(path).map_err(E::from)
                     })?;
                 }
                 p => op_params.push(p.clone()),
@@ -65,74 +70,76 @@ where
     let (_, last_entry, _kvp) = plog.verify().last().ok_or(UpdateError::NoLastEntry)??;
 
     // 2. load the entry unlock script
-    let unlock_script = {
-        let unlock_path = config
-            .entry_unlock_script
-            .ok_or::<Error>(UpdateError::NoEntryUnlockScript.into())?;
-        script::Loader::new(unlock_path).try_build()?
-    };
 
     // get the entry signing key
-    let entry_mk = config
-        .entry_signing_key
-        .ok_or::<Error>(UpdateError::NoSigningKey.into())?;
+    let entry_key_path = config.entry_signing_key();
 
-    // 3. Construct the next entry, starting from the last, calling back to get the entry signed
+    // 3. Construct the next entry, starting from the last entry
+    let entry_builder = entry::EntryBuilder::from(&last_entry);
+    let mut mutable_entry = entry_builder.unlock(config.unlock().clone()).build();
 
-    // construct the first entry from all of the parts
-    let mut builder = entry::Builder::from(&last_entry).with_unlock(&unlock_script);
+    for lock in config.add_entry_lock_scripts() {
+        mutable_entry.add_lock(lock);
+    }
 
-    // add in all of the entry Ops
-    op_params
-        .iter()
-        .try_for_each(|params| -> Result<(), Error> {
-            // construct the op
-            let op = match params {
-                OpParams::Noop { key } => op::Builder::new(OpId::Noop)
+    // CRITICAL: First add ALL operations to the builder AFTER all op_params have been processed
+    for params in &op_params {
+        // Construct the op
+        let op = match params {
+            OpParams::Noop { key } => op::Builder::new(OpId::Noop)
+                .with_key_path(key)
+                .try_build()?,
+            OpParams::Delete { key } => op::Builder::new(OpId::Delete)
+                .with_key_path(key)
+                .try_build()?,
+            OpParams::UseCid { key, cid } => {
+                let v: Vec<u8> = cid.clone().into();
+                op::Builder::new(OpId::Update)
                     .with_key_path(key)
-                    .try_build()?,
-                OpParams::Delete { key } => op::Builder::new(OpId::Delete)
+                    .with_data_value(v)
+                    .try_build()?
+            }
+            OpParams::UseKey { key, mk } => {
+                let v: Vec<u8> = mk.clone().into();
+                op::Builder::new(OpId::Update)
                     .with_key_path(key)
-                    .try_build()?,
-                OpParams::UseCid { key, cid } => {
-                    let v: Vec<u8> = cid.clone().into();
-                    op::Builder::new(OpId::Update)
-                        .with_key_path(key)
-                        .with_data_value(v)
-                        .try_build()?
-                }
-                OpParams::UseKey { key, mk } => {
-                    let v: Vec<u8> = mk.clone().into();
-                    op::Builder::new(OpId::Update)
-                        .with_key_path(key)
-                        .with_data_value(v)
-                        .try_build()?
-                }
-                OpParams::UseStr { key, s } => op::Builder::new(OpId::Update)
-                    .with_key_path(key)
-                    .with_string_value(s)
-                    .try_build()?,
-                OpParams::UseBin { key, data } => op::Builder::new(OpId::Update)
-                    .with_key_path(key)
-                    .with_data_value(data)
-                    .try_build()?,
-                _ => return Err(UpdateError::InvalidOpParams.into()),
-            };
-            // add the op to the builder
-            builder = builder.clone().add_op(&op);
-            Ok(())
-        })?;
+                    .with_data_value(v)
+                    .try_build()?
+            }
+            OpParams::UseStr { key, s } => op::Builder::new(OpId::Update)
+                .with_key_path(key)
+                .with_string_value(s)
+                .try_build()?,
+            OpParams::UseBin { key, data } => op::Builder::new(OpId::Update)
+                .with_key_path(key)
+                .with_data_value(data)
+                .try_build()?,
+            _ => return Err(UpdateError::InvalidOpParams.into()),
+        };
 
-    // finalize the entry building by signing it
-    let entry = builder.try_build(|e| {
-        // get the serialzied version of the entry with an empty "proof" field
-        let ev: Vec<u8> = e.clone().into();
-        // call the call back to have the caller sign the data
-        let ms = sign_entry(&entry_mk, &ev)
-            .map_err(|e| PlogError::from(EntryError::SignFailed(e.to_string())))?;
-        // store the signature as proof
-        Ok(ms.into())
-    })?;
+        // Add the op to the builder
+        mutable_entry.add_op(&op);
+    }
+
+    // check current entry for lipmaa longhop, and set lipmaa if needed
+    let curr_seqno = last_entry.seqno() + 1;
+    if curr_seqno.is_lipmaa() {
+        let lipmaa = curr_seqno.lipmaa();
+        let longhop_entry = plog.seqno(lipmaa)?;
+        mutable_entry.with_lipmaa(&longhop_entry.cid());
+    }
+
+    // Now prepare for signing after ALL operations have been added
+    let unsigned_entry = mutable_entry.prepare_unsigned_entry()?;
+    let entry_bytes: Vec<u8> = unsigned_entry.clone().into();
+
+    // Sign the entry
+    let signature = signer
+        .try_sign(entry_key_path, &entry_bytes)
+        .map_err(|e| PlogError::from(EntryError::SignFailed(e.to_string())))?;
+
+    // Finalize the entry with the signature as proof
+    let entry = unsigned_entry.try_build_with_proof(signature.into())?;
 
     // try to add the entry to the p.log
     plog.try_append(&entry)?;
@@ -140,13 +147,13 @@ where
     Ok(entry)
 }
 
-fn load_key<F>(
+fn load_key<E>(
     ops: &mut Vec<OpParams>,
     params: &OpParams,
-    mut get_key: F,
-) -> Result<Multikey, Error>
+    key_manager: &dyn crate::config::sync::KeyManager<E>,
+) -> Result<Multikey, E>
 where
-    F: FnMut(&Key, Codec, usize, usize) -> Result<Multikey, Error>,
+    E: From<UpdateError> + From<multikey::Error> + From<crate::Error>,
 {
     debug!("load_key: {:?}", params);
     match params {
@@ -158,10 +165,14 @@ where
             revoke,
         } => {
             // call back to generate the key
-            let mk = get_key(key, *codec, *threshold, *limit)?;
+            let mk = key_manager.get_key(key, codec, *threshold, *limit)?;
 
             // get the public key
-            let pk = mk.conv_view()?.to_public_key()?;
+            let pk = if mk.attr_view()?.is_secret_key() {
+                mk.conv_view()?.to_public_key()?
+            } else {
+                mk.clone()
+            };
 
             // if revoking, explicitly delete the old key first
             if *revoke {
@@ -180,9 +191,10 @@ where
     }
 }
 
-fn load_cid<F>(ops: &mut Vec<OpParams>, params: &OpParams, mut load_file: F) -> Result<Cid, Error>
+fn load_cid<F, E>(ops: &mut Vec<OpParams>, params: &OpParams, _load_file: F) -> Result<Cid, E>
 where
-    F: FnMut(&Path) -> Result<Vec<u8>, Error>,
+    F: FnOnce(&Path) -> Result<Vec<u8>, E>,
+    E: From<UpdateError> + From<multihash::Error> + From<multicid::Error> + From<PlogError>,
 {
     debug!("load_cid: {:?}", params);
     match params {
@@ -192,14 +204,11 @@ where
             target,
             hash,
             inline,
-            path,
+            data,
         } => {
-            // load the file data for the cid
-            let file_data = load_file(path)?;
-
             let cid = cid::Builder::new(*version)
                 .with_target_codec(*target)
-                .with_hash(&mh::Builder::new_from_bytes(*hash, &file_data)?.try_build()?)
+                .with_hash(&mh::Builder::new_from_bytes(*hash, data)?.try_build()?)
                 .try_build()?;
 
             // create the cid key-path
@@ -221,12 +230,219 @@ where
                 // add the op param to add the file data
                 ops.push(OpParams::UseBin {
                     key: data_key,
-                    data: file_data,
+                    data: data.clone(),
                 });
             }
 
             Ok(cid)
         }
         _ => Err(UpdateError::InvalidCidParams.into()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::params::{
+        anykey::PubkeyParams,
+        vlad::{FirstEntryKeyParams, VladParams},
+    };
+    use crate::{open, open_plog};
+
+    use bs_traits::sync::SyncGetKey;
+    use bs_wallets::memory::InMemoryKeyManager;
+    use multicodec::Codec;
+    use multikey::Views;
+    use provenance_log::key::key_paths::ValidatedKeyParams;
+    use provenance_log::Script;
+    use provenance_log::{entry::Field, value::try_extract};
+    use provenance_log::{Key, Pairs};
+    use tracing_subscriber::fmt;
+
+    #[allow(unused)]
+    fn init_logger() {
+        let subscriber = fmt().with_env_filter("trace,provenance_log=off").finish();
+        if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
+            tracing::warn!("failed to set subscriber: {}", e);
+        }
+    }
+
+    #[test]
+    fn test_create_using_defaults_and_rotate_keys() {
+        // init_logger();
+
+        let pubkey_params = PubkeyParams::builder().codec(Codec::Ed25519Priv).build();
+
+        let unlock = format!(
+            r#"
+             // push the serialized Entry as the message
+             push("{entry_key}");
+
+             // push the proof data
+             push("{proof_key}");
+            "#,
+            entry_key = Field::ENTRY,
+            proof_key = Field::PROOF
+        );
+
+        let unlock_script = Script::Code(Key::default(), unlock.to_string());
+
+        let lock = format!(
+            r#"
+            // then check a possible threshold sig...
+            check_signature("/recoverykey", "{entry_key}") ||
+
+            // then check a possible pubkey sig...
+            check_signature("{pubkey}", "{entry_key}") ||
+
+            // then the pre-image proof...
+            check_preimage("/hash")
+        "#,
+            entry_key = Field::ENTRY,
+            pubkey = PubkeyParams::KEY_PATH,
+        );
+
+        let lock_script = Script::Code(Key::default(), lock);
+
+        let open_config = open::Config::builder()
+            .vlad(VladParams::<FirstEntryKeyParams>::default())
+            .pubkey(pubkey_params.clone().into())
+            .entrykey(
+                FirstEntryKeyParams::builder()
+                    .codec(Codec::Ed25519Priv)
+                    .build()
+                    .into(),
+            )
+            .lock(lock_script.clone())
+            .unlock(unlock_script.clone())
+            .build();
+
+        let key_manager = InMemoryKeyManager::<crate::Error>::default();
+        let mut plog =
+            open_plog(&open_config, &key_manager, &key_manager).expect("Failed to open plog");
+
+        // We need to generate PubkeyParams key in our wallet:
+        let old_pk = key_manager
+            .get_key(
+                &PubkeyParams::KEY_PATH.into(),
+                &pubkey_params.codec(),
+                pubkey_params.threshold(),
+                pubkey_params.limit(),
+            )
+            .expect("Failed to create and store pubkey");
+
+        // 2. Update the p.log with a new entry
+        // - add a lock Script
+        // - remove the entrykey lock Script
+        // - add an op
+        let delegated_lock = format!(
+            r#"
+            // check a possible delegated pubkey sig...
+            check_signature(branch("{pubkey}"), "{entry_key}")
+            "#,
+            pubkey = PubkeyParams::KEY_PATH,
+            entry_key = Field::ENTRY,
+        );
+
+        // CHANGED: Now using the builder pattern
+        let update_cfg = Config::builder()
+            .unlock(unlock_script.clone())
+            .entry_signing_key(PubkeyParams::KEY_PATH.into())
+            .additional_ops(vec![OpParams::Delete {
+                key: VladParams::<FirstEntryKeyParams>::FIRST_ENTRY_KEY_PATH.into(),
+            }])
+            // Entry lock scripts define conditions which must be met by the next entry in the plog for it to be valid.
+            .add_entry_lock_scripts(vec![Script::Code(
+                Key::try_from("/delegated/").unwrap(),
+                delegated_lock,
+            )])
+            .build();
+
+        let prev = plog.head.clone();
+
+        // take config and use update method with TestKeyManager to update the log
+        update_plog(&mut plog, &update_cfg, &key_manager, &key_manager)
+            .expect("Failed to update plog");
+
+        // plog head prev should match prev
+        assert_eq!(prev, plog.entries.get(&plog.head).unwrap().prev());
+
+        {
+            // There should be no DEFAULT_ENTRYKEY kvp
+            let verify_iter = &mut plog.verify();
+
+            let mut last = None;
+
+            // the log should also verify
+            for ret in verify_iter {
+                if let Some(e) = ret.clone().err() {
+                    tracing::error!("Error: {:#?}", e);
+                    // fail test
+                    panic!("Error in log verification");
+                } else {
+                    last = Some(ret.ok().unwrap());
+                }
+            }
+
+            let (_count, _entry, kvp) = last.ok_or("No last entry").unwrap();
+            let op = kvp.get(&VladParams::<FirstEntryKeyParams>::FIRST_ENTRY_KEY_PATH);
+
+            assert!(op.is_none());
+        }
+
+        // 3. Rotate the key
+        // Generate a new key without a path
+        let new_pk = InMemoryKeyManager::<crate::Error>::generate_key(&Codec::Ed25519Priv)
+            .expect("Failed to generate new key");
+        let new_pk_fp = new_pk
+            .fingerprint_view()
+            .unwrap()
+            .fingerprint(Codec::Sha2256)
+            .unwrap();
+
+        // Create the key rotation entry
+        let key_rotation_config = Config::builder()
+            .unlock(unlock_script.clone())
+            .entry_signing_key(PubkeyParams::KEY_PATH.into()) // Sign with the old key
+            .additional_ops(vec![
+                // Update /pubkey with the new key
+                OpParams::UseKey {
+                    key: PubkeyParams::KEY_PATH.into(),
+                    mk: new_pk.conv_view().unwrap().to_public_key().unwrap(),
+                },
+            ])
+            .build();
+
+        update_plog(&mut plog, &key_rotation_config, &key_manager, &key_manager)
+            .expect("Failed to rotate key");
+
+        // Update the key manager's path mapping
+        key_manager
+            .update_path_mapping(PubkeyParams::KEY_PATH.into(), new_pk_fp.into())
+            .expect("Failed to update path mapping");
+
+        // 4. Verify the key was rotated
+        let mut last = None;
+        for ret in plog.verify() {
+            if let Some(e) = ret.clone().err() {
+                tracing::error!("Error: {:#?}", e);
+                panic!("Error in log verification");
+            } else {
+                last = Some(ret.ok().unwrap());
+            }
+        }
+
+        let (_count, _entry, kvp) = last.ok_or("No last entry").unwrap();
+        let new_pk_op = kvp.get(&PubkeyParams::KEY_PATH).expect("No pubkey found");
+
+        let new_pk_from_log: Multikey = try_extract(&new_pk_op).unwrap();
+
+        assert_ne!(old_pk, new_pk_from_log, "Key was not rotated");
+
+        assert_eq!(
+            new_pk.conv_view().unwrap().to_public_key().unwrap(),
+            new_pk_from_log,
+            "New key in log does not match generated key"
+        );
     }
 }

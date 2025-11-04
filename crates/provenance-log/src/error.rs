@@ -119,9 +119,6 @@ pub enum KvpError {
 #[derive(Clone, Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum LogError {
-    /// Wacc Error
-    #[error(transparent)]
-    Wacc(#[from] wacc::Error),
     /// Missing sigil
     #[error("missing provenance log sigil")]
     MissingSigil,
@@ -164,6 +161,12 @@ pub enum LogError {
     /// Updating kvp failed
     #[error("Kvp set entry failed {0}")]
     KvpSetEntryFailed(String),
+    /// Running the unlock script failed
+    #[error("Running the unlock script failed, reason: {0}")]
+    UnlockFailed(String),
+    /// Running the lock script failed
+    #[error("Running the lock script failed, reason: {0}")]
+    LockFailed(String),
 }
 
 /// Errors created by this library
@@ -183,8 +186,8 @@ pub enum OpError {
 #[non_exhaustive]
 pub enum ScriptError {
     /// Missing sigil
-    #[error("missing provenance entry sigil")]
-    MissingSigil,
+    #[error("missing provenance script sigil")]
+    MissingScriptSigil,
     /// Invalid script type id
     #[error("invalid script type id {0}")]
     InvalidScriptId(u8),
@@ -206,6 +209,14 @@ pub enum ScriptError {
     /// invalid wasm script magic value
     #[error("invalid wasm script")]
     InvalidScriptMagic,
+    /// Wrong script format
+    #[error("wrong script format: expected {expected}, found {found}")]
+    WrongScriptFormat {
+        /// The String that was found
+        found: String,
+        /// The String that was expected
+        expected: String,
+    },
 }
 
 /// Errors created by this library

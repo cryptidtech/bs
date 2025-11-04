@@ -1,4 +1,10 @@
 // SPDX-License-Identifier: FSL-1.1
+use multicid::Error as MulticidError;
+use multihash::Error as MultihashError;
+use multikey::Error as MultikeyError;
+use provenance_log::Error as PlogError;
+use std::fmt::Debug;
+
 /// Errors generated from this crate
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -39,9 +45,10 @@ pub enum Error {
     /// I/O error
     #[error(transparent)]
     Io(#[from] std::io::Error),
-    /// Serde CBOR error
+
+    /// Wallets error
     #[error(transparent)]
-    SerdeCbor(#[from] serde_cbor::Error),
+    Wallets(#[from] bs_wallets::Error),
 }
 
 /// Open op errors
@@ -102,4 +109,34 @@ pub enum UpdateError {
     /// No signing key
     #[error("No entry signing key")]
     NoSigningKey,
+}
+
+/// Trait alias for errors that can be used with BS operations
+pub trait BsCompatibleError:
+    From<OpenError>
+    + From<UpdateError>
+    + From<PlogError>
+    + From<std::io::Error>
+    + From<MulticidError>
+    + From<MultikeyError>
+    + From<MultihashError>
+    + From<Error>
+    + ToString
+    + Debug
+{
+}
+
+// Blanket implementation for any type that satisfies the bounds
+impl<T> BsCompatibleError for T where
+    T: From<OpenError>
+        + From<UpdateError>
+        + From<PlogError>
+        + From<std::io::Error>
+        + From<MulticidError>
+        + From<MultikeyError>
+        + From<MultihashError>
+        + From<Error>
+        + ToString
+        + Debug
+{
 }

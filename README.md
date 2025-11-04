@@ -8,6 +8,14 @@
 
 [<img src="https://img.youtube.com/vi/LxU4wG4ryFo/hqdefault.jpg" width="100%" />](https://www.youtube.com/watch?v=LxU4wG4ryFo)
 
+## Tests 
+
+Run the [just command](https://just.systems/man/en/) in the root of the repository to run the tests:
+
+```
+just test
+```
+
 ## Introduction
 
 BetterSign (`bs`) is a new signing tool designed to use provenance based

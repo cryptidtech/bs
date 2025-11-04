@@ -501,7 +501,7 @@ mod tests {
         let _s = span!(Level::INFO, "test_nonce_serde_compact").entered();
         let bytes = hex::decode("76895272c5ce5c0c72b5ec54944ead739482f87048dbbfc13b873008b31d5995")
             .unwrap();
-        let n = nonce::Builder::new_from_bytes(&bytes).try_build().unwrap();
+        let n = nonce::Builder::new_from_bytes(&bytes).build();
 
         assert_tokens(
             &n.compact(),
@@ -517,9 +517,7 @@ mod tests {
         let _s = span!(Level::INFO, "test_nonce_serde_encoded_string").entered();
         let bytes = hex::decode("76895272c5ce5c0c72b5ec54944ead739482f87048dbbfc13b873008b31d5995")
             .unwrap();
-        let n = nonce::Builder::new_from_bytes(&bytes)
-            .try_build_encoded()
-            .unwrap();
+        let n = nonce::Builder::new_from_bytes(&bytes).build_encoded();
 
         assert_tokens(
             &n.readable(),
@@ -534,7 +532,7 @@ mod tests {
         let _s = span!(Level::INFO, "test_nonce_serde_readable").entered();
         let bytes = hex::decode("76895272c5ce5c0c72b5ec54944ead739482f87048dbbfc13b873008b31d5995")
             .unwrap();
-        let n = nonce::Builder::new_from_bytes(&bytes).try_build().unwrap();
+        let n = nonce::Builder::new_from_bytes(&bytes).build();
 
         assert_tokens(
             &n.readable(),

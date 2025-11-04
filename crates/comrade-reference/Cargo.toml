@@ -1,0 +1,25 @@
+[package]
+name = "comrade-reference"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+readme.workspace = true
+license.workspace = true
+
+[dependencies]
+multikey = { workspace = true }
+multihash.workspace = true
+multisig.workspace = true
+multiutil.workspace = true
+pest = "2.8"
+pest_derive = "2.8"
+thiserror = "2.0"
+
+[dev-dependencies]
+hex = "0.4"
+rand = "0.8.5"
+chrono = { version = "0.4.19", default-features = false, features = ["clock"] }
+
+[lints]
+workspace = true
