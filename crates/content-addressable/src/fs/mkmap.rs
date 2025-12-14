@@ -44,7 +44,7 @@ mod tests {
             .unwrap()
     }
 
-    #[test]
+    #[tokio::test]
     async fn test_builder_lazy() {
         let _s = span!(Level::INFO, "test_builder_lazy").entered();
         let mut pb = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -82,7 +82,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[tokio::test]
     async fn test_builder_not_lazy() {
         let _s = span!(Level::INFO, "test_builder_not_lazy").entered();
         let mut pb = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -125,7 +125,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[tokio::test]
     async fn test_put_lazy() {
         let _s = span!(Level::INFO, "test_put_lazy").entered();
         let mut pb = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -174,7 +174,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[tokio::test]
     async fn test_put_not_lazy() {
         let _s = span!(Level::INFO, "test_put_not_lazy").entered();
         let mut pb = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -222,7 +222,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[tokio::test]
     async fn test_rm_lazy() {
         let _s = span!(Level::INFO, "test_rm_lazy").entered();
         let mut pb = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -279,7 +279,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[tokio::test]
     async fn test_rm_not_lazy() {
         let _s = span!(Level::INFO, "test_rm_not_lazy").entered();
         let mut pb = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -342,7 +342,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[tokio::test]
     async fn test_gc() {
         let _s = span!(Level::INFO, "test_gc").entered();
         let mut pb = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
