@@ -107,52 +107,6 @@ impl Blockstore for OPFSBlockstore {
 }
 
 /// A Wrapper sturct around OPFSBlockstore so that we can make it [Send]
-///
-/// # Example
-/// ```no_run
-/// use wasm_bindgen_futures::spawn_local;
-/// use peerpiper_browser::opfs::OPFSWrapped;
-/// use peerpiper_core::Blockstore;
-///
-/// spawn_local(async move {
-///    let Ok(blockstore) = OPFSWrapped::new().await else {
-///         panic!("Failed to create OPFSWrapped");
-///    };
-///    
-///    // Use blockstore when starting peerpiper
-///    
-///    // 16 is arbitrary, but should be enough for now
-///    let (tx_evts, mut rx_evts) = mpsc::channel(16);
-///
-///    // client sync oneshot
-///    let (tx_client, rx_client) = oneshot::channel();
-///
-///    // command_sender will be used by other wasm_bindgen functions to send commands to the network
-///    // so we will need to wrap it in a Mutex or something to make it thread safe.
-///    let (network_command_sender, network_command_receiver) = tokio::sync::mpsc::channel(8);
-///
-///    let bstore = blockstore.clone();
-///
-///    spawn_local(async move {
-///        peerpiper::start(
-///            tx_evts,
-///            network_command_receiver,
-///            tx_client,
-///            libp2p_endpoints,
-///            bstore,
-///        )
-///        .await
-///        .expect("never end")
-///    });
-///
-///    // wait on rx_client to get the client handle
-///    let client_handle = rx_client.await?;
-///
-///    commander
-///        .with_network(network_command_sender)
-///       .with_client(client_handle);
-/// });
-/// ```
 #[derive(Debug, Clone)]
 pub struct OPFSWrapped {
     inner: SendWrapper<OPFSBlockstore>,
