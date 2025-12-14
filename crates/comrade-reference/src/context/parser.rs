@@ -41,7 +41,7 @@ pub enum Expression<'a> {
 }
 
 /// Parse a script from a string into expressions
-pub fn parse(script_str: &str) -> Result<Vec<Expression>, ApiError> {
+pub fn parse(script_str: &str) -> Result<Vec<Expression<'_>>, ApiError> {
     let pairs = ScriptParser::parse(Rule::script, script_str)
         .map_err(|e| ApiError::PestParse(Box::new(e)))?;
 
