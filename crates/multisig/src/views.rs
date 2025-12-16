@@ -6,6 +6,8 @@ use multicodec::Codec;
 pub mod bls12381;
 /// Edwards curve 25519 signature implementation
 pub mod ed25519;
+/// NIST P-256 curve signature implementation (ES256, used by WebAuthn/passkeys)
+pub mod p256;
 /// Koblitz 256k1 curve implmentation (a.k.a. the Bitcoin curve)
 pub mod secp256k1;
 

@@ -3,7 +3,7 @@ use crate::{
     error::AttributesError,
     views::{
         bls12381::{self, SchemeTypeId},
-        ed25519, secp256k1,
+        ed25519, p256, secp256k1,
     },
     AttrId, AttrView, ConvView, DataView, Error, ThresholdAttrView, ThresholdView, Views,
 };
@@ -15,11 +15,11 @@ use multiutil::{BaseEncoded, CodecInfo, EncodingInfo, Varbytes, VarbytesIter, Va
 use std::{collections::BTreeMap, fmt, num::NonZeroUsize};
 
 /// the list of signature codecs currently supported
-pub const SIG_CODECS: [Codec; 4] = [
+pub const SIG_CODECS: [Codec; 5] = [
     Codec::Bls12381G1Msig,
     Codec::Bls12381G2Msig,
     Codec::EddsaMsig,
-    // Codec::Es256Msig,
+    Codec::Es256Msig,  // P-256 (WebAuthn/passkey signatures)
     // Codec::Es384Msig,
     // Codec::Es521Msig,
     // Codec::Rs256Msig,
@@ -185,6 +185,7 @@ impl Views for Multisig {
             | Codec::Bls12381G1ShareMsig
             | Codec::Bls12381G2ShareMsig => Ok(Box::new(bls12381::View::try_from(self)?)),
             Codec::EddsaMsig => Ok(Box::new(ed25519::View::try_from(self)?)),
+            Codec::Es256Msig => Ok(Box::new(p256::View::try_from(self)?)),
             Codec::Es256KMsig => Ok(Box::new(secp256k1::View::try_from(self)?)),
             _ => Err(AttributesError::UnsupportedCodec(self.codec).into()),
         }
@@ -197,6 +198,7 @@ impl Views for Multisig {
             | Codec::Bls12381G1ShareMsig
             | Codec::Bls12381G2ShareMsig => Ok(Box::new(bls12381::View::try_from(self)?)),
             Codec::EddsaMsig => Ok(Box::new(ed25519::View::try_from(self)?)),
+            Codec::Es256Msig => Ok(Box::new(p256::View::try_from(self)?)),
             Codec::Es256KMsig => Ok(Box::new(secp256k1::View::try_from(self)?)),
             _ => Err(AttributesError::UnsupportedCodec(self.codec).into()),
         }
@@ -209,6 +211,7 @@ impl Views for Multisig {
             | Codec::Bls12381G1ShareMsig
             | Codec::Bls12381G2ShareMsig => Ok(Box::new(bls12381::View::try_from(self)?)),
             Codec::EddsaMsig => Ok(Box::new(ed25519::View::try_from(self)?)),
+            Codec::Es256Msig => Ok(Box::new(p256::View::try_from(self)?)),
             Codec::Es256KMsig => Ok(Box::new(secp256k1::View::try_from(self)?)),
             _ => Err(AttributesError::UnsupportedCodec(self.codec).into()),
         }

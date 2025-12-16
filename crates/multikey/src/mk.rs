@@ -1,7 +1,7 @@
-// SPDX-License-Idnetifier: Apache-2.0
+// SPDX-License-Identifier: Apache-2.0
 use crate::{
     error::{AttributesError, CipherError, ConversionsError, KdfError},
-    views::{bcrypt, bls12381, chacha20, ed25519, mlkem, secp256k1},
+    views::{bcrypt, bls12381, chacha20, ed25519, mlkem, p256, secp256k1},
     AttrId, AttrView, CipherAttrView, CipherView, ConvView, DataView, Error, FingerprintView,
     KdfAttrView, KdfView, SignView, ThresholdAttrView, ThresholdView, VerifyView, Views,
 };
@@ -13,6 +13,7 @@ use multiutil::{BaseEncoded, CodecInfo, EncodingInfo, Varbytes, VarbytesIter, Va
 use ssh_key::{
     private::{EcdsaKeypair, KeypairData},
     public::{EcdsaPublicKey, KeyData},
+    Algorithm::*,
     EcdsaCurve, PrivateKey, PublicKey,
 };
 use std::{collections::BTreeMap, fmt, num::NonZeroUsize};
@@ -205,6 +206,7 @@ impl Views for Multikey {
             | Codec::Bls12381G2Pub
             | Codec::Bls12381G2PubShare => Ok(Box::new(bls12381::View::try_from(self)?)),
             Codec::Ed25519Pub | Codec::Ed25519Priv => Ok(Box::new(ed25519::View::try_from(self)?)),
+            Codec::P256Pub | Codec::P256Priv => Ok(Box::new(p256::View::try_from(self)?)),
             Codec::Secp256K1Pub | Codec::Secp256K1Priv => {
                 Ok(Box::new(secp256k1::View::try_from(self)?))
             }
@@ -250,6 +252,7 @@ impl Views for Multikey {
             | Codec::Bls12381G2Pub
             | Codec::Bls12381G2PubShare => Ok(Box::new(bls12381::View::try_from(self)?)),
             Codec::Ed25519Pub | Codec::Ed25519Priv => Ok(Box::new(ed25519::View::try_from(self)?)),
+            Codec::P256Pub | Codec::P256Priv => Ok(Box::new(p256::View::try_from(self)?)),
             Codec::Secp256K1Pub | Codec::Secp256K1Priv => {
                 Ok(Box::new(secp256k1::View::try_from(self)?))
             }
@@ -318,6 +321,7 @@ impl Views for Multikey {
             | Codec::Bls12381G2Pub
             | Codec::Bls12381G2PubShare => Ok(Box::new(bls12381::View::try_from(self)?)),
             Codec::Ed25519Pub | Codec::Ed25519Priv => Ok(Box::new(ed25519::View::try_from(self)?)),
+            Codec::P256Pub | Codec::P256Priv => Ok(Box::new(p256::View::try_from(self)?)),
             Codec::Secp256K1Pub | Codec::Secp256K1Priv => {
                 Ok(Box::new(secp256k1::View::try_from(self)?))
             }
@@ -343,6 +347,7 @@ impl Views for Multikey {
             | Codec::Bls12381G2Pub
             | Codec::Bls12381G2PubShare => Ok(Box::new(bls12381::View::try_from(self)?)),
             Codec::Ed25519Pub | Codec::Ed25519Priv => Ok(Box::new(ed25519::View::try_from(self)?)),
+            Codec::P256Pub | Codec::P256Priv => Ok(Box::new(p256::View::try_from(self)?)),
             Codec::Secp256K1Pub | Codec::Secp256K1Priv => {
                 Ok(Box::new(secp256k1::View::try_from(self)?))
             }
@@ -377,6 +382,7 @@ impl Views for Multikey {
             | Codec::Bls12381G2Pub
             | Codec::Bls12381G2PubShare => Ok(Box::new(bls12381::View::try_from(self)?)),
             Codec::Ed25519Pub | Codec::Ed25519Priv => Ok(Box::new(ed25519::View::try_from(self)?)),
+            Codec::P256Pub | Codec::P256Priv => Ok(Box::new(p256::View::try_from(self)?)),
             Codec::Secp256K1Pub | Codec::Secp256K1Priv => {
                 Ok(Box::new(secp256k1::View::try_from(self)?))
             }
@@ -406,6 +412,7 @@ impl Views for Multikey {
             | Codec::Bls12381G2Pub
             | Codec::Bls12381G2PubShare => Ok(Box::new(bls12381::View::try_from(self)?)),
             Codec::Ed25519Pub | Codec::Ed25519Priv => Ok(Box::new(ed25519::View::try_from(self)?)),
+            Codec::P256Pub | Codec::P256Priv => Ok(Box::new(p256::View::try_from(self)?)),
             Codec::Secp256K1Pub | Codec::Secp256K1Priv => {
                 Ok(Box::new(secp256k1::View::try_from(self)?))
             }
@@ -487,7 +494,6 @@ impl Builder {
 
     /// new builder from ssh_key::PublicKey source
     pub fn new_from_ssh_public_key(sshkey: &PublicKey) -> Result<Self, Error> {
-        use ssh_key::Algorithm::*;
         match sshkey.algorithm() {
             Ecdsa { curve } => {
                 use EcdsaCurve::*;
