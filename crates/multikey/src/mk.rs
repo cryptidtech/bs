@@ -20,15 +20,16 @@ use std::{collections::BTreeMap, fmt, num::NonZeroUsize};
 use zeroize::Zeroizing;
 
 /// the list of key codecs supported for key generation
-pub const KEY_CODECS: [Codec; 7] = [
+pub const KEY_CODECS: [Codec; 8] = [
     Codec::Bls12381G1Priv,
     Codec::Bls12381G2Priv,
     Codec::Ed25519Priv,
+    Codec::P256Priv,
     /*
     Codec::LamportSha3256Priv,
     Codec::LamportSha3384Priv,
     Codec::LamportSha3512Priv,
-    Codec::P256Priv,
+
     Codec::P384Priv,
     Codec::P521Priv,
     */
@@ -492,7 +493,7 @@ impl Builder {
         })
     }
 
-    /// new builder from ssh_key::PublicKey source
+    /// Build from [ssh_key::PublicKey] source
     pub fn new_from_ssh_public_key(sshkey: &PublicKey) -> Result<Self, Error> {
         match sshkey.algorithm() {
             Ecdsa { curve } => {
@@ -500,7 +501,44 @@ impl Builder {
                 let (key_bytes, codec) = match curve {
                     NistP256 => {
                         if let KeyData::Ecdsa(EcdsaPublicKey::NistP256(point)) = sshkey.key_data() {
-                            (point.as_bytes().to_vec(), Codec::P256Pub)
+                            // SSH stores points in uncompressed format
+                            // Convert to compressed SEC1 format to match to_public_key()
+                            let point_bytes = point.as_bytes();
+
+                            // Parse the point - it may have the 0x04 tag (65 bytes) or not (64 bytes)
+                            let verifying_key = if point_bytes.len() == 65 && point_bytes[0] == 0x04
+                            {
+                                // Already has the tag, use as-is
+                                ::p256::ecdsa::VerifyingKey::from_sec1_bytes(point_bytes).map_err(
+                                    |e| {
+                                        ConversionsError::PublicKeyFailure(format!(
+                                            "Invalid P-256 point: {}",
+                                            e
+                                        ))
+                                    },
+                                )?
+                            } else if point_bytes.len() == 64 {
+                                // Need to add the 0x04 tag
+                                let mut uncompressed_bytes = vec![0x04];
+                                uncompressed_bytes.extend_from_slice(point_bytes);
+                                ::p256::ecdsa::VerifyingKey::from_sec1_bytes(&uncompressed_bytes)
+                                    .map_err(|e| {
+                                        ConversionsError::PublicKeyFailure(format!(
+                                            "Invalid P-256 point: {}",
+                                            e
+                                        ))
+                                    })?
+                            } else {
+                                return Err(ConversionsError::PublicKeyFailure(format!(
+                                    "Invalid P-256 point length: {}",
+                                    point_bytes.len()
+                                ))
+                                .into());
+                            };
+
+                            // Convert to compressed format
+                            let compressed_point = verifying_key.to_encoded_point(true);
+                            (compressed_point.as_bytes().to_vec(), Codec::P256Pub)
                         } else {
                             return Err(ConversionsError::UnsupportedAlgorithm(
                                 sshkey.algorithm().to_string(),
