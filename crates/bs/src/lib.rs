@@ -21,6 +21,8 @@ pub use ops::prelude::*;
 /// convenient export
 pub mod prelude {
     pub use super::*;
+    pub use multihash;
+    pub use multikey;
 }
 
 /// Opinionated configuation for the BetterSign library

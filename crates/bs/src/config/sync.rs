@@ -1,5 +1,5 @@
 //! Sync alterntives to the asynchronous traits.
-use bs_traits::sync::{SyncGetKey, SyncPrepareEphemeralSigning, SyncSigner};
+pub use bs_traits::sync::{SyncGetKey, SyncPrepareEphemeralSigning, SyncSigner};
 use bs_traits::EphemeralKey;
 
 use super::*;
