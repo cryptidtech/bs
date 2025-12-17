@@ -16,6 +16,8 @@ use bs::{
 };
 pub use bs_p2p::events::api::{Client, Libp2pEvent};
 pub use bs_p2p::events::PublicEvent;
+use bs_traits::asyncro::AsyncKeyManager;
+use bs_traits::asyncro::AsyncMultiSigner;
 use bs_traits::CondSync;
 use futures::channel::mpsc::{self};
 pub use libp2p::PeerId;
@@ -129,7 +131,11 @@ where
 
 impl<KP, BS> BsPeer<KP, BS>
 where
-    KP: KeyManager<Error> + MultiSigner<Error> + CondSync,
+    KP: KeyManager<Error>
+        + MultiSigner<Error>
+        + CondSync
+        + AsyncKeyManager<Error>
+        + AsyncMultiSigner<bs::config::Multisig, Error>,
     BS: BlockstoreTrait + CondSync,
 {
     /// Returns a clone of the p[p::Log] of the peer, if it exists.
@@ -278,7 +284,7 @@ where
         }
 
         // Pass the key_provider directly as both key_manager and signer
-        let plog = bs::ops::open_plog(&config, &self.key_provider, &self.key_provider)?;
+        let plog = bs::ops::open_plog(&config, &self.key_provider, &self.key_provider).await?;
         {
             let verify_iter = &mut plog.verify();
 
@@ -337,12 +343,13 @@ where
     /// Update the BsPeer's Plog with new data.
     pub async fn update(&mut self, config: UpdateConfig) -> Result<(), Error> {
         {
+            // TODO: Fix async held across await issue
             let mut plog = self.plog.lock().map_err(|_| Error::LockPosioned)?;
             let Some(ref mut plog) = *plog else {
                 return Err(Error::PlogNotInitialized);
             };
             // Apply the update to the plog
-            bs::ops::update_plog(plog, &config, &self.key_provider, &self.key_provider)?;
+            bs::ops::update_plog(plog, &config, &self.key_provider, &self.key_provider).await?;
 
             // Verify the updated plog
             let verify_iter = &mut plog.verify();

@@ -106,7 +106,7 @@ pub trait ResolverExt: Resolver {
             tracing::debug!("First lock script built Rebuilt plog");
 
             let rebuilt_plog = provenance_log::log::Builder::new()
-                .with_vlad(&vlad)
+                .with_vlad(vlad)
                 .with_first_lock(&first_lock_script)
                 .with_entries(&entry_chain.entries)
                 .with_head(head_cid)

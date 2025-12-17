@@ -14,6 +14,9 @@
 pub mod error;
 pub use error::Error;
 
+/// The concrete type used for signatures in this crate.
+pub type Signature = multisig::Multisig;
+
 /// bettersign operations
 pub mod ops;
 pub use ops::prelude::*;

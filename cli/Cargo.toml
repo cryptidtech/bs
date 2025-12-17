@@ -19,7 +19,7 @@ default = ["serde"]
 anyhow = "1.0"
 async-trait = "0.1"
 best-practices.workspace = true
-bs.workspace = true
+bs = { workspace = true, features = ["sync"] }
 bs-traits.workspace = true
 clap = { version = "4.5.36", features = ["cargo"] }
 colored = "3.0.0"

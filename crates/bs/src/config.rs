@@ -3,12 +3,11 @@
 //! Users can pick any concrete types that implement the traits, but this module provides
 //! default implementations that can be used directly.
 
-/// Opinionated configuration for the async traits types
-pub mod asynchronous;
+/// Sync to async adapters
+pub mod adapters;
 /// Opinionated configuration for the sync traits types
 pub mod sync;
 
-use crate::Error;
 use bs_traits::{GetKey, Signer};
 
 /// Re-export the types used in the traits

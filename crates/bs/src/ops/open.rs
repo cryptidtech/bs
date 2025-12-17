@@ -8,7 +8,9 @@ use crate::{
     error::{BsCompatibleError, OpenError},
     params::vlad::{FirstEntryKeyParams, VladParams},
     update::{op, OpParams},
+    Signature,
 };
+use bs_traits::asyncro::{AsyncKeyManager, AsyncMultiSigner};
 pub use config::Config;
 use multicid::{cid, Cid, Vlad};
 use multicodec::Codec;
@@ -17,41 +19,59 @@ use multikey::{Multikey, Views};
 use provenance_log::{entry, error::EntryError, Error as PlogError, Key, Log, OpId};
 use tracing::debug;
 
-/// Open a new provenance log based on the [Config] provided.
-//
-// To Open a Plog, the critical steps are:
-// - First get the public key of the ephemeral first entry key
-// - Add the public key of the ephemeral first entry key operation to `op_params`
-// - Add ALL operations to the entry builder
-// - Sign that operated entry using the ephemeral first entry key's one-time signing function
-// - Finalize the Entry with the signature
-//
-// When the script runtime checks the first entry data (the Entry without the proof), against the
-// first lock script, it will use the first entry key's public key to verify the signature.
-pub fn open_plog<E: BsCompatibleError>(
+/// Open a new provenance log based on the [Config] provided. (async)
+pub async fn open_plog<E, KM, S>(config: &Config, key_manager: &KM, signer: &S) -> Result<Log, E>
+where
+    E: BsCompatibleError + Send,
+    KM: AsyncKeyManager<E, Key = Multikey, KeyPath = Key, Codec = Codec> + ?Sized,
+    S: AsyncMultiSigner<Signature, E, PubKey = Multikey, Codec = Codec> + ?Sized,
+{
+    open_plog_core(config, key_manager, signer).await
+}
+
+/// Synchronous version of [open_plog]
+#[cfg(feature = "sync")]
+pub fn open_plog_sync<E>(
     config: &Config,
-    key_manager: &dyn crate::config::sync::KeyManager<E>,
-    signer: &dyn crate::config::sync::MultiSigner<E>,
-) -> Result<Log, E> {
+    key_manager: &(dyn crate::config::sync::KeyManager<E> + Send + Sync),
+    signer: &(dyn crate::config::sync::MultiSigner<E> + Send + Sync),
+) -> Result<Log, E>
+where
+    E: BsCompatibleError + Send + Sync + 'static,
+{
+    use crate::config::adapters::{SyncToAsyncManager, SyncToAsyncSigner};
+
+    let key_manager_adapter = SyncToAsyncManager::new(key_manager);
+    let signer_adapter = SyncToAsyncSigner::new(signer);
+
+    futures::executor::block_on(open_plog_core(
+        config,
+        &key_manager_adapter,
+        &signer_adapter,
+    ))
+}
+
+async fn open_plog_core<E, KM, S>(config: &Config, key_manager: &KM, signer: &S) -> Result<Log, E>
+where
+    E: BsCompatibleError + Send,
+    KM: AsyncKeyManager<E, Key = Multikey, KeyPath = Key, Codec = Codec> + ?Sized,
+    S: AsyncMultiSigner<Signature, E, PubKey = Multikey, Codec = Codec> + ?Sized,
+{
     // 0. Set up the list of ops
     let mut op_params = Vec::default();
 
     // Process initial operations
-    config
-        .additional_ops()
-        .iter()
-        .try_for_each(|params| -> Result<(), E> {
-            match params {
-                p @ OpParams::KeyGen { .. } => {
-                    let _ = load_key::<E>(&mut op_params, p, key_manager)?;
-                }
-                p @ OpParams::CidGen { .. } => {
-                    let _ = load_cid::<E>(&mut op_params, p)?;
-                }
-                p => op_params.push(p.clone()),
+    for params in config.additional_ops().iter() {
+        match params {
+            p @ OpParams::KeyGen { .. } => {
+                let _ = load_key::<E, _>(&mut op_params, p, key_manager).await?;
             }
-            Ok(())
-        })?;
+            p @ OpParams::CidGen { .. } => {
+                let _ = load_cid::<E>(&mut op_params, p)?;
+            }
+            p => op_params.push(p.clone()),
+        }
+    }
 
     // 1. Extract VLAD parameters and prepare signing
     let (vlad_key_params, vlad_cid_params): (OpParams, OpParams) =
@@ -59,7 +79,9 @@ pub fn open_plog<E: BsCompatibleError>(
     let (codec, threshold, limit) = extract_key_params::<E>(&vlad_key_params)?;
 
     // get ephemeral public key and one time signing function
-    let (vlad_pubkey, sign_vlad) = signer.prepare_ephemeral_signing(&codec, threshold, limit)?;
+    let (vlad_pubkey, sign_vlad) = signer
+        .prepare_ephemeral_signing(&codec, threshold, limit)
+        .await?;
 
     let cid = load_cid::<E>(&mut op_params, &vlad_cid_params)?;
 
@@ -86,7 +108,9 @@ pub fn open_plog<E: BsCompatibleError>(
     let (codec, threshold, limit) = extract_key_params::<E>(entrykey_params)?;
 
     // Get the public key and signing function
-    let (entry_pubkey, sign_entry) = signer.prepare_ephemeral_signing(&codec, threshold, limit)?;
+    let (entry_pubkey, sign_entry) = signer
+        .prepare_ephemeral_signing(&codec, threshold, limit)
+        .await?;
 
     // 3. Add the entry public key operation to op_params
     if let OpParams::KeyGen { key, .. } = entrykey_params {
@@ -97,7 +121,7 @@ pub fn open_plog<E: BsCompatibleError>(
     }
 
     // 4. Continue with other preparations
-    let _ = load_key::<E>(&mut op_params, config.pubkey(), key_manager)?;
+    let _ = load_key::<E, _>(&mut op_params, config.pubkey(), key_manager).await?;
     let lock_script = config.lock_script().clone();
     let unlock_script = config.unlock().clone();
 
@@ -182,13 +206,14 @@ fn extract_key_params<E: BsCompatibleError>(
     }
 }
 
-fn load_key<E>(
+async fn load_key<E, KM>(
     ops: &mut Vec<OpParams>,
     params: &OpParams,
-    key_manager: &dyn crate::config::sync::KeyManager<E>,
+    key_manager: &KM,
 ) -> Result<Multikey, E>
 where
     E: From<OpenError> + From<multikey::Error> + From<crate::Error>,
+    KM: AsyncKeyManager<E, Key = Multikey, KeyPath = Key, Codec = Codec> + ?Sized,
 {
     debug!("load_key: {:?}", params);
     match params {
@@ -200,7 +225,7 @@ where
             revoke,
         } => {
             // call back to generate the key
-            let mk = key_manager.get_key(key, codec, *threshold, *limit)?;
+            let mk = key_manager.get_key(key, codec, *threshold, *limit).await?;
 
             // get the public key
             let pk = if mk.attr_view()?.is_secret_key() {
@@ -386,7 +411,8 @@ mod tests {
 
         let key_manager = InMemoryKeyManager::<crate::Error>::default();
 
-        let plog = open_plog(&config, &key_manager, &key_manager).expect("Failed to open plog");
+        let plog =
+            open_plog_sync(&config, &key_manager, &key_manager).expect("Failed to open plog");
 
         // log.first_lock should match
         assert_eq!(&plog.first_lock, config.first_lock());

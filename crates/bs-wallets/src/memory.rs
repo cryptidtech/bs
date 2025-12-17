@@ -200,11 +200,7 @@ where
         // Generate a new key since we don't have it yet
         let secret_key = Self::generate_key(codec)?;
         let fingerprint = secret_key.fingerprint_view()?.fingerprint(Codec::Sha2256)?;
-        tracing::debug!(
-            "Generated new key for path {}: {:?}",
-            key_path,
-            fingerprint
-        );
+        tracing::debug!("Generated new key for path {key_path}: {fingerprint:?}");
         let public_key = secret_key.conv_view()?.to_public_key()?;
 
         // Store the secret key for future use

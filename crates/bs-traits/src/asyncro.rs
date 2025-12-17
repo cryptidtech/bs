@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1
 //! This module provides traits for asynchronous operations
 use crate::cond_send::CondSend;
+use crate::sync::EphemeralSigningTuple;
 use crate::*;
 use std::future::Future;
 use std::num::NonZeroUsize;
@@ -161,4 +162,30 @@ pub trait AsyncGetKey: GetKey {
         threshold: usize,
         limit: usize,
     ) -> Result<GetKeyFuture<'a, Self::Key, Self::Error>, Self::Error>;
+}
+
+/// An async version of KeyManager
+pub trait AsyncKeyManager<E>: GetKey + Send + Sync {
+    fn get_key<'a>(
+        &'a self,
+        key_path: &'a Self::KeyPath,
+        codec: &'a Self::Codec,
+        threshold: NonZeroUsize,
+        limit: NonZeroUsize,
+    ) -> BoxFuture<'a, Result<Self::Key, E>>;
+}
+
+/// An async version of MultiSigner, including ephemeral signing
+pub trait AsyncMultiSigner<S, E>:
+    AsyncSigner<Signature = S, Error = E> + EphemeralKey + GetKey
+where
+    S: Send,
+    E: Send,
+{
+    fn prepare_ephemeral_signing<'a>(
+        &'a self,
+        codec: &'a Self::Codec,
+        threshold: NonZeroUsize,
+        limit: NonZeroUsize,
+    ) -> BoxFuture<'a, EphemeralSigningTuple<Self::PubKey, S, E>>;
 }
