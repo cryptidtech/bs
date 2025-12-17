@@ -30,6 +30,7 @@ bon = "3.6.3"
 tracing-subscriber.workspace = true
 bs-wallets = { workspace = true, features = ["sync"] }
 multibase.workspace = true
+tokio = { workspace = true, features = ["macros", "rt"] }
 
 [lints]
 workspace = true

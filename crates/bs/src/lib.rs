@@ -14,8 +14,9 @@
 pub mod error;
 pub use error::Error;
 
-/// The concrete type used for signatures in this crate.
-pub type Signature = multisig::Multisig;
+/// BetterSign module for managing provenance logs
+pub mod better_sign;
+pub use better_sign::{BetterSign, Signature};
 
 /// bettersign operations
 pub mod ops;

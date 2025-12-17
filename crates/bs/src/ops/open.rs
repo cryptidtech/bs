@@ -51,7 +51,12 @@ where
     ))
 }
 
-async fn open_plog_core<E, KM, S>(config: &Config, key_manager: &KM, signer: &S) -> Result<Log, E>
+/// Core function to open a provenance log based on the [Config] provided. (async)
+pub(crate) async fn open_plog_core<E, KM, S>(
+    config: &Config,
+    key_manager: &KM,
+    signer: &S,
+) -> Result<Log, E>
 where
     E: BsCompatibleError + Send,
     KM: AsyncKeyManager<E, Key = Multikey, KeyPath = Key, Codec = Codec> + ?Sized,

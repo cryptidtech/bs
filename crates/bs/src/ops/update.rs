@@ -13,11 +13,11 @@ pub use config::Config;
 pub mod op_params;
 pub use op_params::OpParams;
 
-use bs_traits::asyncro::{AsyncKeyManager, AsyncMultiSigner, AsyncSigner};
 use crate::{
     error::{BsCompatibleError, UpdateError},
     Signature,
 };
+use bs_traits::asyncro::{AsyncKeyManager, AsyncMultiSigner, AsyncSigner};
 use multicid::{cid, Cid};
 use multicodec::Codec;
 use multihash::mh;
@@ -92,7 +92,7 @@ where
     ))
 }
 
-async fn update_plog_core<E, KM, S>(
+pub(crate) async fn update_plog_core<E, KM, S>(
     plog: &mut Log,
     config: &Config,
     key_manager: &KM,
@@ -312,11 +312,11 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::open::{self, open_plog_sync};
     use crate::params::{
         anykey::PubkeyParams,
         vlad::{FirstEntryKeyParams, VladParams},
     };
-    use crate::open::{self, open_plog_sync};
 
     use bs_traits::sync::SyncGetKey;
     use bs_wallets::memory::InMemoryKeyManager;

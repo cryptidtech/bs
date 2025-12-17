@@ -188,12 +188,12 @@ pub async fn run_basic_test() {
 
     // Check if the plog is initialized
     assert!(
-        fixture.peer.plog().is_some(),
+        fixture.peer.plog().await.is_some(),
         "Expected plog to be initialized"
     );
 
     // Check if the plog can be verified
-    let plog = fixture.peer.plog().unwrap();
+    let plog = fixture.peer.plog().await.unwrap();
     let verify_iter = &mut plog.verify();
     for result in verify_iter {
         if let Err(e) = result {
@@ -237,12 +237,12 @@ pub async fn run_basic_network_test() {
 
     // Check if the plog is initialized
     assert!(
-        fixture.peer.plog().is_some(),
+        fixture.peer.plog().await.is_some(),
         "Expected plog to be initialized in network peer"
     );
 
     // Check if the plog can be verified
-    let plog = fixture.peer.plog().unwrap();
+    let plog = fixture.peer.plog().await.unwrap();
     let verify_iter = &mut plog.verify();
     for result in verify_iter {
         if let Err(e) = result {
@@ -306,7 +306,7 @@ pub async fn run_in_memory_blockstore_test() {
     assert!(res.is_ok(), "Expected successful creation of peer");
 
     // verify the plog
-    let plog = fixture.peer.plog();
+    let plog = fixture.peer.plog().await;
 
     // Verify the CID was stored
     let cid = {
@@ -448,7 +448,7 @@ pub async fn run_store_entries_test() {
     // Let's verify the stored entries
 
     // Get the first lock CID from the plog for verification
-    let plog = fixture.peer.plog();
+    let plog = fixture.peer.plog().await;
     let cid = {
         let binding = plog.as_ref().unwrap();
         let first_lock_cid = binding.vlad.cid();
@@ -497,7 +497,7 @@ pub async fn run_network_store_entries_test() {
         .await
         .expect("Should create initialized network peer");
 
-    let plog = fixture.peer.plog();
+    let plog = fixture.peer.plog().await;
 
     // Get the first lock CID from the plog for verification
     let cid = {
@@ -586,7 +586,7 @@ pub async fn run_update_test() {
     assert!(stored, "Updated CID should be stored in blockstore");
 
     // Verify plog is still valid after update
-    let plog = fixture.peer.plog();
+    let plog = fixture.peer.plog().await;
     let binding = plog.as_ref().unwrap();
     let verify_iter = &mut binding.verify();
     for result in verify_iter {
@@ -643,7 +643,7 @@ pub async fn run_network_update_test() {
     );
 
     // Verify plog is still valid
-    let plog = fixture.peer.plog();
+    let plog = fixture.peer.plog().await;
     let binding = plog.as_ref().unwrap();
     let verify_iter = &mut binding.verify();
     for result in verify_iter {
@@ -660,14 +660,14 @@ pub async fn run_load_test() {
     let fixture = setup_initialized_peer().await;
 
     // Get the plog from the initialized peer
-    let original_plog = fixture.peer.plog().as_ref().unwrap().clone();
+    let original_plog = fixture.peer.plog().await.as_ref().unwrap().clone();
 
     // Create a new peer with empty state
     let mut new_fixture = setup_test_peer().await;
 
     // Ensure the new peer has no plog yet
     assert!(
-        new_fixture.peer.plog().is_none(),
+        new_fixture.peer.plog().await.is_none(),
         "New peer should have no plog initially"
     );
 
@@ -677,12 +677,12 @@ pub async fn run_load_test() {
 
     // Verify the plog was loaded
     assert!(
-        new_fixture.peer.plog().is_some(),
+        new_fixture.peer.plog().await.is_some(),
         "Plog should now be loaded"
     );
 
     // Verify the loaded plog has the correct data
-    let loaded_plog = new_fixture.peer.plog().unwrap();
+    let loaded_plog = new_fixture.peer.plog().await.unwrap();
     assert_eq!(
         loaded_plog.vlad.cid(),
         original_plog.vlad.cid(),
@@ -730,7 +730,7 @@ pub async fn run_network_load_test() {
     let fixture = setup_initialized_peer().await;
 
     // Get the plog from the initialized peer
-    let original_plog = fixture.peer.plog().clone().unwrap().clone();
+    let original_plog = fixture.peer.plog().await.clone().unwrap().clone();
 
     // Create a new network peer with empty state
     let mut new_fixture = setup_network_test_peer()
@@ -739,7 +739,7 @@ pub async fn run_network_load_test() {
 
     // Ensure the new network peer has no plog yet
     assert!(
-        new_fixture.peer.plog().is_none(),
+        new_fixture.peer.plog().await.is_none(),
         "New network peer should have no plog initially"
     );
 
@@ -752,12 +752,12 @@ pub async fn run_network_load_test() {
 
     // Verify the plog was loaded
     assert!(
-        new_fixture.peer.plog().is_some(),
+        new_fixture.peer.plog().await.is_some(),
         "Plog should now be loaded in network peer"
     );
 
     // Verify the loaded plog has the correct data
-    let loaded_plog = new_fixture.peer.plog().as_ref().unwrap().clone();
+    let loaded_plog = new_fixture.peer.plog().await.as_ref().unwrap().clone();
     assert_eq!(
         loaded_plog.vlad.cid(),
         original_plog.vlad.cid(),
