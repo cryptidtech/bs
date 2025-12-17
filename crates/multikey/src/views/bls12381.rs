@@ -476,8 +476,8 @@ impl ConvView for View<'_> {
                 let tav = pk.threshold_attr_view()?;
                 let key_share: Vec<u8> = KeyShare(
                     tav.identifier()?,
-                    tav.threshold()?.into(),
-                    tav.limit()?.into(),
+                    tav.threshold()?,
+                    tav.limit()?,
                     key_bytes.to_vec(),
                 )
                 .into();
@@ -496,7 +496,7 @@ impl ConvView for View<'_> {
                 let tav = pk.threshold_attr_view()?;
                 let key_share: Vec<u8> = KeyShare(
                     tav.identifier()?,
-                    tav.threshold()?.into(),
+                    tav.threshold()?,
                     tav.limit()?,
                     key_bytes.to_vec(),
                 )
@@ -556,7 +556,7 @@ impl ConvView for View<'_> {
                 let sav = self.mk.threshold_attr_view()?;
                 let secret_key_share: Vec<u8> = KeyShare(
                     sav.identifier()?,
-                    sav.threshold()?.into(),
+                    sav.threshold()?,
                     sav.limit()?,
                     secret_bytes.to_vec(),
                 )
@@ -564,7 +564,7 @@ impl ConvView for View<'_> {
                 let pav = pk.threshold_attr_view()?;
                 let public_key_share: Vec<u8> = KeyShare(
                     pav.identifier()?,
-                    pav.threshold()?.into(),
+                    pav.threshold()?,
                     pav.limit()?,
                     key_bytes.to_vec(),
                 )
@@ -590,7 +590,7 @@ impl ConvView for View<'_> {
                 let sav = self.mk.threshold_attr_view()?;
                 let secret_key_share: Vec<u8> = KeyShare(
                     sav.identifier()?,
-                    sav.threshold()?.into(),
+                    sav.threshold()?,
                     sav.limit()?,
                     secret_bytes.to_vec(),
                 )
@@ -598,7 +598,7 @@ impl ConvView for View<'_> {
                 let pav = pk.threshold_attr_view()?;
                 let public_key_share: Vec<u8> = KeyShare(
                     pav.identifier()?,
-                    pav.threshold()?.into(),
+                    pav.threshold()?,
                     pav.limit()?,
                     key_bytes.to_vec(),
                 )

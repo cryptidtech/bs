@@ -63,6 +63,12 @@ pub enum Error {
     UnsupportedAlgorithm(String),
 }
 
+impl From<ssh_key::Error> for Error {
+    fn from(e: ssh_key::Error) -> Self {
+        Error::Conversions(ConversionsError::Ssh(e.into()))
+    }
+}
+
 /// Attributes errors created by this library
 #[derive(Clone, Debug, thiserror::Error)]
 #[non_exhaustive]
