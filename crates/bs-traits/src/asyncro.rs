@@ -159,8 +159,8 @@ pub trait AsyncGetKey: GetKey {
         &'a self,
         key_path: &'a Self::KeyPath,
         codec: &'a Self::Codec,
-        threshold: usize,
-        limit: usize,
+        threshold: NonZeroUsize,
+        limit: NonZeroUsize,
     ) -> Result<GetKeyFuture<'a, Self::Key, Self::Error>, Self::Error>;
 }
 

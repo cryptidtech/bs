@@ -5,12 +5,12 @@ pub mod config;
 use std::num::NonZeroUsize;
 
 use crate::{
+    config::asynchronous::{KeyManager, MultiSigner},
     error::{BsCompatibleError, OpenError},
     params::vlad::{FirstEntryKeyParams, VladParams},
     update::{op, OpParams},
     Signature,
 };
-use bs_traits::asyncro::{AsyncKeyManager, AsyncMultiSigner};
 pub use config::Config;
 use multicid::{cid, Cid, Vlad};
 use multicodec::Codec;
@@ -20,11 +20,13 @@ use provenance_log::{entry, error::EntryError, Error as PlogError, Key, Log, OpI
 use tracing::debug;
 
 /// Open a new provenance log based on the [Config] provided. (async)
-pub async fn open_plog<E, KM, S>(config: &Config, key_manager: &KM, signer: &S) -> Result<Log, E>
+pub async fn open_plog<E>(
+    config: &Config,
+    key_manager: &(dyn KeyManager<E> + Send + Sync),
+    signer: &(dyn MultiSigner<E> + Send + Sync),
+) -> Result<Log, E>
 where
     E: BsCompatibleError + Send,
-    KM: AsyncKeyManager<E, Key = Multikey, KeyPath = Key, Codec = Codec> + ?Sized,
-    S: AsyncMultiSigner<Signature, E, PubKey = Multikey, Codec = Codec> + ?Sized,
 {
     open_plog_core(config, key_manager, signer).await
 }
@@ -44,7 +46,7 @@ where
     let key_manager_adapter = SyncToAsyncManager::new(key_manager);
     let signer_adapter = SyncToAsyncSigner::new(signer);
 
-    futures::executor::block_on(open_plog_core(
+    futures::executor::block_on(open_plog_impl(
         config,
         &key_manager_adapter,
         &signer_adapter,
@@ -52,15 +54,26 @@ where
 }
 
 /// Core function to open a provenance log based on the [Config] provided. (async)
-pub(crate) async fn open_plog_core<E, KM, S>(
+pub(crate) async fn open_plog_core<E>(
     config: &Config,
-    key_manager: &KM,
-    signer: &S,
+    key_manager: &(dyn KeyManager<E> + Send + Sync),
+    signer: &(dyn MultiSigner<E> + Send + Sync),
 ) -> Result<Log, E>
 where
     E: BsCompatibleError + Send,
-    KM: AsyncKeyManager<E, Key = Multikey, KeyPath = Key, Codec = Codec> + ?Sized,
-    S: AsyncMultiSigner<Signature, E, PubKey = Multikey, Codec = Codec> + ?Sized,
+{
+    open_plog_impl(config, key_manager, signer).await
+}
+
+/// Internal implementation that works with base async traits (for adapters)
+async fn open_plog_impl<E, KM, S>(config: &Config, key_manager: &KM, signer: &S) -> Result<Log, E>
+where
+    E: BsCompatibleError + Send,
+    KM: bs_traits::asyncro::AsyncKeyManager<E, Key = Multikey, KeyPath = Key, Codec = Codec>
+        + ?Sized,
+    S: bs_traits::asyncro::AsyncMultiSigner<Signature, E, PubKey = Multikey, Codec = Codec>
+        + bs_traits::asyncro::AsyncSigner<KeyPath = Key, Signature = Signature, Error = E>
+        + ?Sized,
 {
     // 0. Set up the list of ops
     let mut op_params = Vec::default();
@@ -69,7 +82,7 @@ where
     for params in config.additional_ops().iter() {
         match params {
             p @ OpParams::KeyGen { .. } => {
-                let _ = load_key::<E, _>(&mut op_params, p, key_manager).await?;
+                let _ = load_key(&mut op_params, p, key_manager).await?;
             }
             p @ OpParams::CidGen { .. } => {
                 let _ = load_cid::<E>(&mut op_params, p)?;
@@ -126,7 +139,7 @@ where
     }
 
     // 4. Continue with other preparations
-    let _ = load_key::<E, _>(&mut op_params, config.pubkey(), key_manager).await?;
+    let _ = load_key(&mut op_params, config.pubkey(), key_manager).await?;
     let lock_script = config.lock_script().clone();
     let unlock_script = config.unlock().clone();
 
@@ -218,7 +231,8 @@ async fn load_key<E, KM>(
 ) -> Result<Multikey, E>
 where
     E: From<OpenError> + From<multikey::Error> + From<crate::Error>,
-    KM: AsyncKeyManager<E, Key = Multikey, KeyPath = Key, Codec = Codec> + ?Sized,
+    KM: bs_traits::asyncro::AsyncKeyManager<E, Key = Multikey, KeyPath = Key, Codec = Codec>
+        + ?Sized,
 {
     debug!("load_key: {:?}", params);
     match params {

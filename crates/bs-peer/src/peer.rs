@@ -6,7 +6,10 @@ pub use bs::resolver_ext::ResolverExt;
 pub use bs::update::Config as UpdateConfig;
 use bs::BetterSign;
 use bs::{
-    config::sync::{KeyManager, MultiSigner},
+    config::{
+        asynchronous::{KeyManager as AsyncKeyManager, MultiSigner as AsyncMultiSigner},
+        sync::{KeyManager, MultiSigner},
+    },
     params::{
         anykey::PubkeyParams,
         vlad::{FirstEntryKeyParams, VladParams},
@@ -15,8 +18,6 @@ use bs::{
 };
 pub use bs_p2p::events::api::{Client, Libp2pEvent};
 pub use bs_p2p::events::PublicEvent;
-use bs_traits::asyncro::AsyncKeyManager;
-use bs_traits::asyncro::AsyncMultiSigner;
 use bs_traits::CondSync;
 use futures::channel::mpsc::{self};
 pub use libp2p::PeerId;
@@ -136,7 +137,7 @@ where
         + MultiSigner<Error>
         + CondSync
         + AsyncKeyManager<Error>
-        + AsyncMultiSigner<bs::config::Multisig, Error>
+        + AsyncMultiSigner<Error>
         + Clone,
     BS: BlockstoreTrait + CondSync,
 {
@@ -271,7 +272,7 @@ where
     /// Generate a new Plog with the given configuration.
     pub async fn generate_with_config(&mut self, config: bs::open::Config) -> Result<(), Error>
     where
-        KP: AsyncKeyManager<Error> + AsyncMultiSigner<bs::config::Multisig, Error> + Clone,
+        KP: AsyncKeyManager<Error> + AsyncMultiSigner<Error> + Clone,
     {
         {
             let bs = self.better_sign.lock().await;
@@ -322,7 +323,7 @@ where
         unlock: impl AsRef<str>,
     ) -> Result<(), Error>
     where
-        KP: AsyncKeyManager<Error> + AsyncMultiSigner<bs::config::Multisig, Error> + Clone,
+        KP: AsyncKeyManager<Error> + AsyncMultiSigner<Error> + Clone,
     {
         {
             let bs = self.better_sign.lock().await;

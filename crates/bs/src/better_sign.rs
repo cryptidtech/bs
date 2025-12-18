@@ -4,16 +4,11 @@
 //! This module offers a clean, preferred API compared to directly using the functional
 //! `open_plog` and `update_plog` functions.
 use crate::{
+    config::asynchronous::{KeyManager, MultiSigner},
     error::{BsCompatibleError, Error},
     ops::{open, update},
 };
-use bs_traits::asyncro::{AsyncKeyManager, AsyncMultiSigner, AsyncSigner};
-use multicodec::Codec;
-use multikey::Multikey;
-use provenance_log::{entry::Entry, Key, Log};
-
-/// The concrete type used for signatures in this crate.
-pub type Signature = multisig::Multisig;
+use provenance_log::{entry::Entry, Log};
 
 /// A BetterSign instance that encapsulates a provenance log with its key manager and signer.
 ///
@@ -74,9 +69,8 @@ impl<KM, S, E> BetterSign<KM, S, E> {
 impl<KM, S, E> BetterSign<KM, S, E>
 where
     E: BsCompatibleError + Send,
-    KM: AsyncKeyManager<E, Key = Multikey, KeyPath = Key, Codec = Codec>,
-    S: AsyncMultiSigner<Signature, E, PubKey = Multikey, Codec = Codec>,
-    S: AsyncSigner<KeyPath = Key, Signature = Signature, Error = E>,
+    KM: KeyManager<E>,
+    S: MultiSigner<E>,
 {
     /// Create a new BetterSign instance with the given configuration.
     pub async fn new(config: open::Config, key_manager: KM, signer: S) -> Result<Self, E> {
@@ -106,9 +100,8 @@ where
 impl<KM, S, E> BetterSign<KM, S, E>
 where
     E: BsCompatibleError + Send,
-    KM: AsyncKeyManager<E, Key = Multikey, KeyPath = Key, Codec = Codec>,
-    S: AsyncMultiSigner<Signature, E, PubKey = Multikey, Codec = Codec>,
-    S: AsyncSigner<KeyPath = Key, Signature = Signature, Error = E>,
+    KM: KeyManager<E>,
+    S: MultiSigner<E>,
 {
     /// Synchronously create a new BetterSign instance with the given configuration.
     ///
@@ -141,7 +134,7 @@ mod tests {
     use bs_wallets::memory::InMemoryKeyManager;
     use multicodec::Codec;
     use provenance_log::key::key_paths::ValidatedKeyParams;
-    use provenance_log::Script;
+    use provenance_log::{Key, Script};
 
     #[tokio::test]
     async fn test_better_sign_new() {

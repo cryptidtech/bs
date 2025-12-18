@@ -16,7 +16,7 @@ pub use error::Error;
 
 /// BetterSign module for managing provenance logs
 pub mod better_sign;
-pub use better_sign::{BetterSign, Signature};
+pub use better_sign::BetterSign;
 
 /// bettersign operations
 pub mod ops;
@@ -31,6 +31,8 @@ pub mod prelude {
 
 /// Opinionated configuation for the BetterSign library
 pub mod config;
+// Re-export the concrete Signature type from config for convenience
+pub use config::Signature;
 
 /// Resolver extension for bettersign
 pub mod resolver_ext;
