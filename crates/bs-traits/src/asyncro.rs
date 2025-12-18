@@ -165,7 +165,7 @@ pub trait AsyncGetKey: GetKey {
 }
 
 /// An async version of KeyManager
-pub trait AsyncKeyManager<E>: GetKey + Send + Sync {
+pub trait AsyncKeyManager<E>: GetKey + CondSync {
     fn get_key<'a>(
         &'a self,
         key_path: &'a Self::KeyPath,
