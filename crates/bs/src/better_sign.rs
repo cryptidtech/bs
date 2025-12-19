@@ -73,8 +73,8 @@ where
     S: MultiSigner<E>,
 {
     /// Create a new BetterSign instance with the given configuration.
-    pub async fn new(config: open::Config, mut key_manager: KM, signer: S) -> Result<Self, E> {
-        let plog = open::open_plog_core(&config, &mut key_manager, &signer).await?;
+    pub async fn new(config: &open::Config, mut key_manager: KM, signer: S) -> Result<Self, E> {
+        let plog = open::open_plog_core(config, &mut key_manager, &signer).await?;
         Ok(Self {
             plog,
             key_manager,
@@ -110,7 +110,7 @@ where
     /// # Errors
     ///
     /// Returns an error if the provenance log creation fails.
-    pub fn new_sync(config: open::Config, key_manager: KM, signer: S) -> Result<Self, E> {
+    pub fn new_sync(config: &open::Config, key_manager: KM, signer: S) -> Result<Self, E> {
         futures::executor::block_on(Self::new(config, key_manager, signer))
     }
 
