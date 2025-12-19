@@ -166,6 +166,7 @@ pub trait AsyncGetKey: GetKey {
 
 /// An async version of KeyManager
 pub trait AsyncKeyManager<E>: GetKey + CondSync {
+    /// Get the key asynchronously
     fn get_key<'a>(
         &'a self,
         key_path: &'a Self::KeyPath,
@@ -173,6 +174,13 @@ pub trait AsyncKeyManager<E>: GetKey + CondSync {
         threshold: NonZeroUsize,
         limit: NonZeroUsize,
     ) -> BoxFuture<'a, Result<Self::Key, E>>;
+
+    /// Emables you to pre-process the Vlad during the creation process
+    /// For example, you can provide a function that will be called shortly after the Vlad is created
+    #[allow(unused_variables)]
+    fn preprocess_vlad<'a>(&'a mut self, vlad: &'a multicid::Vlad) -> BoxFuture<'a, Result<(), E>> {
+        Box::pin(async move { Ok(()) })
+    }
 }
 
 /// An async version of MultiSigner, including ephemeral signing

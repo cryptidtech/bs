@@ -73,8 +73,8 @@ where
     S: MultiSigner<E>,
 {
     /// Create a new BetterSign instance with the given configuration.
-    pub async fn new(config: open::Config, key_manager: KM, signer: S) -> Result<Self, E> {
-        let plog = open::open_plog_core(&config, &key_manager, &signer).await?;
+    pub async fn new(config: open::Config, mut key_manager: KM, signer: S) -> Result<Self, E> {
+        let plog = open::open_plog_core(&config, &mut key_manager, &signer).await?;
         Ok(Self {
             plog,
             key_manager,

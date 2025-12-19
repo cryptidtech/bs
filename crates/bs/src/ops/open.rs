@@ -22,7 +22,7 @@ use tracing::debug;
 /// Open a new provenance log based on the [Config] provided. (async)
 pub async fn open_plog<E>(
     config: &Config,
-    key_manager: &(dyn KeyManager<E> + Send + Sync),
+    key_manager: &mut (dyn KeyManager<E> + Send + Sync),
     signer: &(dyn MultiSigner<E> + Send + Sync),
 ) -> Result<Log, E>
 where
@@ -43,12 +43,12 @@ where
 {
     use crate::config::adapters::{SyncToAsyncManager, SyncToAsyncSigner};
 
-    let key_manager_adapter = SyncToAsyncManager::new(key_manager);
+    let mut key_manager_adapter = SyncToAsyncManager::new(key_manager);
     let signer_adapter = SyncToAsyncSigner::new(signer);
 
     futures::executor::block_on(open_plog_impl(
         config,
-        &key_manager_adapter,
+        &mut key_manager_adapter,
         &signer_adapter,
     ))
 }
@@ -56,7 +56,7 @@ where
 /// Core function to open a provenance log based on the [Config] provided. (async)
 pub(crate) async fn open_plog_core<E>(
     config: &Config,
-    key_manager: &(dyn KeyManager<E> + Send + Sync),
+    key_manager: &mut (dyn KeyManager<E> + Send + Sync),
     signer: &(dyn MultiSigner<E> + Send + Sync),
 ) -> Result<Log, E>
 where
@@ -66,7 +66,11 @@ where
 }
 
 /// Internal implementation that works with base async traits (for adapters)
-async fn open_plog_impl<E, KM, S>(config: &Config, key_manager: &KM, signer: &S) -> Result<Log, E>
+async fn open_plog_impl<E, KM, S>(
+    config: &Config,
+    key_manager: &mut KM,
+    signer: &S,
+) -> Result<Log, E>
 where
     E: BsCompatibleError + Send,
     KM: bs_traits::asyncro::AsyncKeyManager<E, Key = Multikey, KeyPath = Key, Codec = Codec>
@@ -120,6 +124,9 @@ where
         })?;
         Ok(multisig.into())
     })?;
+
+    // Pass vlad to the caller for any pre-processing
+    key_manager.preprocess_vlad(&vlad).await?;
 
     // 2. Extract entry key parameters and prepare signing
     let entrykey_params = &config.entrykey();

@@ -167,7 +167,7 @@ where
     let entry_builder = entry::EntryBuilder::from(&last_entry);
     let mut mutable_entry = entry_builder.unlock(config.unlock().clone()).build();
 
-    for lock in config.add_entry_lock_scripts() {
+    for lock in config.entry_lock_scripts() {
         mutable_entry.add_lock(lock);
     }
 
@@ -444,7 +444,7 @@ mod tests {
                 key: VladParams::<FirstEntryKeyParams>::FIRST_ENTRY_KEY_PATH.into(),
             }])
             // Entry lock scripts define conditions which must be met by the next entry in the plog for it to be valid.
-            .add_entry_lock_scripts(vec![Script::Code(
+            .with_entry_lock_scripts(vec![Script::Code(
                 Key::try_from("/delegated/").unwrap(),
                 delegated_lock,
             )])

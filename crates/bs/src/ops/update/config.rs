@@ -32,7 +32,7 @@ pub struct Config {
     ///     );
     /// ```
     #[builder(default = Vec::new())]
-    add_entry_lock_scripts: Vec<Script>,
+    with_entry_lock_scripts: Vec<Script>,
 
     /// Key paths of lock scripts to remove
     #[builder(default = Vec::new())]
@@ -59,8 +59,9 @@ impl Config {
         &self.entry_signing_key
     }
 
-    pub(crate) fn add_entry_lock_scripts(&self) -> &[Script] {
-        &self.add_entry_lock_scripts
+    /// Returns all lock scripts for this config
+    pub(crate) fn entry_lock_scripts(&self) -> &[Script] {
+        &self.with_entry_lock_scripts
     }
 }
 
