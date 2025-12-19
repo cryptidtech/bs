@@ -2,8 +2,6 @@
 
 use multicodec::Codec;
 use multikey::{Builder, Views};
-use multiutil::CodecInfo;
-
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);

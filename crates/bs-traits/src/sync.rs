@@ -18,7 +18,7 @@ pub trait SyncSigner: Signer {
     }
 }
 
-pub type OneTimeSignFn<Sig, E> = Box<dyn FnOnce(&[u8]) -> Result<Sig, E>>;
+pub type OneTimeSignFn<Sig, E> = Box<dyn FnOnce(&[u8]) -> Result<Sig, E> + Send>;
 
 pub type EphemeralSigningTuple<PK, Sig, E> = Result<(PK, OneTimeSignFn<Sig, E>), E>;
 

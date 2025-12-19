@@ -9,9 +9,10 @@ license = "Functional Source License 1.1"
 
 [dependencies]
 bs-traits.workspace = true
-bs-wallets.workspace = true
+bs-wallets = { workspace = true, features = ["sync"] }
 best-practices.workspace = true
 comrade.workspace = true
+futures = { workspace = true, optional = true }
 multicid.workspace = true
 multicodec.workspace = true
 multihash.workspace = true
@@ -27,11 +28,14 @@ bon = "3.6.3"
 
 [dev-dependencies]
 tracing-subscriber.workspace = true
-bs-wallets.workspace = true
+bs-wallets = { workspace = true, features = ["sync"] }
 multibase.workspace = true
+tokio = { workspace = true, features = ["macros", "rt"] }
 
 [lints]
 workspace = true
 
 [features]
+default = ["sync"]
 serde = ["dep:serde"]
+sync = ["dep:futures", "bs-wallets/sync"]

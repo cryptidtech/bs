@@ -53,6 +53,7 @@ bs-traits = { path = "crates/bs-traits" }
 bs-wallets = { path = "crates/bs-wallets" }
 comrade = { path = "crates/comrade" }
 comrade-reference = { path = "crates/comrade-reference" }
+futures = "0.3.30"
 multibase = { path = "crates/multibase" }
 multicid = { path = "crates/multicid" }
 multicodec = { path = "crates/multicodec" }

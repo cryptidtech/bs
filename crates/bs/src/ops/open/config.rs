@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1
-
-use provenance_log::{key::key_paths::ValidatedKeyParams, Script};
+pub use provenance_log::{
+    entry::Field, format_with_fields, key::key_paths::ValidatedKeyParams, Script,
+};
 
 use crate::{
     params::vlad::{FirstEntryKeyParams, VladParams},

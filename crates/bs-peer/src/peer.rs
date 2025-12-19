@@ -1,13 +1,15 @@
 //! BetterSign Peer: BetterSign core + libp2p networking + Blockstore
-use std::sync::{Arc, Mutex};
-
 use crate::{platform, Error};
 use ::cid::Cid;
 use blockstore::Blockstore as BlockstoreTrait;
 pub use bs::resolver_ext::ResolverExt;
 pub use bs::update::Config as UpdateConfig;
+use bs::BetterSign;
 use bs::{
-    config::sync::{KeyManager, MultiSigner},
+    config::{
+        asynchronous::{KeyManager as AsyncKeyManager, MultiSigner as AsyncMultiSigner},
+        sync::{KeyManager, MultiSigner},
+    },
     params::{
         anykey::PubkeyParams,
         vlad::{FirstEntryKeyParams, VladParams},
@@ -25,6 +27,8 @@ use multihash::mh;
 use provenance_log::key::key_paths::ValidatedKeyParams;
 pub use provenance_log::resolver::{ResolvedPlog, Resolver};
 pub use provenance_log::{self as p, Key, Script};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 /// A peer that is generic over the blockstore type.
 ///
@@ -35,8 +39,8 @@ where
     KP: KeyManager<Error> + MultiSigner<Error>,
     BS: BlockstoreTrait + CondSync,
 {
-    /// The Provenance Log of the peer, which contains the history of operations
-    plog: Arc<Mutex<Option<p::Log>>>,
+    /// The BetterSign instance containing the plog and crypto operations
+    better_sign: Arc<Mutex<Option<BetterSign<KP, KP, Error>>>>,
     /// Key provider for the peer, used for signing and key management
     key_provider: KP,
     /// [Blockstore] to save data
@@ -56,15 +60,15 @@ where
 {
     fn eq(&self, other: &Self) -> bool {
         // Compare peer IDs and blockstore references
-        // Equal is the plogs match
-        self.peer_id == other.peer_id && Arc::ptr_eq(&self.plog, &other.plog)
+        // Equal if the better_sign Arc pointers match
+        self.peer_id == other.peer_id && Arc::ptr_eq(&self.better_sign, &other.better_sign)
     }
 }
 
 /// Impl Clone for BsPeer - You get everything except the events because you can't clone a
 /// Receiver.
 ///
-/// Plog is wraped in Arc<Mutex> to allow shared access of a single [provenance_log::Log] across threads,
+/// BetterSign is wrapped in Arc<Mutex> to allow shared access across threads.
 impl<KP, BS> Clone for BsPeer<KP, BS>
 where
     KP: KeyManager<Error> + MultiSigner<Error> + CondSync + Clone,
@@ -72,7 +76,7 @@ where
 {
     fn clone(&self) -> Self {
         Self {
-            plog: self.plog.clone(),
+            better_sign: self.better_sign.clone(),
             key_provider: self.key_provider.clone(),
             blockstore: self.blockstore.clone(),
             network_client: self.network_client.clone(),
@@ -118,7 +122,7 @@ where
 
         Ok(Self {
             network_client: Some(network_client),
-            plog: Default::default(),
+            better_sign: Default::default(),
             key_provider,
             blockstore,
             events: Some(rx_evts),
@@ -129,25 +133,31 @@ where
 
 impl<KP, BS> BsPeer<KP, BS>
 where
-    KP: KeyManager<Error> + MultiSigner<Error> + CondSync,
+    KP: KeyManager<Error>
+        + MultiSigner<Error>
+        + CondSync
+        + AsyncKeyManager<Error>
+        + AsyncMultiSigner<Error>
+        + Clone,
     BS: BlockstoreTrait + CondSync,
 {
-    /// Returns a clone of the p[p::Log] of the peer, if it exists.
-    pub fn plog(&self) -> Option<p::Log> {
-        self.plog.lock().unwrap().as_ref().cloned()
-        // {
-        //     Ok(plog) => plog.clone(),
-        //     Err(_) => {
-        //         tracing::error!("Failed to acquire lock on Plog");
-        //         None
-        //     }
-        // }
+    /// Returns a clone of the provenance log of the peer, if it exists.
+    pub async fn plog(&self) -> Option<p::Log> {
+        self.better_sign
+            .lock()
+            .await
+            .as_ref()
+            .map(|bs| bs.plog().clone())
     }
 
-    /// use lock to replace current plog with given plog
-    fn set_plog(&mut self, plog: p::Log) -> Result<(), Error> {
-        let mut plog_lock = self.plog.lock().map_err(|_| Error::LockPosioned)?;
-        *plog_lock = Some(plog);
+    /// Set the BetterSign instance with the given plog and key provider
+    async fn set_better_sign(&mut self, plog: p::Log, key_provider: KP) -> Result<(), Error> {
+        let mut bs_lock = self.better_sign.lock().await;
+        *bs_lock = Some(BetterSign::from_parts(
+            plog,
+            key_provider.clone(),
+            key_provider,
+        ));
         Ok(())
     }
 
@@ -155,7 +165,7 @@ where
     pub fn with_blockstore(key_provider: KP, blockstore: BS) -> Self {
         Self {
             key_provider,
-            plog: Default::default(),
+            better_sign: Default::default(),
             blockstore,
             network_client: Default::default(),
             events: None,
@@ -214,15 +224,16 @@ where
     /// Store all the plog [provenance_log::Entry]s in the [blockstore::Blockstore]
     async fn store_entries(&self) -> Result<(), Error> {
         let (first_lock_cid, first_lock_bytes, entries) = {
-            let plog = self.plog.lock().map_err(|_| Error::LockPosioned)?;
+            let bs = self.better_sign.lock().await;
 
-            plog.as_ref()
-                .map(|p| {
-                    let first_lock_cid_bytes: Vec<u8> = p.vlad.cid().clone().into();
+            bs.as_ref()
+                .map(|bs| {
+                    let plog = bs.plog();
+                    let first_lock_cid_bytes: Vec<u8> = plog.vlad.cid().clone().into();
                     let first_lock_cid = Cid::try_from(first_lock_cid_bytes).unwrap();
-                    let first_lock_bytes: Vec<u8> = p.first_lock.clone().into();
+                    let first_lock_bytes: Vec<u8> = plog.first_lock.clone().into();
 
-                    (first_lock_cid, first_lock_bytes, p.entries.clone())
+                    (first_lock_cid, first_lock_bytes, plog.entries.clone())
                 })
                 .ok_or(Error::PlogNotInitialized)?
         };
@@ -259,29 +270,32 @@ where
     }
 
     /// Generate a new Plog with the given configuration.
-    pub async fn generate_with_config(&mut self, config: bs::open::Config) -> Result<(), Error> {
+    pub async fn generate_with_config(&mut self, config: bs::open::Config) -> Result<(), Error>
+    where
+        KP: AsyncKeyManager<Error> + AsyncMultiSigner<Error> + Clone,
+    {
         {
-            match self.plog.lock() {
-                Ok(plog) => {
-                    if plog.is_some() {
-                        tracing::error!("[generate_with_config]: Plog already exists, cannot generate a new one");
-                        return Err(Error::PlogAlreadyExists);
-                    } else {
-                        tracing::debug!("[generate_with_config]: Acquired lock on Plog");
-                    }
-                }
-                Err(_) => {
-                    tracing::error!("[generate_with_config]: Failed to acquire lock on Plog");
-                    return Err(Error::LockPosioned);
-                }
+            let bs = self.better_sign.lock().await;
+            if bs.is_some() {
+                tracing::error!(
+                    "[generate_with_config]: BetterSign already exists, cannot generate a new one"
+                );
+                return Err(Error::PlogAlreadyExists);
             }
+            tracing::debug!("[generate_with_config]: Acquired lock on BetterSign");
         }
 
-        // Pass the key_provider directly as both key_manager and signer
-        let plog = bs::ops::open_plog(&config, &self.key_provider, &self.key_provider)?;
-        {
-            let verify_iter = &mut plog.verify();
+        // Create BetterSign instance (no lock held)
+        let bs = BetterSign::new(
+            config.clone(),
+            self.key_provider.clone(),
+            self.key_provider.clone(),
+        )
+        .await?;
 
+        // Verify the plog
+        {
+            let verify_iter = &mut bs.plog().verify();
             for result in verify_iter {
                 if let Err(e) = result {
                     tracing::error!("Plog verification failed: {}", e);
@@ -290,8 +304,12 @@ where
             }
         }
 
+        // Store ops and set the better_sign
         self.store_ops(config.into()).await?;
-        self.set_plog(plog)?;
+        {
+            let mut bs_lock = self.better_sign.lock().await;
+            *bs_lock = Some(bs);
+        }
         self.store_entries().await?;
         self.record_plog_to_dht().await?;
         self.publish_to_pubsub().await?;
@@ -303,11 +321,14 @@ where
         &mut self,
         lock: impl AsRef<str>,
         unlock: impl AsRef<str>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Error>
+    where
+        KP: AsyncKeyManager<Error> + AsyncMultiSigner<Error> + Clone,
+    {
         {
-            let plog = self.plog.lock().map_err(|_| Error::LockPosioned)?;
-            if plog.is_some() {
-                tracing::error!("[generate]: Plog already exists, cannot generate a new one");
+            let bs = self.better_sign.lock().await;
+            if bs.is_some() {
+                tracing::error!("[generate]: BetterSign already exists, cannot generate a new one");
                 return Err(Error::PlogAlreadyExists);
             }
         }
@@ -336,25 +357,26 @@ where
 
     /// Update the BsPeer's Plog with new data.
     pub async fn update(&mut self, config: UpdateConfig) -> Result<(), Error> {
+        // Update with lock held briefly
         {
-            let mut plog = self.plog.lock().map_err(|_| Error::LockPosioned)?;
-            let Some(ref mut plog) = *plog else {
-                return Err(Error::PlogNotInitialized);
-            };
-            // Apply the update to the plog
-            bs::ops::update_plog(plog, &config, &self.key_provider, &self.key_provider)?;
+            let mut bs_guard = self.better_sign.lock().await;
+            let bs = bs_guard.as_mut().ok_or(Error::PlogNotInitialized)?;
+
+            // Update happens - this is async but the lock is held
+            // This is acceptable because BetterSign encapsulates both the plog and crypto ops
+            bs.update(config.clone()).await?;
 
             // Verify the updated plog
-            let verify_iter = &mut plog.verify();
+            let verify_iter = &mut bs.plog().verify();
             for result in verify_iter {
                 if let Err(e) = result {
-                    tracing::error!("Plog verification failed after update: {}", e);
+                    tracing::error!("Plog verification failed after update: {e}");
                     return Err(Error::PlogVerificationFailed(e));
                 }
             }
         }
 
-        // After successful update, store CIDs and publish DHT record
+        // Now do async operations without holding any lock
         self.store_ops(config.into()).await?;
         self.store_entries().await?;
         self.record_plog_to_dht().await?;
@@ -362,11 +384,11 @@ where
         Ok(())
     }
 
-    /// Load a Plog into ths BsPeer.
+    /// Load a Plog into this BsPeer.
     pub async fn load(&mut self, plog: p::Log) -> Result<(), Error> {
         {
-            let plog = self.plog.lock().map_err(|_| Error::LockPosioned)?;
-            if plog.is_some() {
+            let bs = self.better_sign.lock().await;
+            if bs.is_some() {
                 return Err(Error::PlogAlreadyExists);
             }
         }
@@ -382,8 +404,9 @@ where
             }
         }
 
-        // Store the plog, entries, and record to DHT
-        self.set_plog(plog)?;
+        // Store the plog and create BetterSign instance
+        self.set_better_sign(plog, self.key_provider.clone())
+            .await?;
         self.store_entries().await?;
         self.record_plog_to_dht().await?;
 
@@ -394,11 +417,12 @@ where
     pub async fn publish_to_pubsub(&self) -> Result<(), Error> {
         // publish Vlad as topic with head cid bytes to pubsub
         let (vlad_bytes, head) = {
-            let plog = self.plog.lock().map_err(|_| Error::LockPosioned)?;
-            let Some(ref plog) = *plog else {
+            let bs = self.better_sign.lock().await;
+            let Some(ref bs) = *bs else {
                 return Err(Error::PlogNotInitialized);
             };
 
+            let plog = bs.plog();
             let vlad_bytes: Vec<u8> = plog.vlad.clone().into();
 
             (vlad_bytes, plog.head.clone())
@@ -429,11 +453,12 @@ where
     /// - There is an error putting the record into the DHT.
     pub async fn record_plog_to_dht(&mut self) -> Result<(), Error> {
         let (vlad_bytes, head_bytes) = {
-            let plog = self.plog.lock().map_err(|_| Error::LockPosioned)?;
-            let Some(ref plog) = *plog else {
+            let bs = self.better_sign.lock().await;
+            let Some(ref bs) = *bs else {
                 return Err(Error::PlogNotInitialized);
             };
 
+            let plog = bs.plog();
             let vlad_bytes: Vec<u8> = plog.vlad.clone().into();
             let head_bytes: Vec<u8> = plog.head.clone().into();
             (vlad_bytes, head_bytes)

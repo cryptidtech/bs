@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1
 //! This module provides traits for asynchronous operations
 use crate::cond_send::CondSend;
+use crate::sync::EphemeralSigningTuple;
 use crate::*;
 use std::future::Future;
 use std::num::NonZeroUsize;
@@ -158,7 +159,41 @@ pub trait AsyncGetKey: GetKey {
         &'a self,
         key_path: &'a Self::KeyPath,
         codec: &'a Self::Codec,
-        threshold: usize,
-        limit: usize,
+        threshold: NonZeroUsize,
+        limit: NonZeroUsize,
     ) -> Result<GetKeyFuture<'a, Self::Key, Self::Error>, Self::Error>;
+}
+
+/// An async version of KeyManager
+pub trait AsyncKeyManager<E>: GetKey + CondSync {
+    /// Get the key asynchronously
+    fn get_key<'a>(
+        &'a self,
+        key_path: &'a Self::KeyPath,
+        codec: &'a Self::Codec,
+        threshold: NonZeroUsize,
+        limit: NonZeroUsize,
+    ) -> BoxFuture<'a, Result<Self::Key, E>>;
+
+    /// Emables you to pre-process the Vlad during the creation process
+    /// For example, you can provide a function that will be called shortly after the Vlad is created
+    #[allow(unused_variables)]
+    fn preprocess_vlad<'a>(&'a mut self, vlad: &'a multicid::Vlad) -> BoxFuture<'a, Result<(), E>> {
+        Box::pin(async move { Ok(()) })
+    }
+}
+
+/// An async version of MultiSigner, including ephemeral signing
+pub trait AsyncMultiSigner<S, E>:
+    AsyncSigner<Signature = S, Error = E> + EphemeralKey + GetKey
+where
+    S: Send,
+    E: Send,
+{
+    fn prepare_ephemeral_signing<'a>(
+        &'a self,
+        codec: &'a Self::Codec,
+        threshold: NonZeroUsize,
+        limit: NonZeroUsize,
+    ) -> BoxFuture<'a, EphemeralSigningTuple<Self::PubKey, S, E>>;
 }

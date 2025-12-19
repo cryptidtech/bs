@@ -13,27 +13,33 @@ pub use config::Config;
 pub mod op_params;
 pub use op_params::OpParams;
 
-use crate::error::UpdateError;
+use crate::{
+    config::asynchronous::{KeyManager, MultiSigner},
+    error::{BsCompatibleError, UpdateError},
+    Signature,
+};
 use multicid::{cid, Cid};
+use multicodec::Codec;
 use multihash::mh;
 use multikey::{Multikey, Views};
 use provenance_log::{
     entry::{self, Entry},
     error::EntryError,
-    Error as PlogError, Lipmaa as _, Log, OpId,
+    Error as PlogError, Key, Lipmaa as _, Log, OpId,
 };
 use std::{fs::read, path::Path};
 use tracing::debug;
 
-/// Updates a provenance log given the update config
-pub fn update_plog<E>(
+/// Updates a provenance log given the update config (async)
+pub async fn update_plog<E>(
     plog: &mut Log,
     config: &Config,
-    key_manager: &dyn crate::config::sync::KeyManager<E>,
-    signer: &dyn crate::config::sync::MultiSigner<E>,
+    key_manager: &(dyn KeyManager<E> + Send + Sync),
+    signer: &(dyn MultiSigner<E> + Send + Sync),
 ) -> Result<Entry, E>
 where
-    E: From<UpdateError>
+    E: BsCompatibleError
+        + From<UpdateError>
         + From<PlogError>
         + From<std::io::Error>
         + From<multicid::Error>
@@ -41,30 +47,113 @@ where
         + From<multihash::Error>
         + From<crate::Error>
         + ToString
-        + std::fmt::Debug,
+        + std::fmt::Debug
+        + Send,
+{
+    update_plog_core(plog, config, key_manager, signer).await
+}
+
+/// Updates a provenance log given the update config (sync)
+#[cfg(feature = "sync")]
+pub fn update_plog_sync<E>(
+    plog: &mut Log,
+    config: &Config,
+    key_manager: &(dyn crate::config::sync::KeyManager<E> + Send + Sync),
+    signer: &(dyn crate::config::sync::MultiSigner<E> + Send + Sync),
+) -> Result<Entry, E>
+where
+    E: BsCompatibleError
+        + From<UpdateError>
+        + From<PlogError>
+        + From<std::io::Error>
+        + From<multicid::Error>
+        + From<multikey::Error>
+        + From<multihash::Error>
+        + From<crate::Error>
+        + ToString
+        + std::fmt::Debug
+        + Send
+        + Sync
+        + 'static,
+{
+    use crate::config::adapters::{SyncToAsyncManager, SyncToAsyncSigner};
+
+    let key_manager_adapter = SyncToAsyncManager::new(key_manager);
+    let signer_adapter = SyncToAsyncSigner::new(signer);
+
+    futures::executor::block_on(update_plog_impl(
+        plog,
+        config,
+        &key_manager_adapter,
+        &signer_adapter,
+    ))
+}
+
+pub(crate) async fn update_plog_core<E>(
+    plog: &mut Log,
+    config: &Config,
+    key_manager: &(dyn KeyManager<E> + Send + Sync),
+    signer: &(dyn MultiSigner<E> + Send + Sync),
+) -> Result<Entry, E>
+where
+    E: BsCompatibleError
+        + From<UpdateError>
+        + From<PlogError>
+        + From<std::io::Error>
+        + From<multicid::Error>
+        + From<multikey::Error>
+        + From<multihash::Error>
+        + From<crate::Error>
+        + ToString
+        + std::fmt::Debug
+        + Send,
+{
+    update_plog_impl(plog, config, key_manager, signer).await
+}
+
+/// Internal implementation that works with base async traits (for adapters)
+async fn update_plog_impl<E, KM, S>(
+    plog: &mut Log,
+    config: &Config,
+    key_manager: &KM,
+    signer: &S,
+) -> Result<Entry, E>
+where
+    E: BsCompatibleError
+        + From<UpdateError>
+        + From<PlogError>
+        + From<std::io::Error>
+        + From<multicid::Error>
+        + From<multikey::Error>
+        + From<multihash::Error>
+        + From<crate::Error>
+        + ToString
+        + std::fmt::Debug
+        + Send,
+    KM: bs_traits::asyncro::AsyncKeyManager<E, Key = Multikey, KeyPath = Key, Codec = Codec>
+        + ?Sized,
+    S: bs_traits::asyncro::AsyncMultiSigner<Signature, E, PubKey = Multikey, Codec = Codec>
+        + bs_traits::asyncro::AsyncSigner<KeyPath = Key, Signature = Signature, Error = E>
+        + ?Sized,
 {
     // 0. Set up the list of ops we're going to add
     let mut op_params = Vec::default();
 
     // go through the additional ops and generate CIDs and keys and adding the resulting op params
     // to the vec of op params
-    config
-        .additional_ops()
-        .iter()
-        .try_for_each(|params| -> Result<(), E> {
-            match params {
-                p @ OpParams::KeyGen { .. } => {
-                    let _ = load_key::<E>(&mut op_params, p, key_manager)?;
-                }
-                p @ OpParams::CidGen { .. } => {
-                    let _ = load_cid(&mut op_params, p, |path| -> Result<Vec<u8>, E> {
-                        read(path).map_err(E::from)
-                    })?;
-                }
-                p => op_params.push(p.clone()),
+    for params in config.additional_ops().iter() {
+        match params {
+            p @ OpParams::KeyGen { .. } => {
+                let _ = load_key(&mut op_params, p, key_manager).await?;
             }
-            Ok(())
-        })?;
+            p @ OpParams::CidGen { .. } => {
+                let _ = load_cid(&mut op_params, p, |path| -> Result<Vec<u8>, E> {
+                    read(path).map_err(E::from)
+                })?;
+            }
+            p => op_params.push(p.clone()),
+        }
+    }
 
     // 1. validate the p.log and get the last entry and state
     let (_, last_entry, _kvp) = plog.verify().last().ok_or(UpdateError::NoLastEntry)??;
@@ -78,7 +167,7 @@ where
     let entry_builder = entry::EntryBuilder::from(&last_entry);
     let mut mutable_entry = entry_builder.unlock(config.unlock().clone()).build();
 
-    for lock in config.add_entry_lock_scripts() {
+    for lock in config.entry_lock_scripts() {
         mutable_entry.add_lock(lock);
     }
 
@@ -136,6 +225,7 @@ where
     // Sign the entry
     let signature = signer
         .try_sign(entry_key_path, &entry_bytes)
+        .await
         .map_err(|e| PlogError::from(EntryError::SignFailed(e.to_string())))?;
 
     // Finalize the entry with the signature as proof
@@ -147,13 +237,15 @@ where
     Ok(entry)
 }
 
-fn load_key<E>(
+async fn load_key<E, KM>(
     ops: &mut Vec<OpParams>,
     params: &OpParams,
-    key_manager: &dyn crate::config::sync::KeyManager<E>,
+    key_manager: &KM,
 ) -> Result<Multikey, E>
 where
     E: From<UpdateError> + From<multikey::Error> + From<crate::Error>,
+    KM: bs_traits::asyncro::AsyncKeyManager<E, Key = Multikey, KeyPath = Key, Codec = Codec>
+        + ?Sized,
 {
     debug!("load_key: {:?}", params);
     match params {
@@ -165,7 +257,7 @@ where
             revoke,
         } => {
             // call back to generate the key
-            let mk = key_manager.get_key(key, codec, *threshold, *limit)?;
+            let mk = key_manager.get_key(key, codec, *threshold, *limit).await?;
 
             // get the public key
             let pk = if mk.attr_view()?.is_secret_key() {
@@ -243,11 +335,11 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::open::{self, open_plog_sync};
     use crate::params::{
         anykey::PubkeyParams,
         vlad::{FirstEntryKeyParams, VladParams},
     };
-    use crate::{open, open_plog};
 
     use bs_traits::sync::SyncGetKey;
     use bs_wallets::memory::InMemoryKeyManager;
@@ -319,17 +411,17 @@ mod tests {
 
         let key_manager = InMemoryKeyManager::<crate::Error>::default();
         let mut plog =
-            open_plog(&open_config, &key_manager, &key_manager).expect("Failed to open plog");
+            open_plog_sync(&open_config, &key_manager, &key_manager).expect("Failed to open plog");
 
         // We need to generate PubkeyParams key in our wallet:
-        let old_pk = key_manager
-            .get_key(
-                &PubkeyParams::KEY_PATH.into(),
-                &pubkey_params.codec(),
-                pubkey_params.threshold(),
-                pubkey_params.limit(),
-            )
-            .expect("Failed to create and store pubkey");
+        let old_pk = SyncGetKey::get_key(
+            &key_manager,
+            &PubkeyParams::KEY_PATH.into(),
+            &pubkey_params.codec(),
+            pubkey_params.threshold(),
+            pubkey_params.limit(),
+        )
+        .expect("Failed to create and store pubkey");
 
         // 2. Update the p.log with a new entry
         // - add a lock Script
@@ -352,7 +444,7 @@ mod tests {
                 key: VladParams::<FirstEntryKeyParams>::FIRST_ENTRY_KEY_PATH.into(),
             }])
             // Entry lock scripts define conditions which must be met by the next entry in the plog for it to be valid.
-            .add_entry_lock_scripts(vec![Script::Code(
+            .with_entry_lock_scripts(vec![Script::Code(
                 Key::try_from("/delegated/").unwrap(),
                 delegated_lock,
             )])
@@ -361,7 +453,7 @@ mod tests {
         let prev = plog.head.clone();
 
         // take config and use update method with TestKeyManager to update the log
-        update_plog(&mut plog, &update_cfg, &key_manager, &key_manager)
+        update_plog_sync(&mut plog, &update_cfg, &key_manager, &key_manager)
             .expect("Failed to update plog");
 
         // plog head prev should match prev
@@ -413,7 +505,7 @@ mod tests {
             ])
             .build();
 
-        update_plog(&mut plog, &key_rotation_config, &key_manager, &key_manager)
+        update_plog_sync(&mut plog, &key_rotation_config, &key_manager, &key_manager)
             .expect("Failed to rotate key");
 
         // Update the key manager's path mapping

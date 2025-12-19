@@ -9,6 +9,7 @@ license.workspace = true
 
 [dependencies]
 bs-traits.workspace = true
+futures = { workspace = true, optional = true }
 multibase.workspace = true
 multicodec.workspace = true
 multikey.workspace = true
@@ -27,6 +28,9 @@ tokio.workspace = true
 bs.workspace = true
 bs-peer.workspace = true
 tracing-subscriber.workspace = true
+
+[features]
+sync = ["dep:futures"]
 
 [lints]
 workspace = true

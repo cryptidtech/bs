@@ -9,6 +9,7 @@ license = "Functional Source License 1.1"
 
 [dependencies]
 thiserror.workspace = true
+multicid.workspace = true
 
 [dev-dependencies]
 futures = "0.3"

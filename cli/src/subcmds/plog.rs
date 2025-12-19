@@ -81,7 +81,10 @@ impl SyncPrepareEphemeralSigning for KeyManager {
     ) -> Result<
         (
             <Self as EphemeralKey>::PubKey,
-            Box<dyn FnOnce(&[u8]) -> Result<<Self as Signer>::Signature, <Self as Signer>::Error>>,
+            Box<
+                dyn FnOnce(&[u8]) -> Result<<Self as Signer>::Signature, <Self as Signer>::Error>
+                    + Send,
+            >,
         ),
         <Self as Signer>::Error,
     > {
@@ -101,7 +104,10 @@ impl SyncPrepareEphemeralSigning for KeyManager {
         let public_key = secret_key.conv_view()?.to_public_key()?;
 
         // Create the signing closure that owns the secret key
-        let sign_once = Box::new(
+        let sign_once: Box<
+            dyn FnOnce(&[u8]) -> Result<<Self as Signer>::Signature, <Self as Signer>::Error>
+                + Send,
+        > = Box::new(
             move |data: &[u8]| -> Result<<Self as Signer>::Signature, <Self as Signer>::Error> {
                 debug!("Signing data with ephemeral key");
                 let signature = secret_key.sign_view()?.sign(data, false, None)?;
@@ -196,7 +202,7 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
             let key_manager = KeyManager::default();
 
             // open the p.log
-            let plog = open::open_plog(&cfg, &key_manager, &key_manager)?;
+            let plog = open::open_plog_sync(&cfg, &key_manager, &key_manager)?;
 
             println!("Created p.log {}", writer_name(&output)?.to_string_lossy());
             print_plog(&plog)?;
@@ -257,7 +263,7 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
             };
 
             let cfg = update::Config::builder()
-                .add_entry_lock_scripts(vec![lock_script.clone()])
+                .with_entry_lock_scripts(vec![lock_script.clone()])
                 .unlock(unlock_script)
                 .entry_signing_key(entry_signing_key)
                 .additional_ops(entry_ops)
@@ -266,7 +272,7 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
             let key_manager = KeyManager::default();
 
             // update the p.log
-            update::update_plog::<Error>(&mut plog, &cfg, &key_manager, &key_manager)?;
+            update::update_plog_sync::<Error>(&mut plog, &cfg, &key_manager, &key_manager)?;
 
             println!("Writing p.log {}", writer_name(&output)?.to_string_lossy());
             print_plog(&plog)?;
