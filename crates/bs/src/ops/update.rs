@@ -399,7 +399,7 @@ mod tests {
         let open_config = open::Config::builder()
             .vlad(VladParams::<FirstEntryKeyParams>::default())
             .pubkey(pubkey_params.clone().into())
-            .entrykey(
+            .first_entry_params(
                 FirstEntryKeyParams::builder()
                     .codec(Codec::Ed25519Priv)
                     .build()

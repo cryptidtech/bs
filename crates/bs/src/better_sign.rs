@@ -146,7 +146,7 @@ mod tests {
                     .build()
                     .into(),
             )
-            .entrykey(
+            .first_entry_params(
                 FirstEntryKeyParams::builder()
                     .codec(Codec::Ed25519Priv)
                     .build()
@@ -184,7 +184,7 @@ mod tests {
                     .build()
                     .into(),
             )
-            .entrykey(
+            .first_entry_params(
                 FirstEntryKeyParams::builder()
                     .codec(Codec::Ed25519Priv)
                     .build()
@@ -239,7 +239,7 @@ mod tests {
                     .build()
                     .into(),
             )
-            .entrykey(
+            .first_entry_params(
                 FirstEntryKeyParams::builder()
                     .codec(Codec::Ed25519Priv)
                     .build()
