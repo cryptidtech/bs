@@ -165,7 +165,7 @@ mod tests {
         let key_manager = InMemoryKeyManager::<Error>::default();
         let signer = key_manager.clone();
 
-        let bs = BetterSign::new(config, key_manager, signer)
+        let bs = BetterSign::new(&config, key_manager, signer)
             .await
             .expect("Failed to create BetterSign");
 
@@ -203,7 +203,7 @@ mod tests {
         let key_manager = InMemoryKeyManager::<Error>::default();
         let signer = key_manager.clone();
 
-        let mut bs = BetterSign::new(open_config, key_manager, signer)
+        let mut bs = BetterSign::new(&open_config, key_manager, signer)
             .await
             .expect("Failed to create BetterSign");
 
@@ -258,8 +258,8 @@ mod tests {
         let key_manager = InMemoryKeyManager::<Error>::default();
         let signer = key_manager.clone();
 
-        let bs =
-            BetterSign::new_sync(config, key_manager, signer).expect("Failed to create BetterSign");
+        let bs = BetterSign::new_sync(&config, key_manager, signer)
+            .expect("Failed to create BetterSign");
 
         // Verify the plog was created
         assert!(!bs.plog().entries.is_empty());
