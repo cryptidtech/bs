@@ -14,8 +14,8 @@ pub struct Config<T: ValidatedKeyParams = FirstEntryKeyParams> {
     /// the vlad key and cid params
     vlad: VladParams<T>,
 
-    /// the entry key params
-    entrykey: OpParams,
+    /// First entry [OpParams]
+    first_entry_params: OpParams,
 
     /// the pubkey params
     pubkey: OpParams,
@@ -46,9 +46,11 @@ impl<T: ValidatedKeyParams> Config<T> {
         &self.first_lock
     }
 
-    /// Get the entry key params
-    pub fn entrykey(&self) -> &OpParams {
-        &self.entrykey
+    /// Get the (first) entry key params
+    ///
+    /// Because this is the Open Config, this will always be the first entry
+    pub fn first_entry(&self) -> &OpParams {
+        &self.first_entry_params
     }
 
     /// Get the pubkey params
@@ -87,7 +89,12 @@ impl<T: ValidatedKeyParams> From<Config<T>> for Vec<OpParams> {
         // Gather all the operations from this config so we can store their values against their Cids
         let (vlad_key_op, vlad_cid_op): (OpParams, OpParams) = config.vlad.into();
 
-        let mut ops = vec![vlad_key_op, vlad_cid_op, config.entrykey, config.pubkey];
+        let mut ops = vec![
+            vlad_key_op,
+            vlad_cid_op,
+            config.first_entry_params,
+            config.pubkey,
+        ];
         ops.extend(config.additional_ops);
         ops
     }
@@ -107,7 +114,7 @@ mod tests {
         // Create a Config with default type parameter (FirstEntryKeyParams)
         let config = Config::builder()
             .vlad(Default::default())
-            .entrykey(Default::default())
+            .first_entry_params(Default::default())
             .pubkey(Default::default())
             .lock(Script::Code(Key::default(), "test lock".to_string()))
             .unlock(Script::Code(Key::default(), "test unlock".to_string()))
@@ -126,7 +133,7 @@ mod tests {
     fn test_config_with_recovery_key_params() {
         let config: Config<RecoveryKeyParams> = Config::<RecoveryKeyParams>::builder()
             .vlad(VladParams::<RecoveryKeyParams>::builder().build())
-            .entrykey(Default::default())
+            .first_entry_params(Default::default())
             .pubkey(Default::default())
             .lock(Script::Code(Key::default(), "test lock".to_string()))
             .unlock(Script::Code(Key::default(), "test unlock".to_string()))
@@ -150,7 +157,7 @@ mod tests {
         // Create Config and set VladParams
         let config = Config::<FirstEntryKeyParams>::builder()
             .vlad(Default::default())
-            .entrykey(Default::default())
+            .first_entry_params(Default::default())
             .pubkey(Default::default())
             .lock(Script::Code(Key::default(), "test lock".to_string()))
             .unlock(Script::Code(Key::default(), "test unlock".to_string()))
@@ -177,7 +184,7 @@ mod tests {
         // Create a Config
         let config = Config::builder()
             .vlad(Default::default())
-            .entrykey(Default::default())
+            .first_entry_params(Default::default())
             .pubkey(Default::default())
             .lock(Script::Code(Key::default(), "test lock".to_string()))
             .unlock(Script::Code(Key::default(), "test unlock".to_string()))
@@ -199,7 +206,7 @@ mod tests {
         // Create a Config
         let config = Config::builder()
             .vlad(Default::default())
-            .entrykey(Default::default())
+            .first_entry_params(Default::default())
             .pubkey(Default::default())
             .lock(Script::Code(Key::default(), "test lock".to_string()))
             .unlock(Script::Code(Key::default(), "test unlock".to_string()))
@@ -219,7 +226,7 @@ mod tests {
         // This would be a compile error if we tried to use the wrong type
         let config = Config::<FirstEntryKeyParams>::builder()
             .vlad(vlad_params)
-            .entrykey(Default::default())
+            .first_entry_params(Default::default())
             .pubkey(Default::default())
             .lock(Script::Code(Key::default(), "test lock".to_string()))
             .unlock(Script::Code(Key::default(), "test unlock".to_string()))

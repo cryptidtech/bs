@@ -287,7 +287,7 @@ where
 
         // Create BetterSign instance (no lock held)
         let bs = BetterSign::new(
-            config.clone(),
+            &config,
             self.key_provider.clone(),
             self.key_provider.clone(),
         )
@@ -341,7 +341,7 @@ where
                     .build()
                     .into(),
             )
-            .entrykey(
+            .first_entry_params(
                 FirstEntryKeyParams::builder()
                     .codec(Codec::Ed25519Priv)
                     .build()

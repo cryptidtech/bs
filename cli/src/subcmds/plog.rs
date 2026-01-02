@@ -193,7 +193,7 @@ pub async fn go(cmd: Command, _config: &Config) -> Result<(), Error> {
                         .hash(vlad_cid_hash)
                         .build(),
                 )
-                .entrykey(parse_key_params(&entry_key_codec, Some("/entrykey"))?)
+                .first_entry_params(parse_key_params(&entry_key_codec, Some("/entrykey"))?)
                 .unlock(unlock_script)
                 .lock(lock_script.clone())
                 .additional_ops(additional_ops) // Add all operations at once

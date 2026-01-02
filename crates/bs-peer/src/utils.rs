@@ -277,7 +277,7 @@ pub async fn run_in_memory_blockstore_test() {
                 .build()
                 .into(),
         )
-        .entrykey(
+        .first_entry_params(
             FirstEntryKeyParams::builder()
                 .codec(Codec::Ed25519Priv)
                 .build()
@@ -376,7 +376,7 @@ pub async fn run_network_blockstore_test() {
                 .build()
                 .into(),
         )
-        .entrykey(
+        .first_entry_params(
             FirstEntryKeyParams::builder()
                 .codec(Codec::Ed25519Priv)
                 .build()

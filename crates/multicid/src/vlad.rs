@@ -166,7 +166,7 @@ impl<'a> TryDecodeFrom<'a> for Vlad {
         if sigil != SIGIL {
             return Err(VladError::MissingSigil.into());
         }
-        // decode the none
+        // decode the nonce
         let (nonce, ptr) = Nonce::try_decode_from(ptr)?;
         // decode the cid
         let (cid, ptr) = Cid::try_decode_from(ptr)?;

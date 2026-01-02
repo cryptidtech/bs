@@ -129,7 +129,7 @@ where
     key_manager.preprocess_vlad(&vlad).await?;
 
     // 2. Extract entry key parameters and prepare signing
-    let entrykey_params = &config.entrykey();
+    let entrykey_params = &config.first_entry();
     let (codec, threshold, limit) = extract_key_params::<E>(entrykey_params)?;
 
     // Get the public key and signing function
@@ -430,7 +430,7 @@ mod tests {
         let config = Config::builder() // Uses default type parameter FirstEntryKeyParams
             .vlad(vlad_params)
             .pubkey(pubkey_params.into())
-            .entrykey(entry_key_params.into())
+            .first_entry_params(entry_key_params.into())
             .lock(Script::Code(Key::default(), lock))
             .unlock(Script::Code(Key::default(), unlock))
             .build();

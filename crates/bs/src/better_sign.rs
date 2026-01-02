@@ -73,8 +73,8 @@ where
     S: MultiSigner<E>,
 {
     /// Create a new BetterSign instance with the given configuration.
-    pub async fn new(config: open::Config, mut key_manager: KM, signer: S) -> Result<Self, E> {
-        let plog = open::open_plog_core(&config, &mut key_manager, &signer).await?;
+    pub async fn new(config: &open::Config, mut key_manager: KM, signer: S) -> Result<Self, E> {
+        let plog = open::open_plog_core(config, &mut key_manager, &signer).await?;
         Ok(Self {
             plog,
             key_manager,
@@ -110,7 +110,7 @@ where
     /// # Errors
     ///
     /// Returns an error if the provenance log creation fails.
-    pub fn new_sync(config: open::Config, key_manager: KM, signer: S) -> Result<Self, E> {
+    pub fn new_sync(config: &open::Config, key_manager: KM, signer: S) -> Result<Self, E> {
         futures::executor::block_on(Self::new(config, key_manager, signer))
     }
 
@@ -146,7 +146,7 @@ mod tests {
                     .build()
                     .into(),
             )
-            .entrykey(
+            .first_entry_params(
                 FirstEntryKeyParams::builder()
                     .codec(Codec::Ed25519Priv)
                     .build()
@@ -165,7 +165,7 @@ mod tests {
         let key_manager = InMemoryKeyManager::<Error>::default();
         let signer = key_manager.clone();
 
-        let bs = BetterSign::new(config, key_manager, signer)
+        let bs = BetterSign::new(&config, key_manager, signer)
             .await
             .expect("Failed to create BetterSign");
 
@@ -184,7 +184,7 @@ mod tests {
                     .build()
                     .into(),
             )
-            .entrykey(
+            .first_entry_params(
                 FirstEntryKeyParams::builder()
                     .codec(Codec::Ed25519Priv)
                     .build()
@@ -203,7 +203,7 @@ mod tests {
         let key_manager = InMemoryKeyManager::<Error>::default();
         let signer = key_manager.clone();
 
-        let mut bs = BetterSign::new(open_config, key_manager, signer)
+        let mut bs = BetterSign::new(&open_config, key_manager, signer)
             .await
             .expect("Failed to create BetterSign");
 
@@ -239,7 +239,7 @@ mod tests {
                     .build()
                     .into(),
             )
-            .entrykey(
+            .first_entry_params(
                 FirstEntryKeyParams::builder()
                     .codec(Codec::Ed25519Priv)
                     .build()
@@ -258,8 +258,8 @@ mod tests {
         let key_manager = InMemoryKeyManager::<Error>::default();
         let signer = key_manager.clone();
 
-        let bs =
-            BetterSign::new_sync(config, key_manager, signer).expect("Failed to create BetterSign");
+        let bs = BetterSign::new_sync(&config, key_manager, signer)
+            .expect("Failed to create BetterSign");
 
         // Verify the plog was created
         assert!(!bs.plog().entries.is_empty());
