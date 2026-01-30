@@ -628,14 +628,17 @@ impl Builder {
                         }
                     };
                     let key_share = bls12381::KeyShare::try_from(key_bytes.as_ref())?;
-                    let identifier: Vec<u8> = Varuint(key_share.0).into();
+                    let identifier: Vec<u8> = key_share.0 .0.to_be_bytes().to_vec();
                     let threshold: Vec<u8> = Varuint(key_share.1).into();
                     let limit: Vec<u8> = Varuint(key_share.2).into();
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::ShareIdentifier, identifier.into());
                     attributes.insert(AttrId::Threshold, threshold.into());
                     attributes.insert(AttrId::Limit, limit.into());
-                    attributes.insert(AttrId::KeyData, key_share.3.into());
+                    attributes.insert(
+                        AttrId::KeyData,
+                        key_share.3 .0.to_be_bytes().to_vec().into(),
+                    );
                     Ok(Builder {
                         codec: Codec::Bls12381G1PubShare,
                         comment: Some(sshkey.comment().to_string()),
@@ -673,16 +676,19 @@ impl Builder {
                         }
                     };
                     let key_share = bls12381::KeyShare::try_from(key_bytes.as_ref())?;
-                    let identifier: Vec<u8> = Varuint(key_share.0).into();
+                    let identifier: Vec<u8> = key_share.0 .0.to_be_bytes().to_vec();
                     let threshold: Vec<u8> = Varuint(key_share.1).into();
                     let limit: Vec<u8> = Varuint(key_share.2).into();
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::ShareIdentifier, identifier.into());
                     attributes.insert(AttrId::Threshold, threshold.into());
                     attributes.insert(AttrId::Limit, limit.into());
-                    attributes.insert(AttrId::KeyData, key_share.3.into());
+                    attributes.insert(
+                        AttrId::KeyData,
+                        key_share.3 .0.to_be_bytes().to_vec().into(),
+                    );
                     Ok(Builder {
-                        codec: Codec::Bls12381G1PubShare,
+                        codec: Codec::Bls12381G2PubShare,
                         comment: Some(sshkey.comment().to_string()),
                         attributes: Some(attributes),
                         ..Default::default()
@@ -843,14 +849,17 @@ impl Builder {
                         }
                     };
                     let key_share = bls12381::KeyShare::try_from(key_bytes.as_ref())?;
-                    let identifier: Vec<u8> = Varuint(key_share.0).into();
+                    let identifier: Vec<u8> = key_share.0 .0.to_be_bytes().to_vec();
                     let threshold: Vec<u8> = Varuint(key_share.1).into();
                     let limit: Vec<u8> = Varuint(key_share.2).into();
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::ShareIdentifier, identifier.into());
                     attributes.insert(AttrId::Threshold, threshold.into());
                     attributes.insert(AttrId::Limit, limit.into());
-                    attributes.insert(AttrId::KeyData, key_share.3.into());
+                    attributes.insert(
+                        AttrId::KeyData,
+                        key_share.3 .0.to_be_bytes().to_vec().into(),
+                    );
                     Ok(Builder {
                         codec: Codec::Bls12381G1PrivShare,
                         comment: Some(sshkey.comment().to_string()),
@@ -888,14 +897,17 @@ impl Builder {
                         }
                     };
                     let key_share = bls12381::KeyShare::try_from(key_bytes.as_ref())?;
-                    let identifier: Vec<u8> = Varuint(key_share.0).into();
+                    let identifier: Vec<u8> = key_share.0 .0.to_be_bytes().to_vec();
                     let threshold: Vec<u8> = Varuint(key_share.1).into();
                     let limit: Vec<u8> = Varuint(key_share.2).into();
                     let mut attributes = Attributes::new();
                     attributes.insert(AttrId::ShareIdentifier, identifier.into());
                     attributes.insert(AttrId::Threshold, threshold.into());
                     attributes.insert(AttrId::Limit, limit.into());
-                    attributes.insert(AttrId::KeyData, key_share.3.into());
+                    attributes.insert(
+                        AttrId::KeyData,
+                        key_share.3 .0.to_be_bytes().to_vec().into(),
+                    );
                     Ok(Builder {
                         codec: Codec::Bls12381G2PrivShare,
                         comment: Some(sshkey.comment().to_string()),
@@ -1005,8 +1017,8 @@ impl Builder {
     }
 
     /// add in the share identifier value
-    pub fn with_identifier(self, identifier: u8) -> Self {
-        self.with_attribute(AttrId::ShareIdentifier, &Varuint(identifier).into())
+    pub fn with_identifier(self, identifier: impl AsRef<[u8]>) -> Self {
+        self.with_attribute(AttrId::ShareIdentifier, &identifier.as_ref().to_vec())
     }
 
     /// add in the threshold data
