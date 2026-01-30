@@ -7,7 +7,11 @@ use crate::{
     },
     AttrId, AttrView, ConvView, DataView, Error, ThresholdAttrView, ThresholdView, Views,
 };
-use blsful::{inner_types::GroupEncoding, vsss_rs::Share, Signature, SignatureShare};
+use blsful::{
+    inner_types::{GroupEncoding, PrimeField},
+    vsss_rs::Share,
+    Signature, SignatureShare,
+};
 use multibase::Base;
 use multicodec::Codec;
 use multitrait::{Null, TryDecodeFrom};
@@ -19,7 +23,7 @@ pub const SIG_CODECS: [Codec; 5] = [
     Codec::Bls12381G1Msig,
     Codec::Bls12381G2Msig,
     Codec::EddsaMsig,
-    Codec::Es256Msig,  // P-256 (WebAuthn/passkey signatures)
+    Codec::Es256Msig, // P-256 (WebAuthn/passkey signatures)
     // Codec::Es384Msig,
     // Codec::Es521Msig,
     // Codec::Rs256Msig,
@@ -300,7 +304,7 @@ impl Builder {
                 }
                 bls12381::ALGORITHM_NAME_G1_SHARE => {
                     let sig_share = bls12381::SigShare::try_from(sig.as_bytes())?;
-                    attributes.insert(AttrId::ShareIdentifier, Varuint(sig_share.0).into());
+                    attributes.insert(AttrId::ShareIdentifier, sig_share.0 .0.to_be_bytes().into());
                     attributes.insert(AttrId::Threshold, Varuint(sig_share.1).into());
                     attributes.insert(AttrId::Limit, Varuint(sig_share.2).into());
                     attributes.insert(AttrId::Scheme, sig_share.3.into());
@@ -313,7 +317,7 @@ impl Builder {
                 }
                 bls12381::ALGORITHM_NAME_G2_SHARE => {
                     let sig_share = bls12381::SigShare::try_from(sig.as_bytes())?;
-                    attributes.insert(AttrId::ShareIdentifier, Varuint(sig_share.0).into());
+                    attributes.insert(AttrId::ShareIdentifier, sig_share.0 .0.to_be_bytes().into());
                     attributes.insert(AttrId::Threshold, Varuint(sig_share.1).into());
                     attributes.insert(AttrId::Limit, Varuint(sig_share.2).into());
                     attributes.insert(AttrId::Scheme, sig_share.3.into());
@@ -337,7 +341,6 @@ impl Builder {
     {
         let scheme_type_id = SchemeTypeId::from(sig);
         let sig_bytes: Vec<u8> = sig.as_raw_value().to_bytes().as_ref().to_vec();
-        println!("signature length: {}", sig_bytes.len());
         let codec = match sig_bytes.len() {
             48 => Codec::Bls12381G1Msig, // G1Projective::to_compressed()
             96 => Codec::Bls12381G2Msig, // G2Projective::to_compressed()
@@ -368,8 +371,8 @@ impl Builder {
     {
         let scheme_type_id = SchemeTypeId::from(sigshare);
         let sigshare = sigshare.as_raw_value();
-        let identifier = sigshare.identifier();
-        let value = sigshare.value_vec();
+        let identifier = sigshare.identifier().0.to_repr().as_ref().to_vec();
+        let value = sigshare.value().0.to_bytes().as_ref().to_vec();
         let codec = match value.len() {
             48 => Codec::Bls12381G1ShareMsig, // large pubkeys, small signatures
             96 => Codec::Bls12381G2ShareMsig, // small pubkeys, large signatures
@@ -381,9 +384,9 @@ impl Builder {
         };
         let mut attributes = BTreeMap::new();
         attributes.insert(AttrId::SigData, value);
-        attributes.insert(AttrId::Threshold, Varuint::<usize>(threshold.into()).into());
-        attributes.insert(AttrId::Limit, Varuint::<usize>(limit.into()).into());
-        attributes.insert(AttrId::ShareIdentifier, Varuint(identifier).into());
+        attributes.insert(AttrId::Threshold, Varuint::<usize>(threshold.get()).into());
+        attributes.insert(AttrId::Limit, Varuint::<usize>(limit.get()).into());
+        attributes.insert(AttrId::ShareIdentifier, identifier);
         attributes.insert(AttrId::Scheme, scheme_type_id.into());
         Ok(Self {
             codec,
@@ -438,8 +441,8 @@ impl Builder {
     }
 
     /// add the threshold signature identifier
-    pub fn with_identifier(self, identifier: u8) -> Self {
-        self.with_attribute(AttrId::ShareIdentifier, &Varuint(identifier).into())
+    pub fn with_identifier(self, identifier: &impl AsRef<[u8]>) -> Self {
+        self.with_attribute(AttrId::ShareIdentifier, &identifier.as_ref().to_vec())
     }
 
     /// add the threshold data

@@ -8,8 +8,8 @@ use crate::{
     KdfAttrView, Multikey, SignView, ThresholdAttrView, ThresholdView, VerifyView, Views,
 };
 use blsful::{
-    inner_types::{G1Projective, G2Projective},
-    vsss_rs::Share,
+    inner_types::{G1Projective, G2Projective, Scalar},
+    vsss_rs::{IdentifierPrimeField, Share, ValueGroup},
     Bls12381G1Impl, Bls12381G2Impl, PublicKey, PublicKeyShare, SecretKey, SecretKeyShare,
     Signature, SignatureSchemes, SignatureShare, SECRET_KEY_BYTES,
 };
@@ -18,14 +18,17 @@ use multicodec::Codec;
 use multihash::{mh, Multihash};
 use multisig::{ms, views::bls12381::SchemeTypeId, Multisig, Views as SigViews};
 use multitrait::TryDecodeFrom;
-use multiutil::{Varbytes, Varuint};
+use multiutil::Varuint;
 use ssh_encoding::{Decode, Encode};
 use std::{
     array::TryFromSliceError,
     collections::BTreeMap,
     num::{NonZero, NonZeroUsize},
 };
-use zeroize::Zeroizing;
+use zeroize::{Zeroize, Zeroizing};
+
+/// ValuePrimeField is a type alias for IdentifierPrimeField in vsss_rs (scalar share value).
+type ValuePrimeField<F> = IdentifierPrimeField<F>;
 
 /// the RFC 4251 algorithm name for SSH compatibility
 pub const ALGORITHM_NAME_G1: &str = "bls12_381-g1@multikey";
@@ -37,31 +40,59 @@ pub const ALGORITHM_NAME_G2_SHARE: &str = "bls12_381-g2-share@multikey";
 pub const G1_PUBLIC_KEY_BYTES: usize = 48;
 pub const G2_PUBLIC_KEY_BYTES: usize = 96;
 
+/// Parse 32 bytes to identifier for BLS key/sig shares.
+fn bytes_to_identifier(bytes: &[u8]) -> Result<IdentifierPrimeField<Scalar>, Error> {
+    let arr: [u8; SECRET_KEY_BYTES] = bytes.try_into().map_err(|_| {
+        Error::Conversions(ConversionsError::SecretKeyFailure(
+            "Invalid share identifier length".to_string(),
+        ))
+    })?;
+    Ok(IdentifierPrimeField(
+        Option::from(Scalar::from_be_bytes(&arr)).ok_or(Error::Conversions(
+            ConversionsError::SecretKeyFailure("Invalid share identifier bytes".to_string()),
+        ))?,
+    ))
+}
+
+/// Parse 32 bytes to value (scalar) for BLS key shares.
+fn bytes_to_value(bytes: &[u8]) -> Result<ValuePrimeField<Scalar>, Error> {
+    let arr: [u8; SECRET_KEY_BYTES] = bytes.try_into().map_err(|_| {
+        Error::Conversions(ConversionsError::SecretKeyFailure(
+            "Invalid share value length".to_string(),
+        ))
+    })?;
+    Ok(IdentifierPrimeField(
+        Option::from(Scalar::from_be_bytes(&arr)).ok_or(Error::Conversions(
+            ConversionsError::SecretKeyFailure("Invalid share value bytes".to_string()),
+        ))?,
+    ))
+}
+
 /// tuple of the key share data with threshold attributes
 // TODO: this should be a struct with the share identifier, threshold, limit, and key bytes
 #[derive(Clone)]
 pub struct KeyShare(
     /// identifier
-    pub u8,
+    pub IdentifierPrimeField<Scalar>,
     /// threshold,
     pub NonZeroUsize,
     /// limit
     pub NonZeroUsize,
     /// key bytes
-    pub Vec<u8>,
+    pub ValuePrimeField<Scalar>,
 );
 
 impl From<KeyShare> for Vec<u8> {
     fn from(val: KeyShare) -> Self {
         let mut v = Vec::default();
         // add in the share identifier
-        v.append(&mut Varuint(val.0).into());
+        v.extend_from_slice(&val.0 .0.to_be_bytes());
         // add in the threshold
         v.append(&mut Varuint::<usize>(val.1.into()).into());
         // add in the limit
         v.append(&mut Varuint::<usize>(val.2.into()).into());
         // add in the key share data
-        v.append(&mut Varbytes(val.3.clone()).into());
+        v.extend_from_slice(&val.3 .0.to_be_bytes());
         v
     }
 }
@@ -80,21 +111,35 @@ impl<'a> TryDecodeFrom<'a> for KeyShare {
 
     fn try_decode_from(bytes: &'a [u8]) -> Result<(Self, &'a [u8]), Self::Error> {
         // try to decode the identifier
-        let (id, ptr) = Varuint::<u8>::try_decode_from(bytes)?;
+        let (id, ptr) = Varuint::<[u8; 32]>::try_decode_from(bytes)?;
         // try to decode the threshold
         let (threshold, ptr) = Varuint::<usize>::try_decode_from(ptr)?;
         // try to decode the limit
         let (limit, ptr) = Varuint::<usize>::try_decode_from(ptr)?;
         // try to decode the key share data
-        let (key_data, ptr) = Varbytes::try_decode_from(ptr)?;
+        let (key_data, ptr) = Varuint::<[u8; 32]>::try_decode_from(ptr)?;
+
+        let identifier = IdentifierPrimeField(
+            Option::<Scalar>::from(Scalar::from_be_bytes(&id.0)).ok_or(Error::Conversions(
+                ConversionsError::SecretKeyFailure("Invalid share identifier bytes".to_string()),
+            ))?,
+        );
+        let value = IdentifierPrimeField(
+            Option::<Scalar>::from(Scalar::from_be_bytes(&key_data.0)).ok_or(
+                Error::Conversions(ConversionsError::SecretKeyFailure(
+                    "Invalid share value bytes".to_string(),
+                )),
+            )?,
+        );
+
         Ok((
             Self(
-                id.to_inner(),
+                identifier,
                 NonZero::new(threshold.clone().to_inner())
                     .ok_or(Error::Threshold(ThresholdError::MustBeNonZero(*threshold)))?,
                 NonZero::new(limit.clone().to_inner())
                     .ok_or(Error::Threshold(ThresholdError::MustBeNonZero(*limit)))?,
-                key_data.to_inner(),
+                value,
             ),
             ptr,
         ))
@@ -102,7 +147,7 @@ impl<'a> TryDecodeFrom<'a> for KeyShare {
 }
 
 #[derive(Clone, Default)]
-pub(crate) struct ThresholdData(pub(crate) BTreeMap<u8, KeyShare>);
+pub(crate) struct ThresholdData(pub(crate) BTreeMap<IdentifierPrimeField<Scalar>, KeyShare>);
 
 impl From<ThresholdData> for Vec<u8> {
     fn from(val: ThresholdData) -> Self {
@@ -110,9 +155,11 @@ impl From<ThresholdData> for Vec<u8> {
         // add in the number of key shares
         v.append(&mut Varuint(val.0.len()).into());
         // add in the key shares
-        val.0.iter().for_each(|(_, share)| {
-            v.append(&mut share.clone().into());
-        });
+        val.0
+            .iter()
+            .for_each(|(_id, share): (&IdentifierPrimeField<Scalar>, &KeyShare)| {
+                v.append(&mut share.clone().into());
+            });
         v
     }
 }
@@ -216,13 +263,13 @@ impl ThresholdAttrView for View<'_> {
         Ok(NonZero::new(*Varuint::<usize>::try_from(v.as_slice())?).unwrap())
     }
     /// get the share identifier for the multikey
-    fn identifier(&self) -> Result<u8, Error> {
+    fn identifier(&self) -> Result<&[u8], Error> {
         let v = self
             .mk
             .attributes
             .get(&AttrId::ShareIdentifier)
             .ok_or(AttributesError::MissingShareIdentifier)?;
-        Ok(*Varuint::<u8>::try_from(v.as_slice())?)
+        Ok(v.as_slice())
     }
     /// get the threshold data
     fn threshold_data(&self) -> Result<&[u8], Error> {
@@ -382,23 +429,61 @@ impl ConvView for View<'_> {
                 let av = self.mk.threshold_attr_view()?;
                 let threshold = av.threshold()?;
                 let limit = av.limit()?;
-                let identifier = av.identifier()?;
-
-                let secret_key: SecretKeyShare<Bls12381G1Impl> = SecretKeyShare(
-                    Share::with_identifier_and_value(identifier, secret_bytes.as_slice()),
+                let identifier_bytes = av.identifier()?;
+                if identifier_bytes.len() != SECRET_KEY_BYTES {
+                    return Err(Error::Conversions(ConversionsError::SecretKeyFailure(
+                        "Insufficient number of bytes for secret share identifier".to_string(),
+                    )));
+                }
+                let identifier_array = <[u8; SECRET_KEY_BYTES]>::try_from(identifier_bytes)
+                    .map_err(|_| {
+                        Error::Conversions(ConversionsError::SecretKeyFailure(
+                            "Invalid bytes for secret share identifier".to_string(),
+                        ))
+                    })?;
+                let identifier = IdentifierPrimeField(
+                    Option::<Scalar>::from(Scalar::from_be_bytes(&identifier_array)).ok_or(
+                        Error::Conversions(ConversionsError::SecretKeyFailure(
+                            "Invalid bytes for secret share identifier".to_string(),
+                        )),
+                    )?,
                 );
+
+                if secret_bytes.len() != SECRET_KEY_BYTES {
+                    return Err(Error::Conversions(ConversionsError::SecretKeyFailure(
+                        "Insufficient number of bytes for secret share".to_string(),
+                    )));
+                }
+                let mut secret_array = <[u8; SECRET_KEY_BYTES]>::try_from(secret_bytes.as_slice())
+                    .map_err(|_| {
+                        Error::Conversions(ConversionsError::SecretKeyFailure(
+                            "Invalid bytes for secret share".to_string(),
+                        ))
+                    })?;
+
+                let secret = IdentifierPrimeField(
+                    Option::<Scalar>::from(Scalar::from_be_bytes(&secret_array)).ok_or(
+                        Error::Conversions(ConversionsError::SecretKeyFailure(
+                            "Invalid bytes for secret share".to_string(),
+                        )),
+                    )?,
+                );
+                secret_array.zeroize();
+
+                let secret_key: SecretKeyShare<Bls12381G1Impl> =
+                    SecretKeyShare(Share::with_identifier_and_value(identifier, secret));
 
                 // get the public key and build a Multikey out of it
                 let public_key = secret_key
                     .public_key()
                     .map_err(|e| ConversionsError::PublicKeyFailure(e.to_string()))?;
-                let key_bytes = public_key.0 .0.value_vec();
+                let key_bytes = public_key.0 .0.value.0.to_compressed();
                 Builder::new(Codec::Bls12381G1PubShare)
                     .with_comment(&self.mk.comment)
                     .with_key_bytes(&key_bytes)
                     .with_threshold(threshold)
                     .with_limit(limit)
-                    .with_identifier(identifier)
+                    .with_identifier(public_key.0 .0.identifier.0.to_be_bytes())
                     .try_build()
             }
             Codec::Bls12381G2Priv => {
@@ -427,23 +512,56 @@ impl ConvView for View<'_> {
                 let av = self.mk.threshold_attr_view()?;
                 let threshold = av.threshold()?;
                 let limit = av.limit()?;
-                let identifier = av.identifier()?;
-
-                let secret_key: SecretKeyShare<Bls12381G2Impl> = SecretKeyShare(
-                    Share::with_identifier_and_value(identifier, secret_bytes.as_slice()),
+                let identifier_bytes = av.identifier()?;
+                let identifier_array = <[u8; SECRET_KEY_BYTES]>::try_from(identifier_bytes)
+                    .map_err(|_| {
+                        Error::Conversions(ConversionsError::SecretKeyFailure(
+                            "Invalid bytes for secret share identifier".to_string(),
+                        ))
+                    })?;
+                let identifier = IdentifierPrimeField(
+                    Option::<Scalar>::from(Scalar::from_be_bytes(&identifier_array)).ok_or(
+                        Error::Conversions(ConversionsError::SecretKeyFailure(
+                            "Invalid bytes for secret share identifier".to_string(),
+                        )),
+                    )?,
                 );
+
+                if secret_bytes.len() != SECRET_KEY_BYTES {
+                    return Err(Error::Conversions(ConversionsError::SecretKeyFailure(
+                        "Insufficient number of bytes for secret share".to_string(),
+                    )));
+                }
+                let mut secret_array = <[u8; SECRET_KEY_BYTES]>::try_from(secret_bytes.as_slice())
+                    .map_err(|_| {
+                        Error::Conversions(ConversionsError::SecretKeyFailure(
+                            "Invalid bytes for secret share".to_string(),
+                        ))
+                    })?;
+
+                let secret = IdentifierPrimeField(
+                    Option::<Scalar>::from(Scalar::from_be_bytes(&secret_array)).ok_or(
+                        Error::Conversions(ConversionsError::SecretKeyFailure(
+                            "Invalid bytes for secret share".to_string(),
+                        )),
+                    )?,
+                );
+                secret_array.zeroize();
+
+                let secret_key: SecretKeyShare<Bls12381G1Impl> =
+                    SecretKeyShare(Share::with_identifier_and_value(identifier, secret));
 
                 // get the public key and build a Multikey out of it
                 let public_key = secret_key
                     .public_key()
                     .map_err(|e| ConversionsError::PublicKeyFailure(e.to_string()))?;
-                let key_bytes = public_key.0 .0.value_vec();
+                let key_bytes = public_key.0 .0.value.0.to_compressed();
                 Builder::new(Codec::Bls12381G1PubShare)
                     .with_comment(&self.mk.comment)
                     .with_key_bytes(&key_bytes)
                     .with_threshold(threshold)
                     .with_limit(limit)
-                    .with_identifier(identifier)
+                    .with_identifier(public_key.0 .0.identifier.0.to_be_bytes())
                     .try_build()
             }
             _ => Err(ConversionsError::UnsupportedCodec(self.mk.codec).into()),
@@ -475,10 +593,10 @@ impl ConvView for View<'_> {
             Codec::Bls12381G1PubShare => {
                 let tav = pk.threshold_attr_view()?;
                 let key_share: Vec<u8> = KeyShare(
-                    tav.identifier()?,
+                    bytes_to_identifier(tav.identifier()?)?,
                     tav.threshold()?,
                     tav.limit()?,
-                    key_bytes.to_vec(),
+                    bytes_to_value(key_bytes.as_slice())?,
                 )
                 .into();
                 key_share
@@ -495,10 +613,10 @@ impl ConvView for View<'_> {
             Codec::Bls12381G2PubShare => {
                 let tav = pk.threshold_attr_view()?;
                 let key_share: Vec<u8> = KeyShare(
-                    tav.identifier()?,
+                    bytes_to_identifier(tav.identifier()?)?,
                     tav.threshold()?,
                     tav.limit()?,
-                    key_bytes.to_vec(),
+                    bytes_to_value(key_bytes.as_slice())?,
                 )
                 .into();
                 key_share
@@ -555,18 +673,18 @@ impl ConvView for View<'_> {
             Codec::Bls12381G1PrivShare => {
                 let sav = self.mk.threshold_attr_view()?;
                 let secret_key_share: Vec<u8> = KeyShare(
-                    sav.identifier()?,
+                    bytes_to_identifier(sav.identifier()?)?,
                     sav.threshold()?,
                     sav.limit()?,
-                    secret_bytes.to_vec(),
+                    bytes_to_value(secret_bytes.as_slice())?,
                 )
                 .into();
                 let pav = pk.threshold_attr_view()?;
                 let public_key_share: Vec<u8> = KeyShare(
-                    pav.identifier()?,
+                    bytes_to_identifier(pav.identifier()?)?,
                     pav.threshold()?,
                     pav.limit()?,
-                    key_bytes.to_vec(),
+                    bytes_to_value(key_bytes.as_slice())?,
                 )
                 .into();
                 secret_key_share
@@ -589,18 +707,18 @@ impl ConvView for View<'_> {
             Codec::Bls12381G2PrivShare => {
                 let sav = self.mk.threshold_attr_view()?;
                 let secret_key_share: Vec<u8> = KeyShare(
-                    sav.identifier()?,
+                    bytes_to_identifier(sav.identifier()?)?,
                     sav.threshold()?,
                     sav.limit()?,
-                    secret_bytes.to_vec(),
+                    bytes_to_value(secret_bytes.as_slice())?,
                 )
                 .into();
                 let pav = pk.threshold_attr_view()?;
                 let public_key_share: Vec<u8> = KeyShare(
-                    pav.identifier()?,
+                    bytes_to_identifier(pav.identifier()?)?,
                     pav.threshold()?,
                     pav.limit()?,
-                    key_bytes.to_vec(),
+                    bytes_to_value(key_bytes.as_slice())?,
                 )
                 .into();
                 secret_key_share
@@ -689,11 +807,11 @@ impl SignView for View<'_> {
                 let av = self.mk.threshold_attr_view()?;
                 let threshold = av.threshold()?;
                 let limit = av.limit()?;
-                let identifier = av.identifier()?;
+                let identifier = bytes_to_identifier(av.identifier()?)?;
+                let secret_value = bytes_to_value(secret_bytes.as_slice())?;
 
-                let secret_key: SecretKeyShare<Bls12381G1Impl> = SecretKeyShare(
-                    Share::with_identifier_and_value(identifier, secret_bytes.as_slice()),
-                );
+                let secret_key: SecretKeyShare<Bls12381G1Impl> =
+                    SecretKeyShare(Share::with_identifier_and_value(identifier, secret_value));
 
                 // sign the data
                 let signature = secret_key
@@ -736,11 +854,11 @@ impl SignView for View<'_> {
                 let av = self.mk.threshold_attr_view()?;
                 let threshold = av.threshold()?;
                 let limit = av.limit()?;
-                let identifier = av.identifier()?;
+                let identifier = bytes_to_identifier(av.identifier()?)?;
+                let secret_value = bytes_to_value(secret_bytes.as_slice())?;
 
-                let secret_key: SecretKeyShare<Bls12381G2Impl> = SecretKeyShare(
-                    Share::with_identifier_and_value(identifier, secret_bytes.as_slice()),
-                );
+                let secret_key: SecretKeyShare<Bls12381G2Impl> =
+                    SecretKeyShare(Share::with_identifier_and_value(identifier, secret_value));
 
                 // sign the data
                 let signature = secret_key
@@ -801,8 +919,9 @@ impl ThresholdView for View<'_> {
                 key_shares
                     .iter()
                     .try_for_each(|share| -> Result<(), Error> {
-                        let key_bytes = share.as_raw_value().value_vec();
-                        let identifier = share.as_raw_value().identifier();
+                        let raw = share.as_raw_value();
+                        let key_bytes = raw.value().0.to_be_bytes();
+                        let identifier = raw.identifier().0.to_be_bytes();
 
                         let mk = Builder::new(Codec::Bls12381G1PrivShare)
                             .with_comment(&self.mk.comment)
@@ -841,8 +960,9 @@ impl ThresholdView for View<'_> {
                 key_shares
                     .iter()
                     .try_for_each(|share| -> Result<(), Error> {
-                        let key_bytes = share.as_raw_value().value_vec();
-                        let identifier = share.as_raw_value().identifier();
+                        let raw = share.as_raw_value();
+                        let key_bytes = raw.value().0.to_be_bytes();
+                        let identifier = raw.identifier().0.to_be_bytes();
 
                         let mk = Builder::new(Codec::Bls12381G2PrivShare)
                             .with_comment(&self.mk.comment)
@@ -879,7 +999,7 @@ impl ThresholdView for View<'_> {
         let (key_share, identifier, threshold, limit) = {
             // get the share attributes
             let av = share.threshold_attr_view()?;
-            let identifier = av.identifier()?;
+            let identifier = bytes_to_identifier(av.identifier()?)?;
             let threshold = av.threshold()?;
             let limit = av.limit()?;
             // get the key data
@@ -887,7 +1007,12 @@ impl ThresholdView for View<'_> {
             let key_bytes = dv.key_bytes()?;
             // return the data
             (
-                KeyShare(identifier, threshold, limit, key_bytes.to_vec()),
+                KeyShare(
+                    identifier,
+                    threshold,
+                    limit,
+                    bytes_to_value(key_bytes.as_slice())?,
+                ),
                 identifier,
                 threshold,
                 limit,
@@ -905,7 +1030,7 @@ impl ThresholdView for View<'_> {
             tdata.into()
         };
 
-        // if this multikey doesn't already have the threshold/limi set, then
+        // if this multikey doesn't already have the threshold/limit set, then
         // set it to match the values from the first share
         let av = share.threshold_attr_view()?;
         let threshold = av.threshold().unwrap_or(threshold);
@@ -951,7 +1076,7 @@ impl ThresholdView for View<'_> {
                     .0
                     .iter()
                     .try_for_each(|(id, share)| -> Result<(), Error> {
-                        let vsss = Share::with_identifier_and_value(*id, share.3.as_slice());
+                        let vsss = Share::with_identifier_and_value(*id, share.3);
                         shares.push(SecretKeyShare::<Bls12381G1Impl>(vsss));
                         Ok(())
                     })?;
@@ -969,7 +1094,7 @@ impl ThresholdView for View<'_> {
                     .0
                     .iter()
                     .try_for_each(|(id, share)| -> Result<(), Error> {
-                        let vsss = Share::with_identifier_and_value(*id, share.3.as_slice());
+                        let vsss = Share::with_identifier_and_value(*id, share.3);
                         shares.push(SecretKeyShare::<Bls12381G2Impl>(vsss));
                         Ok(())
                     })?;
@@ -1059,13 +1184,24 @@ impl VerifyView for View<'_> {
 
                 // get the share identifier
                 let av = multisig.threshold_attr_view()?;
-                let identifier = av.identifier()?;
+                let identifier = bytes_to_identifier(av.identifier()?)?;
 
                 // get the signature data
                 let sv = multisig.data_view()?;
-                let value = sv.sig_bytes().map_err(|_| VerifyError::MissingSignature)?;
+                let value_bytes = sv.sig_bytes().map_err(|_| VerifyError::MissingSignature)?;
+                let value = {
+                    let arr: [u8; G1_PUBLIC_KEY_BYTES] = value_bytes
+                        .as_slice()
+                        .try_into()
+                        .map_err(|e: TryFromSliceError| VerifyError::BadSignature(e.to_string()))?;
+                    Option::from(G1Projective::from_compressed(&arr)).ok_or(
+                        VerifyError::BadSignature(
+                            "failed to deserialize signature share".to_string(),
+                        ),
+                    )?
+                };
 
-                let share = Share::with_identifier_and_value(identifier, &value);
+                let share = Share::with_identifier_and_value(identifier, ValueGroup(value));
 
                 let sig = match sig_scheme {
                     SchemeTypeId::Basic => SignatureShare::<Bls12381G1Impl>::Basic(share),
@@ -1139,21 +1275,32 @@ impl VerifyView for View<'_> {
 
                 // get the share identifier
                 let av = multisig.threshold_attr_view()?;
-                let identifier = av.identifier()?;
+                let identifier = bytes_to_identifier(av.identifier()?)?;
 
                 // get the signature data
                 let sv = multisig.data_view()?;
-                let value = sv.sig_bytes().map_err(|_| VerifyError::MissingSignature)?;
+                let value_bytes = sv.sig_bytes().map_err(|_| VerifyError::MissingSignature)?;
+                let value = {
+                    let arr: [u8; G2_PUBLIC_KEY_BYTES] = value_bytes
+                        .as_slice()
+                        .try_into()
+                        .map_err(|e: TryFromSliceError| VerifyError::BadSignature(e.to_string()))?;
+                    Option::from(G2Projective::from_compressed(&arr)).ok_or(
+                        VerifyError::BadSignature(
+                            "failed to deserialize signature share".to_string(),
+                        ),
+                    )?
+                };
 
-                let share = Share::with_identifier_and_value(identifier, &value);
+                let share = Share::with_identifier_and_value(identifier, ValueGroup(value));
 
                 let sig = match sig_scheme {
-                    SchemeTypeId::Basic => SignatureShare::<Bls12381G1Impl>::Basic(share),
+                    SchemeTypeId::Basic => SignatureShare::<Bls12381G2Impl>::Basic(share),
                     SchemeTypeId::MessageAugmentation => {
-                        SignatureShare::<Bls12381G1Impl>::MessageAugmentation(share)
+                        SignatureShare::<Bls12381G2Impl>::MessageAugmentation(share)
                     }
                     SchemeTypeId::ProofOfPossession => {
-                        SignatureShare::<Bls12381G1Impl>::ProofOfPossession(share)
+                        SignatureShare::<Bls12381G2Impl>::ProofOfPossession(share)
                     }
                 };
 
