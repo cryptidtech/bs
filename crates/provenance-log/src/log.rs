@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: FSL-1.1
-use crate::{entry, error::LogError, Entry, Error, Kvp, Script, Stk};
+use crate::{
+    entry,
+    error::{LogError, ScriptError},
+    Entry, Error, Kvp, Script,
+};
+use comrade::{Comrade, Value};
 use core::fmt;
 use multibase::Base;
 use multicid::{Cid, Vlad};
@@ -7,7 +12,6 @@ use multicodec::Codec;
 use multitrait::{Null, TryDecodeFrom};
 use multiutil::{BaseEncoded, CodecInfo, EncodingInfo, Varuint};
 use std::collections::BTreeMap;
-use wacc::{prelude::StoreLimitsBuilder, vm, Stack};
 
 /// the multicodec provenance log codec
 pub const SIGIL: Codec = Codec::ProvenanceLog;
@@ -189,233 +193,139 @@ struct VerifyIter<'a> {
     entries: Vec<&'a Entry>,
     seqno: usize,
     prev_seqno: usize,
+    prev_cid: Cid,
     kvp: Kvp<'a>,
     lock_scripts: Vec<Script>,
-    error: Option<Error>,
 }
 
 impl<'a> Iterator for VerifyIter<'a> {
     type Item = Result<(usize, Entry, Kvp<'a>), Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        //println!("iter::next({})", self.seqno);
-        let entry = match self.entries.get(self.seqno) {
-            Some(e) => *e,
-            None => return None,
-        };
+        // Check if we've reached the end of entries
+        let entry = self.entries.get(self.seqno)?;
+        let entry = *entry;
 
         // this is the check count if successful
         let mut count = 0;
 
-        // set up the stacks
-        let mut pstack = Stk::default();
-        let mut rstack = Stk::default();
-
         // check the seqno meet the criteria
         if self.seqno > 0 && self.seqno != self.prev_seqno + 1 {
-            // set our index out of range
-            self.seqno = self.entries.len();
-            // set the error state
-            self.error = Some(LogError::InvalidSeqno.into());
-            return Some(Err(self.error.clone().unwrap()));
+            self.seqno = self.entries.len(); // End the iterator
+            return Some(Err(LogError::InvalidSeqno.into()));
+        }
+
+        // check if the cid meets the criteria
+        if self.seqno > 0 && entry.prev() != self.prev_cid {
+            self.seqno = self.entries.len(); // End the iterator
+            return Some(Err(LogError::EntryCidMismatch.into()));
         }
 
         // 'unlock:
-        let mut result = {
-            // run the unlock script using the entry as the kvp to get the
-            // stack in the vm::Context set up.
-            let unlock_ctx = vm::Context {
-                current: entry,  // limit the available data to just the entry
-                proposed: entry, // limit the available data to just the entry
-                pstack: &mut pstack,
-                rstack: &mut rstack,
-                check_count: 0,
-                write_idx: 0,
-                context: entry.context().to_string(),
-                log: Vec::default(),
-                limiter: StoreLimitsBuilder::new()
-                    .memory_size(1 << 16)
-                    .instances(2)
-                    .memories(1)
-                    .build(),
-            };
-
-            let mut instance = match vm::Builder::new()
-                .with_context(unlock_ctx)
-                .with_bytes(entry.unlock.clone())
-                .try_build()
-            {
-                Ok(i) => i,
-                Err(e) => {
-                    // set our index out of range
-                    self.seqno = self.entries.len();
-                    self.error = Some(LogError::Wacc(e).into());
-                    return Some(Err(self.error.clone().unwrap()));
-                }
-            };
-            //print!("running unlock script from seqno: {}...", self.seqno);
-
-            // run the unlock script
-            if let Some(e) = instance.run("for_great_justice").err() {
-                // set our index out of range
-                self.seqno = self.entries.len();
-                self.error = Some(LogError::Wacc(e).into());
-                return Some(Err(self.error.clone().unwrap()));
-            }
-
-            //println!("SUCCEEDED!");
-
-            true
+        let Script::Code(_, ref unlock) = entry.unlock else {
+            self.seqno = self.entries.len(); // End the iterator
+            return Some(Err(Error::Script(ScriptError::WrongScriptFormat {
+                expected: "unlock".to_string(),
+                found: format!("{:?}", entry.unlock),
+            })));
         };
-
-        /*
-        println!("values:");
-        println!("{:?}", pstack.clone());
-        println!("return:");
-        println!("{:?}", rstack.clone());
-        */
-
-        if !result {
-            // set our index out of range
-            self.seqno = self.entries.len();
-            self.error = Some(
-                LogError::VerifyFailed(format!(
-                    "unlock script failed\nvalues:\n{:?}\nreturn:\n{:?}",
-                    rstack, pstack
-                ))
-                .into(),
-            );
-            return Some(Err(self.error.clone().unwrap()));
-        }
-
-        /*
-        // set the entry to look into for proof and message values
-        if let Some(e) = self.kvp.set_entry(entry).err() {
-            // set our index out of range
-            self.seqno = self.entries.len();
-            self.error = Some(LogError::KvpSetEntryFailed(e.to_string()).into());
-            return Some(Err(self.error.clone().unwrap()));
-        }
-        */
 
         // if this is the first entry, then we need to apply the
         // mutation ops
         if self.seqno == 0 {
-            //println!("applying kvp ops for seqno 0");
-            if let Some(e) = self.kvp.apply_entry_ops(entry).err() {
-                // set our index out of range
-                self.seqno = self.entries.len();
-                self.error = Some(LogError::UpdateKvpFailed(e.to_string()).into());
-                return Some(Err(self.error.clone().unwrap()));
+            if let Err(e) = self.kvp.apply_entry_ops(entry) {
+                self.seqno = self.entries.len(); // End the iterator
+                return Some(Err(LogError::UnlockFailed(e.to_string()).into()));
             }
         }
 
-        // 'lock:
-        result = false;
+        let kvp_lock = self.kvp.clone();
+
+        tracing::debug!(
+            "verifying entry with seqno {} and prev_seqno {} unlock script: {:?}",
+            self.seqno,
+            self.prev_seqno,
+            unlock
+        );
+
+        let mut unlocked = match Comrade::new(&kvp_lock, &entry).try_unlock(unlock) {
+            Ok(u) => u,
+            Err(e) => {
+                tracing::error!("unlock failed: {}", e);
+                self.seqno = self.entries.len(); // End the iterator
+                return Some(Err(
+                    LogError::UnlockFailed(format!("unlock failed: {}", e)).into()
+                ));
+            }
+        };
+
+        // show lock scripts
+        tracing::debug!(
+            "entry seqno {} has {:?} lock scripts",
+            self.seqno,
+            self.lock_scripts
+        );
 
         // build the set of lock scripts to run in order from root to longest branch to leaf
         let locks = match entry.sort_locks(&self.lock_scripts) {
             Ok(l) => l,
             Err(e) => {
-                // set our index out of range
-                self.seqno = self.entries.len();
-                self.error = Some(e);
-                return Some(Err(self.error.clone().unwrap()));
+                self.seqno = self.entries.len(); // End the iterator
+                return Some(Err(e));
             }
         };
 
+        let mut results = false;
+
         // run each of the lock scripts
         for lock in locks {
-            // NOTE: clone the kvp and stacks each time
-            let lock_kvp = self.kvp.clone();
-            let mut lock_pstack = pstack.clone();
-            let mut lock_rstack = rstack.clone();
-
-            {
-                let lock_ctx = vm::Context {
-                    current: &lock_kvp,
-                    proposed: entry,
-                    pstack: &mut lock_pstack,
-                    rstack: &mut lock_rstack,
-                    check_count: 0,
-                    write_idx: 0,
-                    context: entry.context().to_string(), // set the branch path for branch()
-                    log: Vec::default(),
-                    limiter: StoreLimitsBuilder::new()
-                        .memory_size(1 << 16)
-                        .instances(2)
-                        .memories(1)
-                        .build(),
-                };
-
-                let mut instance = match vm::Builder::new()
-                    .with_context(lock_ctx)
-                    .with_bytes(lock.clone())
-                    .try_build()
-                {
-                    Ok(i) => i,
-                    Err(e) => {
-                        // set our index out of range
-                        self.seqno = self.entries.len();
-                        self.error = Some(LogError::Wacc(e).into());
-                        return Some(Err(self.error.clone().unwrap()));
-                    }
-                };
-                //print!("running lock script from seqno: {}...", self.seqno);
-
-                // run the unlock script
-                if let Some(e) = instance.run("move_every_zig").err() {
-                    // set our index out of range
-                    self.seqno = self.entries.len();
-                    self.error = Some(LogError::Wacc(e).into());
-                    return Some(Err(self.error.clone().unwrap()));
+            let Script::Code(_, lock) = lock else {
+                self.seqno = self.entries.len(); // End the iterator
+                return Some(Err(ScriptError::WrongScriptFormat {
+                    found: format!("{:?}", lock),
+                    expected: "Script::Code".to_string(),
                 }
+                .into()));
+            };
 
-                //println!("SUCCEEDED!");
-            }
-
-            // break out of this loop as soon as a lock script succeeds
-            if let Some(v) = lock_rstack.top() {
-                match v {
-                    vm::Value::Success(c) => {
-                        count = c;
-                        result = true;
-                        break;
-                    }
-                    _ => result = false,
+            match unlocked.try_lock(&lock) {
+                Ok(Some(Value::Success(ct))) => {
+                    count = ct;
+                    results = true;
+                    break;
                 }
+                Err(e) => {
+                    self.seqno = self.entries.len(); // End the iterator
+                    return Some(Err(LogError::LockFailed(e.to_string()).into()));
+                }
+                _ => continue,
             }
         }
 
-        if result {
-            // if the entry verifies, apply it's mutataions to the kvp
-            // the 0th entry has already been applied at this point so no
-            // need to do it here
-            if self.seqno > 0 {
-                if let Some(e) = self.kvp.apply_entry_ops(entry).err() {
-                    // set our index out of range
-                    self.seqno = self.entries.len();
-                    self.error = Some(LogError::UpdateKvpFailed(e.to_string()).into());
-                    return Some(Err(self.error.clone().unwrap()));
-                }
-            }
-            // update the lock script to validate the next entry
-            self.lock_scripts.clone_from(&entry.locks);
-            // update the seqno
-            self.prev_seqno = self.seqno;
-            self.seqno += 1;
-        } else {
-            // set our index out of range
-            self.seqno = self.entries.len();
-            self.error = Some(
-                LogError::VerifyFailed(format!(
-                    "unlock script failed\nvalues:\n{:?}\nreturn:\n{:?}",
-                    rstack, pstack
-                ))
-                .into(),
-            );
-            return Some(Err(self.error.clone().unwrap()));
+        if !results {
+            self.seqno = self.entries.len(); // End the iterator
+            return Some(Err(LogError::VerifyFailed(
+                "entry failed to verify".to_string(),
+            )
+            .into()));
         }
+
+        // if the entry verifies, apply it's mutatations to the kvp
+        // the 0th entry has already been applied at this point so no
+        // need to do it here
+        if self.seqno > 0 {
+            if let Err(e) = self.kvp.apply_entry_ops(entry) {
+                self.seqno = self.entries.len(); // End the iterator
+                return Some(Err(LogError::UpdateKvpFailed(e.to_string()).into()));
+            }
+        }
+
+        // update the lock script to validate the next entry
+        self.lock_scripts.clone_from(&entry.locks);
+        // update the seqno and prev_cid
+        self.prev_seqno = self.seqno;
+        self.prev_cid = entry.cid();
+        self.seqno += 1;
 
         // return the check count, validated entry, and kvp state
         Some(Ok((count, entry.clone(), self.kvp.clone())))
@@ -423,6 +333,14 @@ impl<'a> Iterator for VerifyIter<'a> {
 }
 
 impl Log {
+    /// Returns the Entries with the given seqno
+    pub fn seqno(&self, seqno: u64) -> Result<&Entry, Error> {
+        self.entries
+            .values()
+            .find(|entry| entry.seqno() == seqno)
+            .ok_or(LogError::InvalidSeqno.into())
+    }
+
     /// get an iterator over the entries in from head to foot
     pub fn iter(&self) -> impl Iterator<Item = &Entry> {
         // get a list of Entry references, sort them by seqno
@@ -443,9 +361,9 @@ impl Log {
             entries,
             seqno: 0,
             prev_seqno: 0,
+            prev_cid: Cid::null(),
             kvp: Kvp::default(),
             lock_scripts: vec![self.first_lock.clone()],
-            error: None,
         }
     }
 
@@ -580,19 +498,51 @@ mod tests {
     use multicid::{cid, vlad};
     use multihash::mh;
     use multikey::{EncodedMultikey, Multikey, Views};
-    use std::path::PathBuf;
     use test_log::test;
     use tracing::{span, Level};
+    use tracing_subscriber::{fmt, EnvFilter};
 
-    fn load_script(path: &Key, file_name: &str) -> Script {
-        let mut pb = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        pb.push("examples");
-        pb.push("wast");
-        pb.push(file_name);
-        crate::script::Builder::from_code_file(&pb)
-            .with_path(path)
-            .try_build()
-            .unwrap()
+    fn first_lock_script() -> Script {
+        Script::Code(
+            Key::default(),
+            r#"
+                check_signature("/ephemeral", "/entry/")
+            "#
+            .to_string(),
+        )
+    }
+
+    fn lock_script() -> Script {
+        Script::Code(
+            Key::default(),
+            r#"
+                check_signature("/recovery", "/entry/") ||
+                check_signature("/pubkey", "/entry/") ||
+                check_preimage("/hash")
+            "#
+            .to_string(),
+        )
+    }
+
+    fn unlock_script() -> Script {
+        Script::Code(
+            Key::default(),
+            r#"
+push("/entry/");
+push("/entry/proof");
+"#
+            .to_string(),
+        )
+    }
+
+    #[allow(unused)]
+    fn init_logger() {
+        let subscriber = fmt()
+            .with_env_filter(EnvFilter::from_default_env())
+            .finish();
+        if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
+            tracing::warn!("failed to set subscriber: {}", e);
+        }
     }
 
     fn get_key_update_op(k: &str, key: &Multikey) -> Op {
@@ -642,24 +592,27 @@ mod tests {
             .unwrap();
 
         // build a vlad from the cid
-        let vlad = vlad::Builder::default()
-            .with_signing_key(&ephemeral)
-            .with_cid(&cid)
-            .try_build()
-            .unwrap();
+        let vlad = Vlad::generate(&cid, |cid| {
+            // sign those bytes
+            let v: Vec<u8> = cid.clone().into();
+            Ok(v)
+        })
+        .unwrap();
 
         // load the entry scripts
-        let lock = load_script(&Key::default(), "lock.wast");
-        let unlock = load_script(&Key::default(), "unlock.wast");
+        let lock = lock_script();
+        let unlock = unlock_script();
         let ephemeral_op = get_key_update_op("/ephemeral", &ephemeral);
         let pubkey_op = get_key_update_op("/pubkey", &key);
 
-        let entry = entry::Builder::default()
-            .with_vlad(&vlad)
-            .add_lock(&lock)
-            .with_unlock(&unlock)
-            .add_op(&ephemeral_op)
-            .add_op(&pubkey_op)
+        let entry = Entry::builder()
+            .vlad(vlad.clone())
+            .locks(vec![lock])
+            .unlock(unlock)
+            .ops(vec![ephemeral_op, pubkey_op])
+            .build();
+
+        let entry = entry
             .try_build(|e| {
                 // get the serialized version of the entry (with empty proof)
                 let ev: Vec<u8> = e.clone().into();
@@ -673,7 +626,7 @@ mod tests {
             .unwrap();
 
         // load the first lock script
-        let first = load_script(&Key::default(), "first.wast");
+        let first = first_lock_script();
 
         let log = Builder::new()
             .with_vlad(&vlad)
@@ -699,21 +652,21 @@ mod tests {
     fn test_entry_iterator() {
         let _s = span!(Level::INFO, "test_entry_iterator").entered();
         let ephemeral = EncodedMultikey::try_from(
-            "fba2480260874657374206b6579010120cbd87095dc5863fcec46a66a1d4040a73cb329f92615e165096bd50541ee71c0"
-        )
-        .unwrap();
+        "fba2480260874657374206b6579010120cbd87095dc5863fcec46a66a1d4040a73cb329f92615e165096bd50541ee71c0"
+    )
+    .unwrap();
         let key1 = EncodedMultikey::try_from(
-            "fba2480260874657374206b6579010120d784f92e18bdba433b8b0f6cbf140bc9629ff607a59997357b40d22c3883a3b8"
-        )
-        .unwrap();
+        "fba2480260874657374206b6579010120d784f92e18bdba433b8b0f6cbf140bc9629ff607a59997357b40d22c3883a3b8"
+    )
+    .unwrap();
         let key2 = EncodedMultikey::try_from(
-            "fba2480260874657374206b65790101203f4c94407de791e53b4df12ef1d5534d1b19ff2ccfccba4ccc4722b6e5e8ea07"
-        )
-        .unwrap();
+        "fba2480260874657374206b65790101203f4c94407de791e53b4df12ef1d5534d1b19ff2ccfccba4ccc4722b6e5e8ea07"
+    )
+    .unwrap();
         let key3 = EncodedMultikey::try_from(
-            "fba2480260874657374206b6579010120518e3ea918b1168d29ca7e75b0ca84be1ad6edf593a47828894a5f1b94a83bd4"
-        )
-        .unwrap();
+        "fba2480260874657374206b6579010120518e3ea918b1168d29ca7e75b0ca84be1ad6edf593a47828894a5f1b94a83bd4"
+    )
+    .unwrap();
 
         // build a cid
         let cid = cid::Builder::new(Codec::Cidv1)
@@ -728,11 +681,12 @@ mod tests {
             .unwrap();
 
         // create a vlad
-        let vlad = vlad::Builder::default()
-            .with_signing_key(&ephemeral)
-            .with_cid(&cid)
-            .try_build()
-            .unwrap();
+        let vlad = Vlad::generate(&cid, |cid| {
+            // sign those bytes
+            let v: Vec<u8> = cid.clone().into();
+            Ok(v)
+        })
+        .unwrap();
 
         let ephemeral_op = get_key_update_op("/ephemeral", &ephemeral);
         let pubkey1_op = get_key_update_op("/pubkey", &key1);
@@ -742,73 +696,97 @@ mod tests {
         let preimage2_op = get_hash_update_op("/hash", "move every zig");
 
         // load the entry scripts
-        let lock = load_script(&Key::default(), "lock.wast");
-        let unlock = load_script(&Key::default(), "unlock.wast");
+        let unlock = unlock_script();
+        let lock = lock_script();
 
         // create the first, self-signed Entry object
-        let e1 = entry::Builder::default()
-            .with_vlad(&vlad)
-            .with_seqno(0)
-            .add_lock(&lock) // "/" -> lock.wast
-            .with_unlock(&unlock)
-            .add_op(&ephemeral_op) // "/ephemeral"
-            .add_op(&pubkey1_op) // "/pubkey"
-            .add_op(&preimage1_op) // "/preimage"
-            .try_build(|e| {
-                let ev: Vec<u8> = e.clone().into();
-                let sv = ephemeral.sign_view().unwrap();
-                let ms = sv.sign(&ev, false, None).unwrap();
-                Ok(ms.into())
-            })
-            .unwrap();
+        let e1 = Entry::builder()
+            .vlad(vlad.clone())
+            .seqno(0)
+            .locks(vec![lock.clone()])
+            .unlock(unlock.clone())
+            .ops(vec![
+                ephemeral_op.clone(),
+                pubkey1_op.clone(),
+                preimage1_op.clone(),
+            ])
+            .build();
 
-        //println!("{:?}", e1);
-        let e2 = entry::Builder::default()
-            .with_vlad(&vlad)
-            .with_seqno(1)
-            .add_lock(&lock) // "/" -> lock.wast
-            .with_unlock(&unlock)
-            .with_prev(&e1.cid())
-            .add_op(&Op::Delete("/ephemeral".try_into().unwrap())) // "/ephemeral"
-            .add_op(&pubkey2_op) // "/pubkey"
-            .try_build(|e| {
-                let ev: Vec<u8> = e.clone().into();
-                let sv = key1.sign_view().unwrap();
-                let ms = sv.sign(&ev, false, None).unwrap();
-                Ok(ms.into())
-            })
-            .unwrap();
+        let unsigned_entry = e1.prepare_unsigned_entry().unwrap();
+        let entry_bytes: Vec<u8> = unsigned_entry.clone().into();
 
-        //println!("{:?}", e2);
-        let e3 = entry::Builder::default()
-            .with_vlad(&vlad)
-            .with_seqno(2)
-            .add_lock(&lock) // "/" -> lock.wast
-            .with_unlock(&unlock)
-            .with_prev(&e2.cid())
-            .try_build(|e| {
-                let ev: Vec<u8> = e.clone().into();
-                let sv = key2.sign_view().unwrap();
-                let ms = sv.sign(&ev, false, None).unwrap();
-                Ok(ms.into())
-            })
-            .unwrap();
+        let signature = {
+            let sv = ephemeral.sign_view().unwrap();
+            sv.sign(&entry_bytes, false, None).unwrap()
+        };
 
-        //println!("{:?}", e3);
-        let e4 = entry::Builder::default()
-            .with_vlad(&vlad)
-            .with_seqno(3)
-            .add_lock(&lock) // "/" -> lock.wast
-            .with_unlock(&unlock)
-            .with_prev(&e3.cid())
-            .add_op(&pubkey3_op) // "/pubkey"
-            .add_op(&preimage2_op) // "/preimage"
-            .try_build(|_| Ok(b"for great justice".to_vec()))
-            .unwrap();
-        //println!("{:?}", e4);
+        let e1 = unsigned_entry
+            .try_build_with_proof(signature.into())
+            .expect("should build e1 with proof");
+
+        let e2 = Entry::builder()
+            .vlad(vlad.clone())
+            .seqno(1)
+            .locks(vec![lock.clone()])
+            .unlock(unlock.clone())
+            .prev(e1.cid())
+            .ops(vec![
+                Op::Delete("/ephemeral".try_into().unwrap()),
+                pubkey2_op.clone(), // Changed from preimage1_op to pubkey2_op
+            ])
+            .build();
+
+        let unsigned_entry = e2.prepare_unsigned_entry().unwrap();
+        let entry_bytes: Vec<u8> = unsigned_entry.clone().into();
+
+        let signature = {
+            let sv = key1.sign_view().unwrap();
+            sv.sign(&entry_bytes, false, None).unwrap()
+        };
+
+        let e2 = unsigned_entry
+            .try_build_with_proof(signature.into())
+            .expect("should build e2 with proof");
+
+        let e3 = Entry::builder()
+            .vlad(vlad.clone())
+            .seqno(2)
+            .locks(vec![lock.clone()])
+            .unlock(unlock.clone())
+            .prev(e2.cid())
+            .build();
+
+        let unsigned_entry = e3.prepare_unsigned_entry().unwrap();
+        let entry_bytes: Vec<u8> = unsigned_entry.clone().into();
+
+        let signature = {
+            let sv = key2.sign_view().unwrap();
+            sv.sign(&entry_bytes, false, None).unwrap()
+        };
+
+        let e3 = unsigned_entry
+            .try_build_with_proof(signature.into())
+            .expect("should build e3 with proof");
+
+        let e4 = Entry::builder()
+            .vlad(vlad.clone())
+            .seqno(3)
+            .locks(vec![lock])
+            .unlock(unlock)
+            .prev(e3.cid())
+            .ops(vec![pubkey3_op, preimage2_op])
+            .build();
+
+        let unsigned_entry = e4.prepare_unsigned_entry().unwrap();
+
+        // For e4, use the raw bytes "for great justice" as the proof,
+        // just like in the original test
+        let e4 = unsigned_entry
+            .try_build_with_proof(b"for great justice".to_vec())
+            .expect("should build e4 with proof");
 
         // load the first lock script
-        let first = load_script(&Key::default(), "first.wast");
+        let first = first_lock_script();
 
         let log = Builder::new()
             .with_vlad(&vlad)
@@ -828,11 +806,15 @@ mod tests {
         assert_eq!(Some(&e3), iter.next());
         assert_eq!(Some(&e4), iter.next());
         assert_eq!(None, iter.next());
+
+        // Add some debug info to help trace any issues
+        println!("Verifying entries...");
+
         let verify_iter = log.verify();
         for ret in verify_iter {
             match ret {
-                Ok((c, _, _)) => {
-                    println!("check count: {}", c);
+                Ok((c, e, _)) => {
+                    println!("check count for entry with seqno {}: {}", e.seqno(), c);
                 }
                 Err(e) => {
                     println!("verify failed: {}", e);

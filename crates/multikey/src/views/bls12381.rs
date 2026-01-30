@@ -9,7 +9,7 @@ use crate::{
 };
 use blsful::{
     inner_types::{G1Projective, G2Projective, Scalar},
-    vsss_rs::{Share, ValueGroup},
+    vsss_rs::{IdentifierPrimeField, Share, ValueGroup},
     Bls12381G1Impl, Bls12381G2Impl, PublicKey, PublicKeyShare, SecretKey, SecretKeyShare,
     Signature, SignatureSchemes, SignatureShare, SECRET_KEY_BYTES,
 };
@@ -20,9 +20,15 @@ use multisig::{ms, views::bls12381::SchemeTypeId, Multisig, Views as SigViews};
 use multitrait::TryDecodeFrom;
 use multiutil::Varuint;
 use ssh_encoding::{Decode, Encode};
-use std::{array::TryFromSliceError, collections::BTreeMap};
-use vsss_rs::{IdentifierPrimeField, ValuePrimeField};
+use std::{
+    array::TryFromSliceError,
+    collections::BTreeMap,
+    num::{NonZero, NonZeroUsize},
+};
 use zeroize::{Zeroize, Zeroizing};
+
+/// ValuePrimeField is a type alias for IdentifierPrimeField in vsss_rs (scalar share value).
+type ValuePrimeField<F> = IdentifierPrimeField<F>;
 
 /// the RFC 4251 algorithm name for SSH compatibility
 pub const ALGORITHM_NAME_G1: &str = "bls12_381-g1@multikey";
@@ -63,14 +69,15 @@ fn bytes_to_value(bytes: &[u8]) -> Result<ValuePrimeField<Scalar>, Error> {
 }
 
 /// tuple of the key share data with threshold attributes
+// TODO: this should be a struct with the share identifier, threshold, limit, and key bytes
 #[derive(Clone)]
 pub struct KeyShare(
     /// identifier
     pub IdentifierPrimeField<Scalar>,
     /// threshold,
-    pub usize,
+    pub NonZeroUsize,
     /// limit
-    pub usize,
+    pub NonZeroUsize,
     /// key bytes
     pub ValuePrimeField<Scalar>,
 );
@@ -81,9 +88,9 @@ impl From<KeyShare> for Vec<u8> {
         // add in the share identifier
         v.extend_from_slice(&val.0 .0.to_be_bytes());
         // add in the threshold
-        v.append(&mut Varuint(val.1).into());
+        v.append(&mut Varuint::<usize>(val.1.into()).into());
         // add in the limit
-        v.append(&mut Varuint(val.2).into());
+        v.append(&mut Varuint::<usize>(val.2.into()).into());
         // add in the key share data
         v.extend_from_slice(&val.3 .0.to_be_bytes());
         v
@@ -126,7 +133,14 @@ impl<'a> TryDecodeFrom<'a> for KeyShare {
         );
 
         Ok((
-            Self(identifier, threshold.to_inner(), limit.to_inner(), value),
+            Self(
+                identifier,
+                NonZero::new(threshold.clone().to_inner())
+                    .ok_or(Error::Threshold(ThresholdError::MustBeNonZero(*threshold)))?,
+                NonZero::new(limit.clone().to_inner())
+                    .ok_or(Error::Threshold(ThresholdError::MustBeNonZero(*limit)))?,
+                value,
+            ),
             ptr,
         ))
     }
@@ -141,9 +155,11 @@ impl From<ThresholdData> for Vec<u8> {
         // add in the number of key shares
         v.append(&mut Varuint(val.0.len()).into());
         // add in the key shares
-        val.0.iter().for_each(|(_, share)| {
-            v.append(&mut share.clone().into());
-        });
+        val.0
+            .iter()
+            .for_each(|(_id, share): (&IdentifierPrimeField<Scalar>, &KeyShare)| {
+                v.append(&mut share.clone().into());
+            });
         v
     }
 }
@@ -228,22 +244,23 @@ impl AttrView for View<'_> {
 
 impl ThresholdAttrView for View<'_> {
     /// get the threshold value for the multikey
-    fn threshold(&self) -> Result<usize, Error> {
+    fn threshold(&self) -> Result<NonZeroUsize, Error> {
         let v = self
             .mk
             .attributes
             .get(&AttrId::Threshold)
             .ok_or(AttributesError::MissingThreshold)?;
-        Ok(*Varuint::<usize>::try_from(v.as_slice())?)
+        Ok(NonZero::new(*Varuint::<usize>::try_from(v.as_slice())?).unwrap())
     }
     /// get the limit value for the multikey
-    fn limit(&self) -> Result<usize, Error> {
+    fn limit(&self) -> Result<NonZeroUsize, Error> {
         let v = self
             .mk
             .attributes
             .get(&AttrId::Limit)
             .ok_or(AttributesError::MissingLimit)?;
-        Ok(*Varuint::<usize>::try_from(v.as_slice())?)
+        // Ok(*Varuint::<usize>::try_from(v.as_slice())?)
+        Ok(NonZero::new(*Varuint::<usize>::try_from(v.as_slice())?).unwrap())
     }
     /// get the share identifier for the multikey
     fn identifier(&self) -> Result<&[u8], Error> {
@@ -861,7 +878,7 @@ impl SignView for View<'_> {
 
 impl ThresholdView for View<'_> {
     /// try to split a Multikey into shares
-    fn split(&self, threshold: usize, limit: usize) -> Result<Vec<Multikey>, Error> {
+    fn split(&self, threshold: NonZeroUsize, limit: NonZeroUsize) -> Result<Vec<Multikey>, Error> {
         if threshold > limit {
             return Err(ThresholdError::InvalidThresholdLimit(threshold, limit).into());
         }
@@ -894,7 +911,7 @@ impl ThresholdView for View<'_> {
                     ))?
                 };
                 let key_shares = secret_key
-                    .split(threshold, limit)
+                    .split(threshold.into(), limit.into())
                     .map_err(ThresholdError::Bls)?;
 
                 let mut shares = Vec::with_capacity(key_shares.len());
@@ -935,7 +952,7 @@ impl ThresholdView for View<'_> {
                 };
 
                 let key_shares = secret_key
-                    .split(threshold, limit)
+                    .split(threshold.into(), limit.into())
                     .map_err(ThresholdError::Bls)?;
 
                 let mut shares = Vec::with_capacity(key_shares.len());
@@ -1013,7 +1030,7 @@ impl ThresholdView for View<'_> {
             tdata.into()
         };
 
-        // if this multikey doesn't already have the threshold/limi set, then
+        // if this multikey doesn't already have the threshold/limit set, then
         // set it to match the values from the first share
         let av = share.threshold_attr_view()?;
         let threshold = av.threshold().unwrap_or(threshold);
@@ -1048,7 +1065,7 @@ impl ThresholdView for View<'_> {
 
         // check that we have enough shares to combine
         let num_shares = threshold_data.0.len();
-        if num_shares < threshold {
+        if num_shares < threshold.into() {
             return Err(ThresholdError::NotEnoughShares.into());
         }
 

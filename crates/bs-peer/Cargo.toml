@@ -1,0 +1,74 @@
+[package]
+name = "bs-peer"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+readme.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+thiserror.workspace = true
+bs.workspace = true
+bs-p2p.workspace = true
+bs-traits.workspace = true
+bs-wallets.workspace = true
+libp2p.workspace = true
+tracing.workspace = true
+provenance-log.workspace = true
+multicodec.workspace = true
+multikey.workspace = true
+multisig.workspace = true
+multicid.workspace = true
+multihash.workspace = true
+blockstore.workspace = true
+serde = { workspace = true, optional = true }
+anyhow = "1.0"
+cid.workspace = true
+futures = "0.3"
+multihash-codetable = { workspace = true, features = [
+  "sha2",
+  "sha3",
+  "blake3",
+] }
+tokio = { workspace = true, features = ["sync"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+directories = "6.0.0"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+send_wrapper = { version = "0.6.0", features = ["futures"] }
+wasm-bindgen = "0.2.93"
+wasm-bindgen-futures.workspace = true
+futures = "0.3.29"
+js-sys = "0.3.66"
+getrandom = { version = "0.3", features = ["wasm_js"] }
+web-sys = { workspace = true, features = [
+  "Window",
+  "Navigator",
+  "Storage",
+  "StorageManager",
+  "Blob",
+  "File",
+  "FileSystem",
+  "FileSystemFileHandle",
+  "FileSystemGetFileOptions",
+  "FileSystemDirectoryHandle",
+  "FileSystemWritableFileStream",
+  "FileSystemCreateWritableOptions",
+] }
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"
+wasm-bindgen = "0.2.93"
+tempfile = "3.20.0"
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+serde = ["dep:serde"]

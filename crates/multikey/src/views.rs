@@ -1,8 +1,9 @@
-// SPDX-License-Idnetifier: Apache-2.0
+// SPDX-License-Identifier: Apache-2.0
 use crate::{Error, Multikey};
 use multicodec::Codec;
 use multihash::Multihash;
 use multisig::Multisig;
+use std::num::NonZeroUsize;
 use zeroize::Zeroizing;
 
 // algorithms implement different sets of view
@@ -11,6 +12,7 @@ pub(crate) mod bls12381;
 pub(crate) mod chacha20;
 pub(crate) mod ed25519;
 pub(crate) mod mlkem;
+pub(crate) mod p256;
 pub(crate) mod secp256k1;
 // Attributes views let you inquire about the Multikey and retrieve data
 // associated with the particular view.
@@ -64,9 +66,9 @@ pub trait KdfAttrView {
 /// trait for viewing the threshold key attributes in a Multikey
 pub trait ThresholdAttrView {
     /// get the threshold value for the multikey
-    fn threshold(&self) -> Result<usize, Error>;
+    fn threshold(&self) -> Result<NonZeroUsize, Error>;
     /// get the limit value for the multikey
-    fn limit(&self) -> Result<usize, Error>;
+    fn limit(&self) -> Result<NonZeroUsize, Error>;
     /// get the share identifier for the multikey
     fn identifier(&self) -> Result<&[u8], Error>;
     /// get the codec-specific threshold data
@@ -130,7 +132,7 @@ pub trait SignView {
 /// trait for doing threshold operations on multikeys
 pub trait ThresholdView {
     /// try to split the key into key shares given the threshold and limit
-    fn split(&self, threshold: usize, limit: usize) -> Result<Vec<Multikey>, Error>;
+    fn split(&self, threshold: NonZeroUsize, limit: NonZeroUsize) -> Result<Vec<Multikey>, Error>;
     /// add a new share and return the Multikey with the share added
     fn add_share(&self, share: &Multikey) -> Result<Multikey, Error>;
     /// reconstruct the key from teh shares

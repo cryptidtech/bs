@@ -1,0 +1,92 @@
+//! Pest grammar file for parsing Scripts into AST
+//!
+//! # Example Script to parse:
+//! ```ignore
+//! // then check a possible threshold sig...
+//! check_signature("/tpubkey", "/entry/") ||   // check_count++
+//! // then check a possible pubkey sig...
+//! check_signature("/pubkey", "/entry/") || // check_count++
+//! // then the pre-image proof...
+//! check_preimage("/hash")
+//! ```
+//!
+//! For example, the following script:
+//!
+//! ```ignore
+//! check_signature("/tpubkey", "/entry/") ||
+//! // then check a possible pubkey sig...
+//! check_signature("/pubkey", "/entry/") ||
+//! // then the pre-image proof...
+//! check_preimage("/hash")
+//! ```
+//!
+//! Would be parsed intot the AST, the executed int he same order, calling the same named functions
+//! in Rust, until "true" is returned.
+//!
+//! ## List of all possible functions:
+//! - `check_eq(key: String)`
+//! - `check_signature(key: String, msg: String)`
+//! - `check_preimage(preimage: String)`
+//! - `check_hash(hash: String)`
+//! - `push(path: String)`
+//! - `branch(branch: String) -> String`
+//!
+//! The order must be preserved such that the order of operations is the same as the order of the
+//! script.
+//!
+//! Recursion can be used as functions in the cript can be nested:
+//!
+//! ## Nested example:
+//! ```ignore
+//! // forking the parent be done by whomever can sign with "/forks/pubkey"
+//! check_signature(branch("pubkey"), "/entry/") ||
+//!
+//! // check the validity of the first entry of the child plog
+//! (check_eq(branch("vlad")) && check_signature(branch("pubkey"), "/entry/"))
+//! ````
+//! The Grammer should be pretty basic, parsing the script by line, logical operators, and
+//! comments. The script is parsed into an AST, which is then used to generate the final
+//! script.
+
+WHITESPACE = _{ " " | "\t" | "\r" }
+NEWLINE    = _{ "\n" }
+
+// Comments
+line_comment  = _{ "//" ~ (!NEWLINE ~ ANY)* }
+block_comment = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
+COMMENT       = _{ line_comment | block_comment }
+
+// String literals for arguments
+string_literal = @{ "\"" ~ (!"\"" ~ ANY)* ~ "\"" | "'" ~ (!("'" | NEWLINE) ~ ANY)* ~ "'" }
+
+// Path literals (strings starting with "/")
+path_literal = @{ "\"" ~ "/" ~ (!"\"" ~ ANY)* ~ "\"" | "'" ~ "/" ~ (!("'" | NEWLINE) ~ ANY)* ~ "'" }
+
+// Identifiers for function names and non-quoted arguments
+identifier = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
+
+// Arguments can be string literals, path literals, identifiers, or function calls
+argument = _{ function_call | string_literal | path_literal | identifier }
+
+// Forward declaration for function_call to allow recursion
+function_call = { identifier ~ "(" ~ (argument ~ ("," ~ argument)*)? ~ ")" }
+
+// Expression can be a function call or a parenthesized expression
+primary_expr = { function_call | "(" ~ expr ~ ")" }
+
+// Logical operators with precedence
+or_expr = {
+    and_expr ~ (NEWLINE* ~ "||" ~ NEWLINE* ~ and_expr)*
+}
+
+and_expr = {
+    primary_expr ~ (NEWLINE* ~ "&&" ~ NEWLINE* ~ primary_expr)*
+}
+
+// Top-level expression
+expr = { or_expr }
+
+// A script is a series of expressions separated by optional newlines and optional semicolons
+script = {
+    SOI ~ NEWLINE* ~ (expr ~ (";" ~ NEWLINE* ~ expr)* ~ ";"?)? ~ NEWLINE* ~ EOI
+}

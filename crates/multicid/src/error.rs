@@ -22,6 +22,9 @@ pub enum Error {
     /// Vlad error
     #[error(transparent)]
     Vlad(#[from] VladError),
+    /// Multiutil Error
+    #[error(transparent)]
+    Multiutil(#[from] multiutil::Error),
 }
 
 /// Cid Errors created by this library
@@ -55,4 +58,7 @@ pub enum VladError {
     /// Missing nonce
     #[error("Missing cid")]
     MissingCid,
+    /// Missing signing key
+    #[error("Missing signing key")]
+    MissingSigningKey,
 }

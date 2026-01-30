@@ -14,7 +14,7 @@ mod tests {
     use multicid::{cid, vlad, Cid, EncodedVlad, Vlad};
     use multicodec::Codec;
     use multihash::mh;
-    use multikey::{mk, Multikey};
+    use multikey::{mk, Multikey, Views as _};
     use multiutil::EncodingInfo;
     use rng::StdRng;
     use std::path::PathBuf;
@@ -49,11 +49,15 @@ mod tests {
         let mk = get_mk();
         let cid = get_cid(b);
 
-        vlad::Builder::default()
-            .with_signing_key(&mk)
-            .with_cid(&cid)
-            .try_build_encoded()
-            .unwrap()
+        Vlad::generate(&cid, |cid| {
+            let signing_view = mk.sign_view().unwrap();
+            let cidv: Vec<u8> = cid.clone().into();
+            let ms = signing_view.sign(&cidv, false, None).unwrap();
+            let msv: Vec<u8> = ms.into();
+            Ok(msv)
+        })
+        .unwrap()
+        .to_encoded()
     }
 
     #[test]
@@ -187,17 +191,32 @@ mod tests {
         let mut pb = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         pb.push(".fsvladmap7");
 
+        // Make sure directory doesn't exist from prior test run
+        if pb.try_exists().unwrap_or(false) {
+            let _ = fs::remove_dir_all(&pb).await;
+        }
+
         let mut vm = Builder::new(&pb).try_build().await.unwrap();
 
         let vlad1 = get_vlad(b"for great justice!");
         let cid1 = get_cid(b"move every zig!");
-        let _ = vm.put(&vlad1, &cid1).await.unwrap();
+
+        // Add debugging to see if the put succeeds
+        vm.put(&vlad1, &cid1).await.unwrap();
+
+        // Verify the put worked
+        assert_eq!(vm.get(&vlad1).await.unwrap(), cid1);
+
         let vlad2 = get_vlad(b"someday");
         let cid2 = get_cid(b"will come");
-        let _ = vm.put(&vlad2, &cid2).await.unwrap();
+        vm.put(&vlad2, &cid2).await.unwrap();
 
-        let _ = vm.rm(&vlad1).await.unwrap();
-        let _ = vm.rm(&vlad2).await.unwrap();
+        // Verify the put worked
+        assert_eq!(vm.get(&vlad2).await.unwrap(), cid2);
+
+        // Remove with better error handling
+        vm.rm(&vlad1).await.unwrap();
+        vm.rm(&vlad2).await.unwrap();
 
         // lazy delete, check that the file is gone, the lazy delete file and folder still exist
         let (_, subfolder1, file1, lazy_deleted_file1) = vm.0.get_paths(&vlad1).await.unwrap();

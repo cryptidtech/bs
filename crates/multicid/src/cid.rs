@@ -18,7 +18,7 @@ pub type LegacyEncodedCid = BaseEncoded<Cid, Base58Encoder>;
 pub type EncodedCid = BaseEncoded<Cid, DetectedEncoder>;
 
 /// implementation of cid
-#[derive(Clone, Eq, Ord, PartialOrd, PartialEq)]
+#[derive(Clone, Eq, Ord, PartialOrd, PartialEq, Hash)]
 pub struct Cid {
     /// the version of the Cid
     pub(crate) codec: Codec,
@@ -153,6 +153,13 @@ impl fmt::Debug for Cid {
         } else {
             write!(f, "cidv0 - {:?} - {:?}", Codec::DagPb, self.hash)
         }
+    }
+}
+
+impl fmt::Display for Cid {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let encoded = EncodedCid::new(self.encoding(), self.clone());
+        write!(f, "{}", encoded)
     }
 }
 

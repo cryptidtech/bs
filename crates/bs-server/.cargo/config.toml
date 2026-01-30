@@ -1,0 +1,3 @@
+# set rust_log for showing logs debug and above 
+[env]
+RUST_LOG = "debug"

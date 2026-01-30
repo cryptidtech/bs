@@ -6,7 +6,7 @@ mod ser;
 #[cfg(test)]
 mod tests {
     use crate::{entry, Key, Op, Script, Value};
-    use multicid::{cid, vlad};
+    use multicid::{cid, vlad, Vlad};
     use multicodec::Codec;
     use multihash::mh;
     use multikey::nonce;
@@ -507,7 +507,7 @@ mod tests {
         // build a nonce
         let bytes = hex::decode("d15c4fb2911ae1337f102bcaf4c0088d36345b88b243968e834c5ffa17907832")
             .unwrap();
-        let nonce = nonce::Builder::new_from_bytes(&bytes).try_build().unwrap();
+        let nonce = nonce::Builder::new_from_bytes(&bytes).build();
 
         // build a cid
         let cid = cid::Builder::new(Codec::Cidv1)
@@ -521,21 +521,18 @@ mod tests {
             .try_build()
             .unwrap();
 
-        let vlad = vlad::Builder::default()
-            .with_nonce(&nonce)
-            .with_cid(&cid)
-            .try_build()
-            .unwrap();
+        let vlad = Vlad::from_parts(nonce, cid.clone());
 
         let script = Script::Cid(Key::default(), cid);
         let op = Op::Update("/move".try_into().unwrap(), Value::Str("zig!".into()));
-        let entry = entry::Builder::default()
-            .with_vlad(&vlad)
-            .add_lock(&script)
-            .with_unlock(&script)
-            .add_op(&op)
-            .try_build(|e| Ok(e.vlad.clone().into()))
-            .unwrap();
+        let entry = entry::Entry::builder()
+            .vlad(vlad)
+            .locks(vec![script.clone()])
+            .unlock(script)
+            .ops(vec![op])
+            .build();
+        let bytes: Vec<u8> = entry.vlad.clone().into();
+        let entry = entry.try_build_with_proof(bytes).unwrap();
 
         /*
         let v: Vec<u8> = entry.clone().into();

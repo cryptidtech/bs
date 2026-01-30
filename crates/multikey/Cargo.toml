@@ -7,6 +7,9 @@ description = "Multikey self-describing cryptographic key data"
 readme = "README.md"
 license = "Apache-2.0"
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [features]
 default = ["serde"]
 wasm = ["getrandom/wasm_js"] # needed for CI testing on wasm32-unknown-unknown
@@ -19,7 +22,11 @@ ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 elliptic-curve.workspace = true
 hex.workspace = true
 k256 = "0.13"
-ml-kem = { version = "0.2.1", features = ["deterministic"]}
+p256 = { version = "0.13", default-features = false, features = [
+  "ecdsa",
+  "arithmetic",
+] }
+ml-kem = { version = "0.2.1", features = ["deterministic"] }
 multibase.workspace = true
 multicodec.workspace = true
 multihash.workspace = true
@@ -38,7 +45,7 @@ thiserror.workspace = true
 tracing.workspace = true
 typenum = "1.17"
 unsigned-varint.workspace = true
-vsss-rs = "5.1.0"
+vsss-rs = "4.3.8"
 zeroize = "1.7"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -46,8 +53,11 @@ ssh-key = { version = "0.6", default-features = false, features = [
   "alloc",
   "ecdsa",
   "ed25519",
+  "p256",
 ] }
-getrandom = { version = "0.3.2", features = ["wasm_js"], optional = true }
+getrandom = { version = "0.3", features = ["wasm_js"] }
+# We have netsed deps that use v0.2, so we need to ensure the feature is flagged here
+getrandom_v02 = { package = "getrandom", version = "0.2.15", features = ["js"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 ssh-key = { version = "0.6", features = ["alloc", "crypto", "ed25519"] }
@@ -56,6 +66,7 @@ ssh-key = { version = "0.6", features = ["alloc", "crypto", "ed25519"] }
 serde_cbor.workspace = true
 serde_json.workspace = true
 serde_test.workspace = true
+wasm-bindgen-test = "0.3"
 
 [lints]
 workspace = true

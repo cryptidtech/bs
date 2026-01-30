@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: FSL-1.1
 use crate::{error::KvpError, Entry, Error, Key, Op, Value};
+pub use comrade::Pairs;
 use std::{collections::BTreeMap, fmt};
 
 /// Kvp is the virtual key-value pair storage system that builds up the state
 /// encoded in provenance logs as time series of verifiable state changes.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Kvp<'a> {
     /// the key-value pair store itself
     kvp: BTreeMap<Key, Value>,
@@ -14,23 +15,23 @@ pub struct Kvp<'a> {
     undo: Vec<(Option<&'a Entry>, BTreeMap<Key, Value>)>,
 }
 
-impl wacc::Pairs for Kvp<'_> {
-    fn get(&self, key: &str) -> Option<wacc::Value> {
+impl Pairs for Kvp<'_> {
+    fn get(&self, key: &str) -> Option<comrade::Value> {
         let k = match Key::try_from(key) {
             Ok(k) => k,
             _ => return None,
         };
         match self.kvp.get(&k) {
             Some(ref v) => match v {
-                Value::Nil => Some(wacc::Value::Bin {
+                Value::Nil => Some(comrade::Value::Bin {
                     hint: key.to_string(),
                     data: Vec::default(),
                 }),
-                Value::Str(ref s) => Some(wacc::Value::Str {
+                Value::Str(ref s) => Some(comrade::Value::Str {
                     hint: key.to_string(),
                     data: s.clone(),
                 }),
-                Value::Data(ref v) => Some(wacc::Value::Bin {
+                Value::Data(ref v) => Some(comrade::Value::Bin {
                     hint: key.to_string(),
                     data: v.clone(),
                 }),
@@ -45,32 +46,32 @@ impl wacc::Pairs for Kvp<'_> {
         }
     }
 
-    fn put(&mut self, key: &str, value: &wacc::Value) -> Option<wacc::Value> {
+    fn put(&mut self, key: &str, value: &comrade::Value) -> Option<comrade::Value> {
         let k = match Key::try_from(key) {
             Ok(k) => k,
             _ => return None,
         };
         let v = match value {
-            wacc::Value::Str {
+            comrade::Value::Str {
                 hint: _,
                 data: ref s,
             } => Value::Str(s.clone()),
-            wacc::Value::Bin {
+            comrade::Value::Bin {
                 hint: _,
                 data: ref v,
             } => Value::Data(v.clone()),
             _ => return None,
         };
         match self.kvp.insert(k, v) {
-            Some(Value::Nil) => Some(wacc::Value::Bin {
+            Some(Value::Nil) => Some(comrade::Value::Bin {
                 hint: key.to_string(),
                 data: Vec::default(),
             }),
-            Some(Value::Str(s)) => Some(wacc::Value::Str {
+            Some(Value::Str(s)) => Some(comrade::Value::Str {
                 hint: key.to_string(),
                 data: s,
             }),
-            Some(Value::Data(v)) => Some(wacc::Value::Bin {
+            Some(Value::Data(v)) => Some(comrade::Value::Bin {
                 hint: key.to_string(),
                 data: v,
             }),
@@ -191,7 +192,7 @@ impl<'a> Kvp<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{entry, Script};
+    use crate::Script;
     use multicid::Vlad;
     use test_log::test;
     use tracing::{span, Level};
@@ -218,22 +219,22 @@ mod tests {
     fn test_same_seqno() {
         let mut p = Kvp::default();
 
-        let e1 = entry::Builder::default()
-            .with_vlad(&Vlad::default())
-            .add_lock(&Script::default())
-            .with_unlock(&Script::default())
-            .try_build(|_| Ok(Vec::default()))
-            .unwrap();
+        let e1 = Entry::builder()
+            .vlad(Vlad::default())
+            .locks(vec![Script::default()])
+            .unlock(Script::default())
+            .build();
+        let e1 = e1.try_build(|_| Ok(Vec::default())).unwrap();
 
         let _ = p.set_entry(&e1).unwrap();
         p.apply_entry_ops(&e1).unwrap();
 
-        let e2 = entry::Builder::default()
-            .with_vlad(&Vlad::default())
-            .add_lock(&Script::default())
-            .with_unlock(&Script::default())
-            .try_build(|_| Ok(Vec::default()))
-            .unwrap();
+        let e2 = Entry::builder()
+            .vlad(Vlad::default())
+            .locks(vec![Script::default()])
+            .unlock(Script::default())
+            .build();
+        let e2 = e2.try_build(|_| Ok(Vec::default())).unwrap();
 
         // this panics because the seqno of e1 is the same
         let _ = p.set_entry(&e2).unwrap();
@@ -243,26 +244,19 @@ mod tests {
     #[test]
     fn test_one_entry() {
         let _s = span!(Level::INFO, "test_one_entry").entered();
-        let entry = entry::Builder::default()
-            .with_vlad(&Vlad::default())
-            .add_lock(&Script::default())
-            .with_unlock(&Script::default())
-            .add_op(&Op::Update(
-                "/one".try_into().unwrap(),
-                Value::Str("foo".to_string()),
-            ))
-            .add_op(&Op::Noop("/foo".try_into().unwrap()))
-            .add_op(&Op::Update(
-                "/two".try_into().unwrap(),
-                Value::Str("bar".to_string()),
-            ))
-            .add_op(&Op::Noop("/bar".try_into().unwrap()))
-            .add_op(&Op::Update(
-                "/three".try_into().unwrap(),
-                Value::Str("baz".to_string()),
-            ))
-            .try_build(|_| Ok(Vec::default()))
-            .unwrap();
+        let entry = Entry::builder()
+            .vlad(Vlad::default())
+            .locks(vec![Script::default()])
+            .unlock(Script::default())
+            .ops(vec![
+                Op::Update("/one".try_into().unwrap(), Value::Str("foo".to_string())),
+                Op::Noop("/foo".try_into().unwrap()),
+                Op::Update("/two".try_into().unwrap(), Value::Str("bar".to_string())),
+                Op::Noop("/bar".try_into().unwrap()),
+                Op::Update("/three".try_into().unwrap(), Value::Str("baz".to_string())),
+            ])
+            .build();
+        let entry = entry.try_build(|_| Ok(Vec::default())).unwrap();
 
         let mut p = Kvp::default();
 

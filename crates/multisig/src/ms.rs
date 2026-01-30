@@ -3,7 +3,7 @@ use crate::{
     error::AttributesError,
     views::{
         bls12381::{self, SchemeTypeId},
-        ed25519, secp256k1,
+        ed25519, p256, secp256k1,
     },
     AttrId, AttrView, ConvView, DataView, Error, ThresholdAttrView, ThresholdView, Views,
 };
@@ -16,14 +16,14 @@ use multibase::Base;
 use multicodec::Codec;
 use multitrait::{Null, TryDecodeFrom};
 use multiutil::{BaseEncoded, CodecInfo, EncodingInfo, Varbytes, VarbytesIter, Varuint};
-use std::{collections::BTreeMap, fmt};
+use std::{collections::BTreeMap, fmt, num::NonZeroUsize};
 
 /// the list of signature codecs currently supported
-pub const SIG_CODECS: [Codec; 4] = [
+pub const SIG_CODECS: [Codec; 5] = [
     Codec::Bls12381G1Msig,
     Codec::Bls12381G2Msig,
     Codec::EddsaMsig,
-    // Codec::Es256Msig,
+    Codec::Es256Msig, // P-256 (WebAuthn/passkey signatures)
     // Codec::Es384Msig,
     // Codec::Es521Msig,
     // Codec::Rs256Msig,
@@ -189,6 +189,7 @@ impl Views for Multisig {
             | Codec::Bls12381G1ShareMsig
             | Codec::Bls12381G2ShareMsig => Ok(Box::new(bls12381::View::try_from(self)?)),
             Codec::EddsaMsig => Ok(Box::new(ed25519::View::try_from(self)?)),
+            Codec::Es256Msig => Ok(Box::new(p256::View::try_from(self)?)),
             Codec::Es256KMsig => Ok(Box::new(secp256k1::View::try_from(self)?)),
             _ => Err(AttributesError::UnsupportedCodec(self.codec).into()),
         }
@@ -201,6 +202,7 @@ impl Views for Multisig {
             | Codec::Bls12381G1ShareMsig
             | Codec::Bls12381G2ShareMsig => Ok(Box::new(bls12381::View::try_from(self)?)),
             Codec::EddsaMsig => Ok(Box::new(ed25519::View::try_from(self)?)),
+            Codec::Es256Msig => Ok(Box::new(p256::View::try_from(self)?)),
             Codec::Es256KMsig => Ok(Box::new(secp256k1::View::try_from(self)?)),
             _ => Err(AttributesError::UnsupportedCodec(self.codec).into()),
         }
@@ -213,6 +215,7 @@ impl Views for Multisig {
             | Codec::Bls12381G1ShareMsig
             | Codec::Bls12381G2ShareMsig => Ok(Box::new(bls12381::View::try_from(self)?)),
             Codec::EddsaMsig => Ok(Box::new(ed25519::View::try_from(self)?)),
+            Codec::Es256Msig => Ok(Box::new(p256::View::try_from(self)?)),
             Codec::Es256KMsig => Ok(Box::new(secp256k1::View::try_from(self)?)),
             _ => Err(AttributesError::UnsupportedCodec(self.codec).into()),
         }
@@ -359,8 +362,8 @@ impl Builder {
 
     /// create a new builder from a Bls SignatureShare
     pub fn new_from_bls_signature_share<C>(
-        threshold: usize,
-        limit: usize,
+        threshold: NonZeroUsize,
+        limit: NonZeroUsize,
         sigshare: &SignatureShare<C>,
     ) -> Result<Self, Error>
     where
@@ -381,8 +384,8 @@ impl Builder {
         };
         let mut attributes = BTreeMap::new();
         attributes.insert(AttrId::SigData, value);
-        attributes.insert(AttrId::Threshold, Varuint(threshold).into());
-        attributes.insert(AttrId::Limit, Varuint(limit).into());
+        attributes.insert(AttrId::Threshold, Varuint::<usize>(threshold.get()).into());
+        attributes.insert(AttrId::Limit, Varuint::<usize>(limit.get()).into());
         attributes.insert(AttrId::ShareIdentifier, identifier);
         attributes.insert(AttrId::Scheme, scheme_type_id.into());
         Ok(Self {
@@ -490,6 +493,8 @@ impl Builder {
 
 #[cfg(test)]
 mod tests {
+    use std::num::NonZero;
+
     use super::*;
 
     #[test]
@@ -580,10 +585,14 @@ mod tests {
                 )
                 .unwrap();
             sigs.push(
-                Builder::new_from_bls_signature_share(3, 4, &sig)
-                    .unwrap()
-                    .try_build()
-                    .unwrap(),
+                Builder::new_from_bls_signature_share(
+                    NonZero::new(3).unwrap(),
+                    NonZero::new(4).unwrap(),
+                    &sig,
+                )
+                .unwrap()
+                .try_build()
+                .unwrap(),
             );
         });
 
@@ -686,10 +695,14 @@ mod tests {
                 )
                 .unwrap();
             sigs.push({
-                let ms = Builder::new_from_bls_signature_share(3, 4, &sig)
-                    .unwrap()
-                    .try_build()
-                    .unwrap();
+                let ms = Builder::new_from_bls_signature_share(
+                    NonZero::new(3).unwrap(),
+                    NonZero::new(4).unwrap(),
+                    &sig,
+                )
+                .unwrap()
+                .try_build()
+                .unwrap();
                 let sc = ms.conv_view().unwrap();
                 sc.to_ssh_signature().unwrap()
             });

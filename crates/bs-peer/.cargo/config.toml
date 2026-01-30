@@ -1,0 +1,6 @@
+[env]
+# RUST_LOG = "debug"
+
+# add RUSTFLAGS='--cfg getrandom_backend="wasm_js"' for browser wasm32 targets 
+[target.wasm32-unknown-unknown]
+rustflags = ["--cfg", "getrandom_backend=\"wasm_js\""]

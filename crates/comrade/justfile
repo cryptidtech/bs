@@ -1,0 +1,15 @@
+build-component:
+  # Run Cargo Component Build first 
+  just -f ../../justfile build
+
+# To call headless 
+# just test-wasm32 --headless
+test-wasm32 *args:
+  # wasm32 test for the browser
+  RUSTFLAGS='--cfg getrandom_backend="wasm_js"' wasm-pack test --chrome {{args}} --all-features 
+
+test: 
+  just test-wasm32 --headless
+  cargo test
+
+

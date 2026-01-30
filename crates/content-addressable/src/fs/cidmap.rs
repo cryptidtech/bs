@@ -75,6 +75,10 @@ where
             }
         } else {
             fs::create_dir_all(&subfolder).await?;
+
+            if !subfolder.try_exists()? || !subfolder.is_dir() {
+                return Err(FsError::CreateDirFailed(subfolder.clone()).into());
+            }
             debug!("Created subfolder at: {}", subfolder.display());
         }
 
@@ -86,18 +90,44 @@ where
 
         // securely create a temporary file. its name begins with "." so that if something goes
         // wrong, the temporary file will be cleaned up by a future GC pass
-        let mut temp = tempfile::Builder::new()
+        // Create a temporary file with better error handling
+        let temp_result = tempfile::Builder::new()
             .suffix(&format!(".{}", eid))
-            .tempfile_in(&subfolder)?;
+            .tempfile_in(&subfolder);
+
+        let mut temp = match temp_result {
+            Ok(temp) => temp,
+            Err(e) => {
+                // If tempfile creation fails, verify directory exists
+                if !subfolder.try_exists()? {
+                    // Try to create directory again
+                    fs::create_dir_all(&subfolder).await?;
+
+                    // Try again with temporary file
+                    tempfile::Builder::new()
+                        .suffix(&format!(".{}", eid))
+                        .tempfile_in(&subfolder)?
+                } else {
+                    return Err(Error::from(e));
+                }
+            }
+        };
 
         // write the contents to the file
         let data: Vec<u8> = cid.clone().into();
         temp.write_all(data.as_ref())?;
 
         // atomically rename/move it to the correct location
-        temp.persist(&file)?;
-
-        Ok(prev_cid)
+        match temp.persist(&file) {
+            Ok(_) => {
+                debug!("Successfully persisted file at: {}", file.display());
+                Ok(prev_cid)
+            }
+            Err(e) => {
+                debug!("Failed to persist file: {:?}", e);
+                Err(Error::from(e))
+            }
+        }
     }
 
     async fn rm(&self, key: &K) -> Result<Cid, Self::Error> {

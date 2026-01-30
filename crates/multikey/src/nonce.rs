@@ -13,13 +13,28 @@ pub const SIGIL: Codec = Codec::Nonce;
 pub type EncodedNonce = BaseEncoded<Nonce>;
 
 /// a multicodec Nonce type
-#[derive(Clone, Default, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Default, Eq, Ord, PartialEq, PartialOrd, Hash)]
 pub struct Nonce {
     /// the random nonce bytes
     pub(crate) nonce: Vec<u8>,
 }
 
 impl Nonce {
+    /// Generate a new [Nonce] from random bytes of the given size.
+    pub fn new_from_random_bytes(size: usize, rng: &mut impl rand_core_6::CryptoRngCore) -> Self {
+        let mut bytes = vec![0; size];
+        bytes.resize(size, 0u8);
+        rng.fill_bytes(bytes.as_mut());
+        Self { nonce: bytes }
+    }
+
+    /// Create a new [Nonce] from existing bytes.
+    pub fn new_from_bytes(bytes: &[u8]) -> Self {
+        Self {
+            nonce: bytes.to_vec(),
+        }
+    }
+
     /// return the size of the nonce in bytes
     pub fn len(&self) -> usize {
         self.nonce.len()
@@ -149,18 +164,18 @@ impl Builder {
     }
 
     /// build a base encoded vlad
-    pub fn try_build_encoded(&self) -> Result<EncodedNonce, Error> {
-        Ok(EncodedNonce::new(
+    pub fn build_encoded(&self) -> EncodedNonce {
+        EncodedNonce::new(
             self.base_encoding.unwrap_or_else(Nonce::preferred_encoding),
-            self.try_build()?,
-        ))
+            self.build(),
+        )
     }
 
-    /// build the vlad
-    pub fn try_build(&self) -> Result<Nonce, Error> {
-        Ok(Nonce {
+    /// build the [Nonce]
+    pub fn build(&self) -> Nonce {
+        Nonce {
             nonce: self.bytes.clone(),
-        })
+        }
     }
 }
 
@@ -176,9 +191,7 @@ mod tests {
     fn test_random() {
         let _s = span!(Level::INFO, "test_random").entered();
         let mut rng = StdRng::from_os_rng();
-        let n = Builder::new_from_random_bytes(32, &mut rng)
-            .try_build()
-            .unwrap();
+        let n = Builder::new_from_random_bytes(32, &mut rng).build();
 
         assert_eq!(Codec::Nonce, n.codec());
         assert_eq!(32, n.len());
@@ -188,9 +201,7 @@ mod tests {
     fn test_binary_roundtrip() {
         let _s = span!(Level::INFO, "test_binary_roundtrip").entered();
         let mut rng = StdRng::from_os_rng();
-        let n = Builder::new_from_random_bytes(32, &mut rng)
-            .try_build()
-            .unwrap();
+        let n = Builder::new_from_random_bytes(32, &mut rng).build();
         let v: Vec<u8> = n.clone().into();
         assert_eq!(n, Nonce::try_from(v.as_ref()).unwrap());
     }
@@ -199,9 +210,7 @@ mod tests {
     fn test_encoded_roundtrip() {
         let _s = span!(Level::INFO, "test_encoded_roundtrip").entered();
         let mut rng = StdRng::from_os_rng();
-        let n = Builder::new_from_random_bytes(32, &mut rng)
-            .try_build_encoded()
-            .unwrap();
+        let n = Builder::new_from_random_bytes(32, &mut rng).build_encoded();
         let s = n.to_string();
         println!("({}) {}", s.len(), s);
         let s = n.to_string();
@@ -225,7 +234,7 @@ mod tests {
         let signature = signmk.sign(msg.as_slice(), false, None).unwrap();
 
         let s: Vec<u8> = signature.into();
-        let n = Builder::new_from_bytes(&s).try_build_encoded().unwrap();
+        let n = Builder::new_from_bytes(&s).build_encoded();
         //println!("{}", n);
         let s = n.to_string();
         assert_eq!(n, EncodedNonce::try_from(s.as_str()).unwrap());

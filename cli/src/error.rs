@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: FSL-1.1
+use provenance_log::Key;
+
 /// Errors generated from this crate
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -29,6 +31,15 @@ pub enum Error {
     /// Bs errors
     #[error(transparent)]
     Bs(#[from] bs::Error),
+
+    /// Error opening a provenance log
+    #[error(transparent)]
+    Open(#[from] bs::error::OpenError),
+
+    /// Error updating a provenance log
+    #[error(transparent)]
+    Update(#[from] bs::error::UpdateError),
+
     /// Multicid error
     #[error(transparent)]
     Multicid(#[from] multicid::Error),
@@ -98,6 +109,10 @@ pub enum Error {
     /// Invalid backend type
     #[error("Invalid backend type {0}")]
     InvalidBackendType(String),
+
+    /// From<std::string::FromUtf8Error>
+    #[error(transparent)]
+    FromUtf8Error(#[from] std::string::FromUtf8Error),
 }
 
 /// SshAgent error
@@ -158,4 +173,8 @@ pub enum PlogError {
     /// No string value given
     #[error("No string value given")]
     NoStringValue,
+
+    /// No key present for that KeyPath
+    #[error("No key present for that KeyPath {0}")]
+    NoKeyPresent(Key),
 }

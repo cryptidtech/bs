@@ -3,7 +3,8 @@ use crate::{error::ValueError, Error};
 use core::fmt;
 use multibase::Base;
 use multitrait::{EncodeInto, TryDecodeFrom};
-use multiutil::{EncodingInfo, Varbytes, VarbytesIter};
+use multiutil::{BaseEncoded, DetectedEncoder, EncodingInfo};
+use multiutil::{Varbytes, VarbytesIter};
 
 /// the identifiers for the operations performed on the namespace in each entry
 #[repr(u8)]
@@ -202,5 +203,22 @@ impl fmt::Debug for Value {
             Self::Str(s) => write!(f, "{:?} - \"{}\"", id, s),
             Self::Data(b) => write!(f, "{:?} - {:x?}", id, b.clone()),
         }
+    }
+}
+
+/// Extracts a Value to a T
+pub fn try_extract<'a, T>(value: &'a comrade::Value) -> Option<T>
+where
+    T: TryFrom<&'a [u8]> + EncodingInfo,
+    BaseEncoded<T, DetectedEncoder>: TryFrom<&'a str>,
+{
+    match value {
+        comrade::Value::Bin { hint: _, data } => T::try_from(data.as_slice()).ok(),
+        comrade::Value::Str { hint: _, data } => {
+            BaseEncoded::<T, DetectedEncoder>::try_from(data.as_str())
+                .ok()
+                .map(|be| be.to_inner())
+        }
+        _ => None,
     }
 }

@@ -1,0 +1,23 @@
+[package]
+name = "comrade-component"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+readme.workspace = true
+
+[dependencies]
+wit-bindgen-rt = { version = "0.41.0", features = ["bitflags"] }
+comrade-reference.workspace = true
+getrandom = { version = "0.2", features = ["custom"] }
+
+[lints]
+workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[package.metadata.component]
+package = "component:comrade-component"
+
+[package.metadata.component.dependencies]
