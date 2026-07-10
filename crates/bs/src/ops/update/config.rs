@@ -21,15 +21,14 @@ pub struct Config {
     /// Lock [provenance_log::Script]s to add.
     ///
     /// For example, if you wanted to add a lock script to the key path "/delegated/"
-    /// with lock script `check_signature(branch("pubkey"), "entry_key")`, you would set:
+    /// with lock script `check_signature(branch("pubkey"), "/entry/")`, you would set:
     /// ```ignore
-    /// .add_entry_lock_scripts(
+    /// .with_entry_lock_scripts(
     ///     vec![Script::Code(
-    ///         Key::try_from_str("/delegated/").unwrap(),
-    ///         "check_signature(branch("pubkey"), "/entry/")")
-    ///         .into()
-    ///         ]
-    ///     );
+    ///         Key::try_from("/delegated/").unwrap(),
+    ///         r#"check_signature(branch("pubkey"), "/entry/")"#.into(),
+    ///     )]
+    /// );
     /// ```
     #[builder(default = Vec::new())]
     with_entry_lock_scripts: Vec<Script>,
