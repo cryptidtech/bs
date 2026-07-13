@@ -430,8 +430,9 @@ mod tests {
         let delegated_lock = format!(
             r#"
             // check a possible delegated pubkey sig...
-            check_signature(branch("pubkey"), "{entry_key}")
+            check_signature(branch("{pubkey}"), "{entry_key}")
             "#,
+            pubkey = PubkeyParams::KEY_PATH,
             entry_key = Field::ENTRY,
         );
 
