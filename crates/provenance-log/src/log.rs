@@ -241,14 +241,20 @@ impl<'a> Iterator for VerifyIter<'a> {
 
         let kvp_lock = self.kvp.clone();
 
+        let domain = entry.context().to_string();
+
         tracing::debug!(
-            "verifying entry with seqno {} and prev_seqno {} unlock script: {:?}",
+            "verifying entry with seqno {} and prev_seqno {} domain {} unlock script: {:?}",
             self.seqno,
             self.prev_seqno,
+            domain,
             unlock
         );
 
-        let mut unlocked = match Comrade::new(&kvp_lock, &entry).try_unlock(unlock) {
+        let mut unlocked = match Comrade::new(&kvp_lock, &entry)
+            .with_domain(&domain)
+            .try_unlock(unlock)
+        {
             Ok(u) => u,
             Err(e) => {
                 tracing::error!("unlock failed: {}", e);
@@ -494,8 +500,8 @@ impl Builder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Key, Op, Value};
-    use multicid::{cid, vlad};
+    use crate::{Key, Op, Pairs, Value};
+    use multicid::cid;
     use multihash::mh;
     use multikey::{EncodedMultikey, Multikey, Views};
     use test_log::test;
@@ -822,6 +828,144 @@ push("/entry/proof");
                 }
             }
         }
+    }
+
+    fn delegated_branch_lock_script() -> Script {
+        Script::Code(
+            Key::try_from("/delegated/").unwrap(),
+            r#"
+                check_signature(branch("pubkey"), "/entry/")
+            "#
+            .to_string(),
+        )
+    }
+
+    #[test]
+    fn test_verify_sets_domain_from_entry_context_for_branch() {
+        let _s = span!(
+            Level::INFO,
+            "test_verify_sets_domain_from_entry_context_for_branch"
+        )
+        .entered();
+
+        let ephemeral = EncodedMultikey::try_from(
+            "fba2480260874657374206b6579010120cbd87095dc5863fcec46a66a1d4040a73cb329f92615e165096bd50541ee71c0"
+        )
+        .unwrap();
+        // Mike's key — used for delegated signatures under /delegated/mike/
+        let mike = EncodedMultikey::try_from(
+            "fba2480260874657374206b6579010120d784f92e18bdba433b8b0f6cbf140bc9629ff607a59997357b40d22c3883a3b8"
+        )
+        .unwrap();
+
+        let cid = cid::Builder::new(Codec::Cidv1)
+            .with_target_codec(Codec::DagCbor)
+            .with_hash(
+                &mh::Builder::new_from_bytes(Codec::Sha3512, b"for great justice, move every zig!")
+                    .unwrap()
+                    .try_build()
+                    .unwrap(),
+            )
+            .try_build()
+            .unwrap();
+
+        let vlad = Vlad::generate(&cid, |cid| {
+            let v: Vec<u8> = cid.clone().into();
+            Ok(v)
+        })
+        .unwrap();
+
+        let unlock = unlock_script();
+        let delegated_lock = delegated_branch_lock_script();
+
+        // Genesis: install Mike's pubkey under the delegated branch.
+        let e1 = Entry::builder()
+            .vlad(vlad.clone())
+            .seqno(0)
+            .locks(vec![delegated_lock.clone()])
+            .unlock(unlock.clone())
+            .ops(vec![
+                get_key_update_op("/ephemeral", &ephemeral),
+                get_key_update_op("/delegated/mike/pubkey", &mike),
+            ])
+            .build();
+
+        let unsigned = e1.prepare_unsigned_entry().unwrap();
+        let entry_bytes: Vec<u8> = unsigned.clone().into();
+        let signature = {
+            let sv = ephemeral.sign_view().unwrap();
+            sv.sign(&entry_bytes, false, None).unwrap()
+        };
+        let e1 = unsigned
+            .try_build_with_proof(signature.into())
+            .expect("should build e1 with proof");
+
+        // Delegated update: only touch /delegated/mike/ so context is
+        // "/delegated/mike/" and branch("pubkey") → "/delegated/mike/pubkey".
+        let e2 = Entry::builder()
+            .vlad(vlad.clone())
+            .seqno(1)
+            .locks(vec![delegated_lock])
+            .unlock(unlock)
+            .prev(e1.cid())
+            .ops(vec![Op::Update(
+                "/delegated/mike/endpoint".try_into().unwrap(),
+                Value::Str("https://cryptid.tech".into()),
+            )])
+            .build();
+
+        assert_eq!(
+            format!("{}", e2.context()),
+            "/delegated/mike/",
+            "ops context must be the delegated mike branch"
+        );
+
+        let unsigned = e2.prepare_unsigned_entry().unwrap();
+        let entry_bytes: Vec<u8> = unsigned.clone().into();
+        let signature = {
+            let sv = mike.sign_view().unwrap();
+            sv.sign(&entry_bytes, false, None).unwrap()
+        };
+        let e2 = unsigned
+            .try_build_with_proof(signature.into())
+            .expect("should build e2 with proof");
+
+        let log = Builder::new()
+            .with_vlad(&vlad)
+            .with_first_lock(&first_lock_script())
+            .append_entry(&e1)
+            .append_entry(&e2)
+            .try_build()
+            .unwrap();
+
+        let mut verified = 0;
+        for ret in log.verify() {
+            match ret {
+                Ok((c, e, kvp)) => {
+                    println!(
+                        "check count for entry with seqno {}: {}, context: {}",
+                        e.seqno(),
+                        c,
+                        e.context()
+                    );
+                    if e.seqno() == 1 {
+                        // Endpoint mutation applied after successful verify.
+                        assert!(
+                            kvp.get("/delegated/mike/endpoint").is_some(),
+                            "delegated endpoint should be present after verify"
+                        );
+                    }
+                    verified += 1;
+                }
+                Err(e) => {
+                    panic!("verify failed (likely branch domain not set): {e}");
+                }
+            }
+        }
+        assert_eq!(
+            verified, 2,
+            "both genesis and delegated entries must verify"
+        );
     }
 }
 
