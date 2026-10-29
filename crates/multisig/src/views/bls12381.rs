@@ -5,7 +5,9 @@ use crate::{
     ThresholdView, Views,
 };
 use blsful::{
-    vsss_rs::Share, Bls12381G1Impl, Bls12381G2Impl, Signature, SignatureSchemes, SignatureShare,
+    inner_types::{G1Projective, G2Projective, Scalar},
+    vsss_rs::{IdentifierPrimeField, Share, ValueGroup},
+    Bls12381G1Impl, Bls12381G2Impl, Signature, SignatureSchemes, SignatureShare,
 };
 use multicodec::Codec;
 use multitrait::{EncodeInto, TryDecodeFrom};
@@ -203,7 +205,7 @@ impl<'a> TryDecodeFrom<'a> for SigCombined {
 #[derive(Clone)]
 pub struct SigShare(
     /// identifier
-    pub u8,
+    pub IdentifierPrimeField<Scalar>,
     /// threshold
     pub usize,
     /// limit
@@ -218,7 +220,7 @@ impl From<SigShare> for Vec<u8> {
     fn from(val: SigShare) -> Self {
         let mut v = Vec::default();
         // add in the share identifier
-        v.append(&mut Varuint(val.0).into());
+        v.append(&mut val.0 .0.to_be_bytes().into());
         // add in the share threshold
         v.append(&mut Varuint(val.1).into());
         // add in the share limit
@@ -245,7 +247,10 @@ impl<'a> TryDecodeFrom<'a> for SigShare {
 
     fn try_decode_from(bytes: &'a [u8]) -> Result<(Self, &'a [u8]), Self::Error> {
         // try to decode the identifier
-        let (id, ptr) = Varuint::<u8>::try_decode_from(bytes)?;
+        let (id_bytes, ptr) = Varuint::<[u8; 32]>::try_decode_from(bytes)?;
+        let id = Option::<Scalar>::from(Scalar::from_be_bytes(&id_bytes)).ok_or(
+            Error::FailedConversion("Can't convert identifier to scalar".to_string()),
+        )?;
         // try to decode the threshold
         let (threshold, ptr) = Varuint::<usize>::try_decode_from(ptr)?;
         // try to decode the limit
@@ -256,7 +261,7 @@ impl<'a> TryDecodeFrom<'a> for SigShare {
         let (share_data, ptr) = Varbytes::try_decode_from(ptr)?;
         Ok((
             Self(
-                id.to_inner(),
+                IdentifierPrimeField(id),
                 threshold.to_inner(),
                 limit.to_inner(),
                 share_type,
@@ -268,7 +273,7 @@ impl<'a> TryDecodeFrom<'a> for SigShare {
 }
 
 #[derive(Clone, Default)]
-pub(crate) struct ThresholdData(pub(crate) BTreeMap<u8, SigShare>);
+pub(crate) struct ThresholdData(pub(crate) BTreeMap<IdentifierPrimeField<Scalar>, SigShare>);
 
 impl From<ThresholdData> for Vec<u8> {
     fn from(val: ThresholdData) -> Self {
@@ -410,11 +415,28 @@ impl ConvView for View<'_> {
                 let av = self.ms.threshold_attr_view()?;
                 let threshold = av.threshold()?;
                 let limit = av.limit()?;
-                let identifier = av.identifier()?;
+                let identifier_bytes = av.identifier()?;
+                if identifier_bytes.len() != 32 {
+                    return Err(Error::FailedConversion(
+                        "Insufficient identifier bytes".to_string(),
+                    ));
+                }
+                let identifier_array = <[u8; 32]>::try_from(identifier_bytes)
+                    .map_err(|_| Error::FailedConversion("Invalid bytes".to_string()))?;
+                let id_scalar = Option::<Scalar>::from(Scalar::from_be_bytes(&identifier_array))
+                    .ok_or(Error::FailedConversion(
+                        "Invalid share identifier bytes".to_string(),
+                    ))?;
 
                 // create the sig share tuple
-                let sig_data: Vec<u8> =
-                    SigShare(identifier, threshold, limit, scheme_type, sig_bytes).into();
+                let sig_data: Vec<u8> = SigShare(
+                    IdentifierPrimeField(id_scalar),
+                    threshold,
+                    limit,
+                    scheme_type,
+                    sig_bytes,
+                )
+                .into();
 
                 Ok(ssh_key::Signature::new(
                     ssh_key::Algorithm::Other(
@@ -430,11 +452,28 @@ impl ConvView for View<'_> {
                 let av = self.ms.threshold_attr_view()?;
                 let threshold = av.threshold()?;
                 let limit = av.limit()?;
-                let identifier = av.identifier()?;
+                let identifier_bytes = av.identifier()?;
+                if identifier_bytes.len() != 32 {
+                    return Err(Error::FailedConversion(
+                        "Insufficient identifier bytes".to_string(),
+                    ));
+                }
+                let identifier_array = <[u8; 32]>::try_from(identifier_bytes)
+                    .map_err(|_| Error::FailedConversion("Invalid bytes".to_string()))?;
+                let id_scalar = Option::<Scalar>::from(Scalar::from_be_bytes(&identifier_array))
+                    .ok_or(Error::FailedConversion(
+                        "Invalid share identifier bytes".to_string(),
+                    ))?;
 
                 // create the sig share tuple
-                let sig_data: Vec<u8> =
-                    SigShare(identifier, threshold, limit, scheme_type, sig_bytes).into();
+                let sig_data: Vec<u8> = SigShare(
+                    IdentifierPrimeField(id_scalar),
+                    threshold,
+                    limit,
+                    scheme_type,
+                    sig_bytes,
+                )
+                .into();
 
                 Ok(ssh_key::Signature::new(
                     ssh_key::Algorithm::Other(
@@ -470,7 +509,7 @@ impl ThresholdAttrView for View<'_> {
         Ok(Varuint::<usize>::try_from(limit.as_slice())?.to_inner())
     }
     /// get the share identifier
-    fn identifier(&self) -> Result<u8, Error> {
+    fn identifier(&self) -> Result<&[u8], Error> {
         match self.ms.codec {
             Codec::Bls12381G1ShareMsig | Codec::Bls12381G2ShareMsig => {
                 let identifier = self
@@ -478,7 +517,7 @@ impl ThresholdAttrView for View<'_> {
                     .attributes
                     .get(&AttrId::ShareIdentifier)
                     .ok_or(AttributesError::MissingIdentifier)?;
-                Ok(Varuint::<u8>::try_from(identifier.as_slice())?.to_inner())
+                Ok(identifier.as_slice())
             }
             _ => Err(SharesError::NotASignatureShare.into()),
         }
@@ -533,7 +572,7 @@ impl ThresholdView for View<'_> {
                 // and the payload encoding value
                 let share = Builder::new(codec)
                     .with_message_bytes(&self.ms.message.as_slice())
-                    .with_identifier(share.0)
+                    .with_identifier(&share.0 .0.to_be_bytes())
                     .with_threshold(share.1)
                     .with_limit(share.2)
                     .with_signature_bytes(&share.4)
@@ -566,7 +605,19 @@ impl ThresholdView for View<'_> {
             let av = share.threshold_attr_view()?;
             let threshold = av.threshold()?;
             let limit = av.limit()?;
-            let identifier = av.identifier()?;
+            let identifier_bytes = av.identifier()?;
+            if identifier_bytes.len() != 32 {
+                return Err(Error::FailedConversion(
+                    "Insufficient number of identifier bytes".to_string(),
+                ));
+            }
+            let identifier_array = <[u8; 32]>::try_from(identifier_bytes)
+                .map_err(|_| Error::FailedConversion("Incorrect identifier bytes".to_string()))?;
+            let identifier = IdentifierPrimeField(
+                Option::<Scalar>::from(Scalar::from_be_bytes(&identifier_array)).ok_or(
+                    Error::FailedConversion("Incorrect identifier bytes".to_string()),
+                )?,
+            );
 
             // get the share's signature data
             let dv = share.data_view()?;
@@ -654,8 +705,11 @@ impl ThresholdView for View<'_> {
                     .0
                     .iter()
                     .try_for_each(|(id, share)| -> Result<(), Error> {
-                        let vsss = Share::with_identifier_and_value(*id, share.4.as_slice());
-                        // check to make sure all of the shares are of the same type
+                        let inner = G1Projective::try_from(&share.4).map_err(|_| {
+                            Error::FailedConversion("Invalid signature share bytes".to_string())
+                        })?;
+                        let vsss = Share::with_identifier_and_value(*id, ValueGroup(inner));
+                        // check to make sure all shares are of the same type
                         if let Some(sti) = share_type_id {
                             if sti != share.3 {
                                 return Err(SharesError::ShareTypeMismatch.into());
@@ -694,8 +748,11 @@ impl ThresholdView for View<'_> {
                     .0
                     .iter()
                     .try_for_each(|(id, share)| -> Result<(), Error> {
-                        let vsss = Share::with_identifier_and_value(*id, share.4.as_slice());
-                        // check to make sure all of the shares are of the same type
+                        let inner = G2Projective::try_from(&share.4).map_err(|_| {
+                            Error::FailedConversion("Invalid signature share bytes".to_string())
+                        })?;
+                        let vsss = Share::with_identifier_and_value(*id, ValueGroup(inner));
+                        // check to make sure all shares are of the same type
                         if let Some(sti) = share_type_id {
                             if sti != share.3 {
                                 return Err(SharesError::ShareTypeMismatch.into());

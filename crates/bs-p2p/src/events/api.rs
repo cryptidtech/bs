@@ -1,11 +1,9 @@
-//! The Events API for interacting witht he netowrk events. 
-use crate::events::delay;
+//! The Events API for interacting witht he netowrk events.
 pub use crate::behaviour::req_res::{PeerRequest, PeerResponse};
-use crate::events::timeout::with_timeout;
-use libp2p::Multiaddr;
-use provenance_log::resolver::{Resolver, SuperResolver};
-use crate::events::{NetworkError, PublicEvent};
 use crate::behaviour::{Behaviour, BehaviourEvent};
+use crate::events::delay;
+use crate::events::timeout::with_timeout;
+use crate::events::{NetworkError, PublicEvent};
 use crate::Error;
 use blockstore::Blockstore;
 use futures::stream::StreamExt;
@@ -23,7 +21,9 @@ use libp2p::kad::{InboundRequest, Record};
 pub use libp2p::multiaddr::Protocol;
 use libp2p::request_response::{self, OutboundRequestId, ResponseChannel};
 use libp2p::swarm::{Swarm, SwarmEvent};
-use libp2p::{identify, kad, ping, PeerId, };
+use libp2p::Multiaddr;
+use libp2p::{identify, kad, ping, PeerId};
+use provenance_log::resolver::{Resolver, SuperResolver};
 use std::collections::{HashMap, HashSet};
 use std::net::Ipv4Addr;
 use std::pin::Pin;
@@ -136,7 +136,7 @@ impl Client {
         receiver.await.map_err(Error::OneshotCanceled)
     }
 
-    /// Put a record on the DHT 
+    /// Put a record on the DHT
     pub async fn put_record(&self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Error> {
         self.command_sender
             .send(NetworkCommand::PutRecord { key, value })
@@ -218,14 +218,14 @@ impl Resolver for Client {
     fn resolve(
         &self,
         cid: &multicid::Cid,
-    // ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Self::Error>> + CondSend>> {
+        // ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Self::Error>> + CondSend>> {
     ) -> Pin<Box<dyn SuperResolver<'_, Self> + '_>> {
         tracing::debug!("DefaultBsPeer Resolving CID over bitswap: {}", cid);
         let cid_bytes: Vec<u8> = cid.clone().into();
         let client = self.clone();
-        Box::pin(async move {
-            with_timeout(client.get_bits(cid_bytes), Duration::from_secs(10)).await?
-        })
+        Box::pin(
+            async move { with_timeout(client.get_bits(cid_bytes), Duration::from_secs(10)).await? },
+        )
     }
 }
 /// PeerPiper Network Commands (Libp2p)
@@ -306,7 +306,6 @@ pub enum Libp2pEvent {
     /// An inbound request to Put a Record into the DHT from a source PeerId
     PutRecordRequest { source: PeerId },
 }
-
 
 /// The network event loop.
 /// Handles all the network logic for us.
@@ -457,25 +456,29 @@ impl<B: Blockstore> EventLoop<B> {
 
                     // pass the address back to the other task, for display, etc.
                     self.event_sender
-                        .try_send(PublicEvent::ListenAddr {
-                            address: p2p_addr,
-                        })
+                        .try_send(PublicEvent::ListenAddr { address: p2p_addr })
                 };
                 // Protocol::Ip is the first item in the address vector
                 match address.iter().next() {
                     Some(Protocol::Ip6(ip6)) => {
                         // Only add our globally available IPv6 addresses to the external addresses list.
                         if !ip6.is_loopback()
-                            && !ip6.is_unspecified() 
+                            && !ip6.is_unspecified()
                             && !ip6.is_multicast()
                             && (ip6.segments()[0] & 0xffc0) != 0xfe80 // no fe80::/10 addresses, (!ip6.is_unicast_link_local() requires nightly)
-                            && (ip6.segments()[0] & 0xfe00) != 0xfc00 // Unique Local Addresses (ULAs, fd00::/8) are private IPv6 addresses and should not be advertised.
+                            && (ip6.segments()[0] & 0xfe00) != 0xfc00
+                        // Unique Local Addresses (ULAs, fd00::/8) are private IPv6 addresses and should not be advertised.
                         {
                             addr_handler()?;
                         }
                     }
                     Some(Protocol::Ip4(ip4)) => {
-                        if !(ip4.is_loopback() || ip4.is_unspecified() || ip4.is_private() || ip4.is_multicast() || ip4 == Ipv4Addr::LOCALHOST || ip4.octets()[0] & 240 == 240 && !ip4.is_broadcast())
+                        if !(ip4.is_loopback()
+                            || ip4.is_unspecified()
+                            || ip4.is_private()
+                            || ip4.is_multicast()
+                            || ip4 == Ipv4Addr::LOCALHOST
+                            || ip4.octets()[0] & 240 == 240 && !ip4.is_broadcast())
                         {
                             addr_handler()?;
                         }
@@ -506,7 +509,9 @@ impl<B: Blockstore> EventLoop<B> {
                     .await
                 {
                     tracing::error!("Failed to send NewConnection event: {e}");
-                    return Err(Error::SendFailure("Failed to send NewConnection event".to_string()));
+                    return Err(Error::SendFailure(
+                        "Failed to send NewConnection event".to_string(),
+                    ));
                 }
             }
             SwarmEvent::OutgoingConnectionError { peer_id, error, .. } => {
@@ -591,7 +596,12 @@ impl<B: Blockstore> EventLoop<B> {
 
                 // Send ACK back to the sender
                 let ack_topic = format!("ack/{}", message.topic.to_string());
-                if let Err(e) = self.swarm.behaviour_mut().gossipsub.publish(libp2p::gossipsub::IdentTopic::new(&ack_topic), message.data) {
+                if let Err(e) = self
+                    .swarm
+                    .behaviour_mut()
+                    .gossipsub
+                    .publish(libp2p::gossipsub::IdentTopic::new(&ack_topic), message.data)
+                {
                     tracing::error!("Failed to publish ACK: {e}");
                 }
             }
@@ -622,27 +632,29 @@ impl<B: Blockstore> EventLoop<B> {
                     .kad
                     .store_mut()
                     .get(&libp2p::kad::RecordKey::new(&key))
-                    .map(|record| record.into_owned()) {
-                        tracing::debug!("Found record for key {:?}: {:?}", key, record);
-                        // Publish the record to the topic
-                        if let Err(e) = self
-                            .swarm
-                            .behaviour_mut()
-                            .gossipsub
-                            .publish(topic, record.value.clone())
-                        {
-                            tracing::error!("Failed to publish record to topic: {e}");
-                        }
-                } 
+                    .map(|record| record.into_owned())
+                {
+                    tracing::debug!("Found record for key {:?}: {:?}", key, record);
+                    // Publish the record to the topic
+                    if let Err(e) = self
+                        .swarm
+                        .behaviour_mut()
+                        .gossipsub
+                        .publish(topic, record.value.clone())
+                    {
+                        tracing::error!("Failed to publish record to topic: {e}");
+                    }
+                }
             }
             SwarmEvent::Behaviour(BehaviourEvent::PeerRequest(
                 request_response::Event::Message { message, .. },
             )) => match message {
                 request_response::Message::Request {
-                    request, channel: _, ..
+                    request,
+                    channel: _,
+                    ..
                 } => {
                     tracing::debug!("Received request: {:?}", &request);
-
                 }
                 request_response::Message::Response {
                     request_id,
@@ -768,7 +780,6 @@ impl<B: Blockstore> EventLoop<B> {
                 result,
                 ..
             })) => {
-
                 tracing::debug!("Got Kad QueryProgressed: {:?}", result);
                 match result {
                     kad::QueryResult::GetProviders(Ok(kad::GetProvidersOk::FoundProviders {
@@ -829,22 +840,14 @@ impl<B: Blockstore> EventLoop<B> {
             })) => {
                 tracing::debug!("Kademlia Inbound Request: {:?}", request);
                 match request {
-                    InboundRequest::PutRecord {
-                        source,
-                        record,
-                        ..
-                    } => {
+                    InboundRequest::PutRecord { source, record, .. } => {
                         tracing::info!("Received PutRecordRequest from: {:?}", source);
 
                         // TODO: Filter Providers based on criteria?
                         // for now, add the provider to the DHT as is
                         if let Some(rec) = record {
-                            if let Err(e) = self
-                                .swarm
-                                .behaviour_mut()
-                                .kad
-                                .store_mut()
-                                .put(rec.clone())
+                            if let Err(e) =
+                                self.swarm.behaviour_mut().kad.store_mut().put(rec.clone())
                             {
                                 tracing::error!("Failed to add provider to DHT: {e}");
                             }
@@ -853,9 +856,7 @@ impl<B: Blockstore> EventLoop<B> {
                         // send evt to external handler plugins to decide whether to include record or not:
                         if let Err(e) = self
                             .event_sender
-                            .send(PublicEvent::Swarm(Libp2pEvent::PutRecordRequest {
-                                source,
-                            }))
+                            .send(PublicEvent::Swarm(Libp2pEvent::PutRecordRequest { source }))
                             .await
                         {
                             tracing::error!("Failed to send PutRecordRequest event: {e}");
@@ -928,7 +929,7 @@ impl<B: Blockstore> EventLoop<B> {
                         }
                     }
                 }
-            },
+            }
             event => {
                 tracing::debug!("Other type of event: {:?}", event);
             }
@@ -1031,12 +1032,9 @@ impl<B: Blockstore> EventLoop<B> {
                     .with(Protocol::P2p(*self.swarm.local_peer_id()));
 
                 // emit as Event
-                if let Err(e) = self
-                    .event_sender
-                    .try_send(PublicEvent::ListenAddr {
-                        address: p2p_addr.clone(),
-                    })
-                {
+                if let Err(e) = self.event_sender.try_send(PublicEvent::ListenAddr {
+                    address: p2p_addr.clone(),
+                }) {
                     tracing::error!("Failed to send share address event: {e}");
                 }
             }
@@ -1082,7 +1080,8 @@ impl<B: Blockstore> EventLoop<B> {
                     .swarm
                     .behaviour_mut()
                     .kad
-                    .put_record(record, kad::Quorum::One) {
+                    .put_record(record, kad::Quorum::One)
+                {
                     tracing::error!("Failed to put record: {e}");
                 }
             }
@@ -1104,4 +1103,3 @@ impl<B: Blockstore> EventLoop<B> {
         }
     }
 }
-

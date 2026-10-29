@@ -67,6 +67,7 @@ rng = { path = "crates/rng" }
 
 # Core dependencies
 best-practices = { version = "0.1.0", git = "https://github.com/cryptidtech/best-practices.git" }
+blsful = "3.0.0"
 blockstore = "0.7.1"
 cid = "0.11.0"
 criterion = "0.5.1"

@@ -70,7 +70,7 @@ pub trait ThresholdAttrView {
     /// get the limit value for the multikey
     fn limit(&self) -> Result<NonZeroUsize, Error>;
     /// get the share identifier for the multikey
-    fn identifier(&self) -> Result<u8, Error>;
+    fn identifier(&self) -> Result<&[u8], Error>;
     /// get the codec-specific threshold data
     fn threshold_data(&self) -> Result<&[u8], Error>;
 }

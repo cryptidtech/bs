@@ -76,3 +76,16 @@ impl<'a> TryDecodeFrom<'a> for usize {
         decode::usize(bytes).map_err(Self::Error::UnsignedVarintDecode)
     }
 }
+
+impl<const N: usize> TryDecodeFrom<'_> for [u8; N] {
+    type Error = Error;
+
+    fn try_decode_from(bytes: &'_ [u8]) -> Result<([u8; N], &'_ [u8]), Self::Error> {
+        if bytes.len() < 32 {
+            return Err(Error::UnsignedVarintDecode(decode::Error::Overflow));
+        }
+        let a = <[u8; N]>::try_from(bytes)
+            .map_err(|_| Self::Error::UnsignedVarintDecode(decode::Error::Insufficient))?;
+        Ok((a, &bytes[32..]))
+    }
+}

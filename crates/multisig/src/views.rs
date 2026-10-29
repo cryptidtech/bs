@@ -41,7 +41,7 @@ pub trait ThresholdAttrView {
     /// get the limit value for this multisig share
     fn limit(&self) -> Result<usize, Error>;
     /// get the identifier value for this multisig share
-    fn identifier(&self) -> Result<u8, Error>;
+    fn identifier(&self) -> Result<&[u8], Error>;
     /// get the threshold data associated with the signature
     fn threshold_data(&self) -> Result<&[u8], Error>;
 }
