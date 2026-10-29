@@ -187,8 +187,8 @@ pub trait AsyncKeyManager<E>: GetKey + CondSync {
 pub trait AsyncMultiSigner<S, E>:
     AsyncSigner<Signature = S, Error = E> + EphemeralKey + GetKey
 where
-    S: Send,
-    E: Send,
+    S: CondSend,
+    E: CondSend,
 {
     fn prepare_ephemeral_signing<'a>(
         &'a self,
